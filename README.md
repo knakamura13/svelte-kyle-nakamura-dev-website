@@ -27,3 +27,7 @@ This example is a simple [SvelteKit](https://kit.svelte.dev/) app.
 
 This example was created by running `yarn create svelte`. Please see the [official
 documentation](https://kit.svelte.dev/docs) for more info.
+
+## License
+
+This code is provided under the [MIT license](https://mit-license.org/).
