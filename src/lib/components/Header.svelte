@@ -4,28 +4,26 @@
 
 <AppBar>
 	<svelte:fragment slot="lead">
-		<strong class="text-xl uppercase">Skeleton</strong>
+		<strong class="text-xl uppercase">Kyle Nakamura</strong>
 	</svelte:fragment>
+
 	<svelte:fragment slot="trail">
 		<a
 			class="btn btn-sm variant-ghost-surface"
-			href="https://discord.gg/EXqV7W8MtY"
+			href="https://linkedin.com/in/kylenakamura"
+			aria-label="Go to Kyle Nakamura's LinkedIn profile"
+			title="Go to Kyle Nakamura's LinkedIn profile"
 			target="_blank"
 			rel="noreferrer"
 		>
-			Discord
+			LinkedIn
 		</a>
+
 		<a
 			class="btn btn-sm variant-ghost-surface"
-			href="https://twitter.com/SkeletonUI"
-			target="_blank"
-			rel="noreferrer"
-		>
-			Twitter
-		</a>
-		<a
-			class="btn btn-sm variant-ghost-surface"
-			href="https://github.com/skeletonlabs/skeleton"
+			href="https://github.com/knakamura13"
+			aria-label="Go to Kyle Nakamura's GitHub profile"
+			title="Go to Kyle Nakamura's GitHub profile"
 			target="_blank"
 			rel="noreferrer"
 		>
