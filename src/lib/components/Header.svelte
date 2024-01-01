@@ -2,7 +2,7 @@
 	import { AppBar } from '@skeletonlabs/skeleton';
 </script>
 
-<AppBar>
+<AppBar shadow="shadow-2xl">
 	<svelte:fragment slot="lead">
 		<strong class="text-xl uppercase">Kyle Nakamura</strong>
 	</svelte:fragment>

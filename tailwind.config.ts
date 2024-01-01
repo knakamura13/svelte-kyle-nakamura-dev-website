@@ -18,6 +18,30 @@ export default {
 					{
 						name: 'skeleton',
 						enhancements: true
+					},
+					{
+						name: 'modern',
+						enhancements: true
+					},
+					{
+						name: 'wintry',
+						enhancements: true
+					},
+					{
+						name: 'rocket',
+						enhancements: true
+					},
+					{
+						name: 'hamlindigo',
+						enhancements: true
+					},
+					{
+						name: 'gold-nouveau',
+						enhancements: true
+					},
+					{
+						name: 'crimson',
+						enhancements: true
 					}
 				]
 			}

@@ -12,7 +12,8 @@
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
 	},
 	"dependencies": {
-		"@floating-ui/dom": "1.5.3"
+		"@floating-ui/dom": "1.5.3",
+		"particles.js": "^2.0.0"
 	},
 	"devDependencies": {
 		"@skeletonlabs/skeleton": "2.6.1",
