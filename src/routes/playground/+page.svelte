@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 
 	onMount(() => {
-		particlesJS.load('particles-js', '/src/lib/particlesjs-config.json');
+		particlesJS.load('particles-js', '/vendor/particlesjs-config.json');
 	});
 </script>
 
