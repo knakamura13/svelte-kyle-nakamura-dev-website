@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { AppBar } from '@skeletonlabs/skeleton';
+	import AnimatedButton from '$lib/components/AnimatedButton.svelte';
 </script>
 
 <AppBar shadow="shadow-2xl">
@@ -10,26 +11,15 @@
 	</svelte:fragment>
 
 	<svelte:fragment slot="trail">
-		<a
-			class="btn btn-sm variant-ghost-surface"
+		<AnimatedButton
 			href="https://linkedin.com/in/kylenakamura"
-			aria-label="Go to Kyle Nakamura's LinkedIn profile"
-			title="Go to Kyle Nakamura's LinkedIn profile"
-			target="_blank"
-			rel="noreferrer"
+			icon="/src/assets/icons/logo-linkedin-white.png"
+			iconSize="small">LinkedIn</AnimatedButton
 		>
-			LinkedIn
-		</a>
-
-		<a
-			class="btn btn-sm variant-ghost-surface"
+		<AnimatedButton
 			href="https://github.com/knakamura13"
-			aria-label="Go to Kyle Nakamura's GitHub profile"
-			title="Go to Kyle Nakamura's GitHub profile"
-			target="_blank"
-			rel="noreferrer"
+			icon="/src/assets/icons/logo-github-white.svg"
+			iconSize="small">GitHub</AnimatedButton
 		>
-			GitHub
-		</a>
 	</svelte:fragment>
 </AppBar>
