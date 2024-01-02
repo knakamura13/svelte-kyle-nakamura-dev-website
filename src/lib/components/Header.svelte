@@ -4,7 +4,9 @@
 
 <AppBar shadow="shadow-2xl">
 	<svelte:fragment slot="lead">
-		<strong class="text-xl uppercase">Kyle Nakamura</strong>
+		<a href="/" class="link link--zoomies">
+			<strong class="text-xl uppercase">Kyle Nakamura</strong>
+		</a>
 	</svelte:fragment>
 
 	<svelte:fragment slot="trail">
