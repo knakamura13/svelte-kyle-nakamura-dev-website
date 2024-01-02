@@ -13,12 +13,12 @@
 	<svelte:fragment slot="trail">
 		<AnimatedButton
 			href="https://linkedin.com/in/kylenakamura"
-			icon="/src/assets/icons/logo-linkedin-white.png"
+			icon="/icons/logo-linkedin-white.png"
 			iconSize="small">LinkedIn</AnimatedButton
 		>
 		<AnimatedButton
 			href="https://github.com/knakamura13"
-			icon="/src/assets/icons/logo-github-white.svg"
+			icon="/icons/logo-github-white.svg"
 			iconSize="small">GitHub</AnimatedButton
 		>
 	</svelte:fragment>

@@ -10,7 +10,7 @@
 	export let type: BUTTON_TYPE = 'fill';
 	export let ariaLabel: string = '';
 	export let disabled: boolean = false;
-	export let icon: string = '/src/assets/icons/icon-arrow-light.svg';
+	export let icon: string = '/icons/icon-arrow-light.svg';
 	export let iconSize: ICON_SIZE = 'med';
 
 	const dispatch = createEventDispatcher();
