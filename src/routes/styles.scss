@@ -66,3 +66,29 @@
 		}
 	}
 }
+
+.header {
+	margin-bottom: 0.5rem;
+
+	&.h1 {
+		margin-bottom: 1rem;
+	}
+}
+
+.sub-header {
+	opacity: 0.75;
+}
+
+.paragraph {
+	opacity: 0.9;
+}
+
+section.page {
+	padding: 2rem 1rem;
+	max-width: 50rem;
+	margin: auto;
+
+	* + * {
+		margin-bottom: 2rem;
+	}
+}
