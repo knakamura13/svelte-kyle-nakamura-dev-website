@@ -67,14 +67,6 @@
 	}
 }
 
-.header {
-	margin-bottom: 0.5rem;
-
-	&.h1 {
-		margin-bottom: 1rem;
-	}
-}
-
 .sub-header {
 	opacity: 0.75;
 }
@@ -88,7 +80,12 @@ section.page {
 	max-width: 50rem;
 	margin: auto;
 
+	// Lobotomized owl selectors
 	* + * {
-		margin-bottom: 2rem;
+		margin-top: 1em;
+	}
+
+	.header > * + * {
+		margin-top: 1rem;
 	}
 }

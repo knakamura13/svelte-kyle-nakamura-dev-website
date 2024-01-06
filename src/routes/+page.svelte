@@ -28,8 +28,9 @@
 		</p>
 	</section>
 
-	<AnimatedButton href="https://linkedin.com/in/kylenakamura/">Learn more</AnimatedButton>
+	<AnimatedButton
+		href="https://linkedin.com/in/kylenakamura/"
+		size="big"
+		ariaLabel="Learn more about me on LinkedIn">Learn more</AnimatedButton
+	>
 </section>
-
-<style lang="scss">
-</style>
