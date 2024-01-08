@@ -2,7 +2,7 @@
 	import AnimatedButton from '$lib/components/AnimatedButton.svelte';
 </script>
 
-<section class="page" id="home-bio">
+<section class="page" id="home">
 	<section class="intro">
 		<h1 class="header h1">Hi, I'm Kyle Nakamura</h1>
 		<p class="sub-header">
@@ -28,9 +28,5 @@
 		</p>
 	</section>
 
-	<AnimatedButton
-		href="https://linkedin.com/in/kylenakamura/"
-		size="big"
-		ariaLabel="Learn more about me on LinkedIn">Learn more</AnimatedButton
-	>
+	<AnimatedButton href="/resume" size="big" ariaLabel="See my résumé">Learn more</AnimatedButton>
 </section>

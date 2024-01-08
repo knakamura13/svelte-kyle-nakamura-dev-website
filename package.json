@@ -13,6 +13,8 @@
 	},
 	"dependencies": {
 		"@floating-ui/dom": "1.5.3",
+		"@types/pdfjs-dist": "^2.10.378",
+		"@vitejs/plugin-legacy": "^5.2.0",
 		"particles.js": "^2.0.0"
 	},
 	"devDependencies": {
@@ -26,6 +28,7 @@
 		"@types/node": "20.10.6",
 		"autoprefixer": "10.4.16",
 		"matter-js": "^0.19.0",
+		"pdfjs-dist": "^4.0.379",
 		"postcss": "8.4.32",
 		"prettier": "^3.1.1",
 		"prettier-plugin-svelte": "^3.1.2",
