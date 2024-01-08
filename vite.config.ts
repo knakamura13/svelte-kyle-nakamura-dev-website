@@ -12,9 +12,6 @@ export default defineConfig({
 		})
 	],
 	build: {
-		rollupOptions: {
-			external: ['pdfjs-dist']
-		},
 		target: 'esnext' // Change to a more recent ECMAScript standard
 	}
 });
