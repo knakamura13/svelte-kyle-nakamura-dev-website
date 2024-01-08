@@ -10,7 +10,7 @@
 	<svelte:fragment slot="lead">
 		{#if urlPath !== '/'}
 			<button
-				class="btn back-btn"
+				class="btn back-btn jiggle"
 				title="Back"
 				on:click={() => {
 					history.back();

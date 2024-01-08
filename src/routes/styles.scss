@@ -1,3 +1,50 @@
+@keyframes jiggle {
+	0% {
+		transform: rotate(0deg) scale(1.1);
+	}
+	10% {
+		transform: rotate(-5deg) scale(1.15);
+	}
+	20% {
+		transform: rotate(5deg) scale(1.2);
+	}
+	30% {
+		transform: rotate(-4deg) scale(1.25);
+	}
+	40% {
+		transform: rotate(4deg) scale(1.25);
+	}
+	50% {
+		transform: rotate(-3deg) scale(1.25);
+	}
+	60% {
+		transform: rotate(3deg) scale(1.25);
+	}
+	70% {
+		transform: rotate(-2deg) scale(1.25);
+	}
+	80% {
+		transform: rotate(2deg) scale(1.25);
+	}
+	90% {
+		transform: rotate(-1deg) scale(1.25);
+	}
+	100% {
+		transform: rotate(0deg) scale(1.25);
+	}
+}
+
+button.btn {
+	&.jiggle {
+		transition: all 0.25s ease-in-out;
+
+		&:hover {
+			animation: jiggle 1s ease-out;
+			transform: scale(1.25);
+		}
+	}
+}
+
 .link {
 	cursor: pointer;
 	font-size: 18px;
@@ -88,5 +135,9 @@ section.page {
 
 	.header > * + * {
 		margin-top: 1rem;
+	}
+
+	.sub-header {
+		margin-bottom: 2rem;
 	}
 }
