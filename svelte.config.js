@@ -7,13 +7,6 @@ const config = {
 	preprocess: [vitePreprocess()],
 	kit: {
 		adapter: adapter()
-	},
-	browserslist: [
-		// Support modern browsers with top-level await
-		'Chrome >= 89',
-		'Edge >= 89',
-		'Firefox >= 89',
-		'Safari >= 15'
-	]
+	}
 };
 export default config;
