@@ -28,5 +28,7 @@
 		</p>
 	</section>
 
-	<AnimatedButton href="/resume" size="big" ariaLabel="See my résumé">Learn more</AnimatedButton>
+	<AnimatedButton href="/resume" size="big" ariaLabel="View my resume">
+		View my resume
+	</AnimatedButton>
 </section>

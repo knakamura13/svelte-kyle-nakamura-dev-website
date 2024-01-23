@@ -98,11 +98,10 @@
 			bottom: 0;
 			height: 75%;
 			width: auto;
-			margin-bottom: auto;
-			margin-top: auto;
-			overflow: visible;
+			margin: auto;
 			transition: all 0.3s;
 			aspect-ratio: 1 / 1 !important;
+			border-radius: unset;
 		}
 
 		.btn-text {
