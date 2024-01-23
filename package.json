@@ -1,5 +1,5 @@
 {
-	"name": "my-skeleton-app",
+	"name": "kylenakamura-dev",
 	"version": "0.0.1",
 	"private": true,
 	"type": "module",
@@ -11,20 +11,17 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
 	},
-	"dependencies": {
-		"@floating-ui/dom": "1.5.3",
-		"@vitejs/plugin-legacy": "^5.2.0",
-		"particles.js": "^2.0.0"
-	},
+	"dependencies": {},
 	"devDependencies": {
+		"@floating-ui/dom": "1.5.3",
 		"@skeletonlabs/skeleton": "2.6.1",
 		"@skeletonlabs/tw-plugin": "0.3.0",
-		"@sveltejs/adapter-auto": "^3.0.0",
 		"@sveltejs/adapter-node": "^2.0.2",
 		"@sveltejs/kit": "^2.0.0",
 		"@sveltejs/vite-plugin-svelte": "^3.0.0",
 		"@types/matter-js": "^0.19.5",
 		"@types/node": "20.10.6",
+		"@vitejs/plugin-legacy": "^5.2.0",
 		"autoprefixer": "10.4.16",
 		"matter-js": "^0.19.0",
 		"postcss": "8.4.32",
