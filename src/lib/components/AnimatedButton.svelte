@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { createEventDispatcher } from 'svelte';
+	import { clipboard } from '@skeletonlabs/skeleton';
 
 	type BUTTON_SIZE = 'big' | 'small';
 	type BUTTON_ICON_SIZE = 'big' | 'med' | 'small';
@@ -10,6 +11,8 @@
 	export let disabled: boolean = false;
 	export let icon: string = '/icons/icon-arrow-light.svg';
 	export let iconSize: BUTTON_ICON_SIZE = 'med';
+	export let noUppercase: boolean | undefined = false;
+	export let clipboardText: string = '';
 
 	const dispatch = createEventDispatcher();
 
@@ -18,6 +21,11 @@
 
 	// Determine if the link is a PDF
 	$: isPDFLink = typeof href === 'string' && href.length && href.endsWith('.pdf');
+
+	// Determine if the link is copyable text
+	$: isClipboardLink = typeof href === 'undefined' && !!clipboardText;
+
+	let copied = false;
 
 	function handleClick(event: MouseEvent): void {
 		if (href !== undefined && isPDFLink) {
@@ -29,10 +37,25 @@
 		}
 	}
 
+	function handleClipboardClick(): void {
+		copied = true;
+		setTimeout(() => {
+			copied = false;
+		}, 1000);
+	}
+
 	function determineClasses(): string {
-		return `button btn btn-sm variant-ghost-surface ${size} icon--${iconSize} ${
-			disabled ? 'disabled-link' : ''
-		}`;
+		const buttonClasses = [
+			'button',
+			'btn',
+			'btn-sm',
+			'variant-ghost-surface',
+			size,
+			`icon--${iconSize}`,
+			disabled ? 'disabled-link' : '',
+			noUppercase ? 'no-uppercase' : ''
+		];
+		return buttonClasses.join(' ');
 	}
 
 	function determineHref(): string {
@@ -58,7 +81,7 @@
 
 		<img src={icon} alt="" aria-hidden="true" class="btn-icon" />
 	</a>
-{:else}
+{:else if isPDFLink}
 	<a
 		on:click={handleClick}
 		aria-label={ariaLabel}
@@ -73,6 +96,25 @@
 
 		<img src={icon} alt="" aria-hidden="true" class="btn-icon" />
 	</a>
+{:else if isClipboardLink}
+	<button
+		use:clipboard={clipboardText}
+		on:click={handleClipboardClick}
+		aria-label={ariaLabel}
+		title={ariaLabel}
+		class={determineClasses()}
+		disabled={copied}
+	>
+		<span class="btn-text">
+			{#if copied}
+				Copied phone number 👍
+			{:else}
+				<slot />
+			{/if}
+		</span>
+
+		<img src={icon} alt="" aria-hidden="true" class="btn-icon" />
+	</button>
 {/if}
 
 <style lang="scss">
@@ -105,7 +147,12 @@
 		}
 
 		.btn-text {
+			display: inline-block;
 			transition: all 0.3s;
+		}
+
+		&.no-uppercase {
+			text-transform: initial !important;
 		}
 
 		// Button Size
