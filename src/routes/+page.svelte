@@ -2,6 +2,10 @@
 	import AnimatedButton from '$lib/components/AnimatedButton.svelte';
 </script>
 
+<svelte:head>
+	<title>About Kyle</title>
+</svelte:head>
+
 <section class="page" id="home">
 	<section class="intro">
 		<h1 class="header h1">Hi, I'm Kyle Nakamura</h1>

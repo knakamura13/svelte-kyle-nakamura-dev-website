@@ -81,21 +81,6 @@
 
 		<img src={icon} alt="" aria-hidden="true" class="btn-icon" />
 	</a>
-{:else if isPDFLink}
-	<a
-		on:click={handleClick}
-		aria-label={ariaLabel}
-		title={ariaLabel}
-		href={determineHref()}
-		class={determineClasses()}
-		type="button"
-	>
-		<div class="btn-text">
-			<slot />
-		</div>
-
-		<img src={icon} alt="" aria-hidden="true" class="btn-icon" />
-	</a>
 {:else if isClipboardLink}
 	<button
 		use:clipboard={clipboardText}
@@ -115,6 +100,21 @@
 
 		<img src={icon} alt="" aria-hidden="true" class="btn-icon" />
 	</button>
+{:else}
+	<a
+		on:click={handleClick}
+		aria-label={ariaLabel}
+		title={ariaLabel}
+		href={determineHref()}
+		class={determineClasses()}
+		type="button"
+	>
+		<div class="btn-text">
+			<slot />
+		</div>
+
+		<img src={icon} alt="" aria-hidden="true" class="btn-icon" />
+	</a>
 {/if}
 
 <style lang="scss">
@@ -138,7 +138,7 @@
 			top: 0;
 			right: -4rem;
 			bottom: 0;
-			height: 75%;
+			height: 55%;
 			width: auto;
 			margin: auto;
 			transition: all 0.3s;
@@ -155,6 +155,18 @@
 			text-transform: initial !important;
 		}
 
+		// Animations
+		&:hover,
+		&:focus {
+			img.btn-icon {
+				right: calc(1rem + 1px);
+			}
+
+			.btn-text {
+				transform: translateX(-0.9rem);
+			}
+		}
+
 		// Button Size
 		&.big {
 			padding: 0.75rem 2rem;
@@ -166,19 +178,23 @@
 			font-size: 0.9rem;
 		}
 
-		// Animations
-		&:hover,
-		&:focus {
+		// Icon size
+		&.icon--big {
 			img.btn-icon {
-				right: calc(0.6rem - 1px);
+				height: 75%;
 			}
 
-			.btn-text {
-				transform: translateX(-0.9rem);
+			&:hover,
+			&:focus {
+				img.btn-icon {
+					right: calc(0.6rem - 1px);
+				}
+
+				.btn-text {
+					transform: translateX(-0.9rem);
+				}
 			}
 		}
-
-		// Icon size
 		&.icon--small {
 			img.btn-icon {
 				height: 40%;
