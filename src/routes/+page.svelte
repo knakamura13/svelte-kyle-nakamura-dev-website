@@ -18,17 +18,16 @@
 	<section class="about">
 		<h2 class="header h2">About Me</h2>
 		<p class="paragraph">
-			I'm a passionate Machine Learning enthusiast and experienced Full-Stack Web Developer,
-			currently pursuing a Master's in Computer Science at Georgia Tech (expected to graduate in May
-			2024).
+			I'm a dedicated Machine Learning enthusiast and seasoned Full-Stack Web Developer with a
+			Master's degree in Computer Science from Georgia Tech.
 			<br /><br />
-			My academic focus is on Machine Learning, blending it with practical applications in fields like
-			computer vision and autonomous vehicle technologies. Professionally, I've honed my skills over
-			six years in full-stack web and mobile development, working at Azusa Pacific University as well
-			as various startups.
+			My academic journey concentrated on Machine Learning, integrating it with practical applications
+			in areas like computer vision and autonomous vehicles. With over 7 years of professional experience
+			in full-stack web and mobile development, I've worked at Azusa Pacific University and various startups
+			as a freelance software developer.
 			<br /><br />
-			My drive to innovate and problem-solve in AI and web development is matched by my commitment to
-			creating impactful, user-centric solutions. I look forward to seeing what you and I can build together.
+			I am driven by a passion for innovation and problem-solving in AI and web development, always striving
+			to create impactful, user-centric solutions. Let's collaborate to build something remarkable together.
 		</p>
 	</section>
 
