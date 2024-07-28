@@ -1,14 +1,13 @@
 <script>
 	import { onMount } from 'svelte';
-
 	import AnimatedButton from '$lib/components/AnimatedButton.svelte';
 
 	let repositories = [];
 
 	onMount(async () => {
-		const response = await fetch('https://api.github.com/users/knakamura13/repos?sort=updated');
+		const response = await fetch('/api/repositories');
 		const data = await response.json();
-		repositories = data.slice(0, 6); // Get the 6 most recent repositories
+		repositories = data.repositories;
 	});
 </script>
 
@@ -52,6 +51,14 @@
 			{#each repositories as repo}
 				<a class="repo-card" href={repo.html_url} target="_blank" rel="noopener noreferrer">
 					<h3>{repo.name}</h3>
+					<div class="github-stars-container">
+						<img
+							class="github-stars-icon"
+							src="icons/icon-yellow-star.svg"
+							alt="GitHub Stars Icon"
+						/>
+						<span class="github-stars-count">{repo.stargazers_count}</span>
+					</div>
 					<p>{repo.description ?? 'No description.'}</p>
 				</a>
 			{/each}
@@ -88,6 +95,24 @@
 		&:hover {
 			background-color: rgba(255, 255, 255, 0.15);
 			border-color: #919191;
+		}
+
+		.github-stars-container {
+			display: flex;
+			height: 1rem;
+			gap: 0.25rem;
+			align-items: center;
+			margin-top: 0.5rem;
+
+			.github-stars-icon {
+				width: auto;
+				height: 100%;
+				margin: 0;
+			}
+
+			.github-stars-count {
+				margin: 0;
+			}
 		}
 	}
 </style>
