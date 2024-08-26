@@ -28,16 +28,19 @@
 	<section class="about">
 		<h2 class="header h2">About Me</h2>
 		<p class="paragraph">
-			I'm a dedicated Machine Learning enthusiast and seasoned Full-Stack Web Developer with a
-			Master's degree in Computer Science from Georgia Tech.
+			Hi, I'm Kyle Nakamura, a software engineer with 7 years of experience in full-stack web
+			development.
 			<br /><br />
-			My academic journey concentrated on Machine Learning, integrating it with practical applications
-			in areas like computer vision and natural language processing. With over 7 years of professional
-			experience in full-stack web and mobile development, I've worked at Azusa Pacific University and
-			various startups as a freelance software developer.
+			I have a deep interest in machine learning, which I’ve successfully integrated into various web
+			applications throughout my career. I recently earned my Master’s in Computer Science from Georgia
+			Tech, specializing in machine learning, and I’m an active contributor to the open-source community
+			through projects like
+			<a href="https://github.com/knakamura13/mlrose-ky" target="_blank" rel="noopener">mlrose-ky</a
+			>, where I’ve overhauled and enhanced the codebase of a popular ML package.
 			<br /><br />
-			I am driven by a passion for innovation and problem-solving in AI and web development, always striving
-			to create impactful, user-centric solutions. Let's collaborate to build something remarkable together.
+			I’m currently seeking opportunities that allow me to work at the intersection of ML research and
+			product development, but I’m also open to non-software engineering roles where I can leverage my
+			engineering experience and contribute to innovative projects.
 		</p>
 
 		<AnimatedButton href="/resume" size="big" ariaLabel="View my resume" iconSize="big">
