@@ -19,10 +19,7 @@
 	<section class="intro">
 		<h1 class="header h1">Hi, I'm Kyle Nakamura</h1>
 
-		<p class="sub-header">
-			Welcome to my professional portfolio.<br />
-			I specialize in Machine Learning and Full-Stack Web Development.
-		</p>
+		<p class="sub-header">Welcome to my professional portfolio.</p>
 	</section>
 
 	<section class="about">

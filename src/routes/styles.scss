@@ -114,6 +114,10 @@ button.btn {
 	}
 }
 
+section + section {
+	margin-top: 3rem !important;
+}
+
 .sub-header {
 	opacity: 0.75;
 }
