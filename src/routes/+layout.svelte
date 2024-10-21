@@ -3,6 +3,7 @@
 	import './styles.scss';
 	import { AppShell } from '@skeletonlabs/skeleton';
 	import Header from '$lib/components/Header.svelte';
+	import '@fortawesome/fontawesome-free/css/all.min.css';
 
 	// Floating UI for Popups
 	import { computePosition, autoUpdate, flip, shift, offset, arrow } from '@floating-ui/dom';

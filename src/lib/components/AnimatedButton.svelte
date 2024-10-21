@@ -48,7 +48,6 @@
 		const buttonClasses = [
 			'button',
 			'btn',
-			'btn-sm',
 			'variant-ghost-surface',
 			size,
 			`icon--${iconSize}`,

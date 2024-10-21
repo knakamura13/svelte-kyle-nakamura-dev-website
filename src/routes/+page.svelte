@@ -14,8 +14,7 @@
 
 <section class="page" id="home">
 	<section class="intro">
-		<h1 class="header h1">Hi, I'm Kyle Nakamura</h1>
-
+		<h1 class="header h1">Hello!</h1>
 		<p class="sub-header">Welcome to my professional portfolio.</p>
 	</section>
 

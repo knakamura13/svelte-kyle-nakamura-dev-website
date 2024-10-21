@@ -13,6 +13,7 @@
 	},
 	"devDependencies": {
 		"@floating-ui/dom": "1.6.8",
+		"@fortawesome/fontawesome-free": "^6.6.0",
 		"@octokit/rest": "^21.0.1",
 		"@skeletonlabs/skeleton": "2.10.2",
 		"@skeletonlabs/tw-plugin": "0.4.0",
