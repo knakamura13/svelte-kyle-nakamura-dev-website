@@ -60,6 +60,10 @@
 					</div>
 					<p>{repo.description ?? 'No description.'}</p>
 				</a>
+			{:else}
+				<div class="no-repos-message">
+					<p>Projects are loading... If this persists, check the GitHub API connection.</p>
+				</div>
 			{/each}
 		</div>
 
@@ -80,6 +84,20 @@
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
 		gap: 1rem;
+	}
+
+	.no-repos-message {
+		grid-column: 1 / -1;
+		text-align: center;
+		padding: 2rem;
+		background-color: rgba(255, 255, 255, 0.05);
+		border-radius: 8px;
+		border: 1px dashed rgba(255, 255, 255, 0.2);
+
+		p {
+			margin: 0;
+			opacity: 0.7;
+		}
 	}
 
 	.repo-card {

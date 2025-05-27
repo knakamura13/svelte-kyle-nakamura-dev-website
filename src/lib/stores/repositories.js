@@ -11,7 +11,13 @@ function isBrowser() {
 if (isBrowser()) {
 	const cachedData = sessionStorage.getItem('repositories');
 	if (cachedData) {
-		repositories.set(JSON.parse(cachedData)); // Populate store with cached data
+		try {
+			repositories.set(JSON.parse(cachedData)); // Populate store with cached data
+		} catch (error) {
+			console.warn('Failed to parse cached repository data:', error);
+			// Clear the corrupted cache
+			sessionStorage.removeItem('repositories');
+		}
 	}
 }
 
@@ -21,17 +27,43 @@ export async function fetchRepositories() {
 	if (!fetched) {
 		try {
 			const response = await fetch('/api/repositories');
-			const data = await response.json();
-			repositories.set(data.repositories);
 
-			// Save to session storage for persistence across reloads
-			if (isBrowser()) {
-				sessionStorage.setItem('repositories', JSON.stringify(data.repositories));
+			// Check if the response is ok
+			if (!response.ok) {
+				throw new Error(`HTTP error! status: ${response.status}`);
+			}
+
+			// Get the response text first to check if it's valid
+			const responseText = await response.text();
+
+			// Check if response is empty or undefined
+			if (!responseText || responseText === 'undefined') {
+				throw new Error('Empty or undefined response from server');
+			}
+
+			// Parse the JSON
+			const data = JSON.parse(responseText);
+
+			// Ensure we have a valid data structure
+			if (data && data.repositories && Array.isArray(data.repositories)) {
+				repositories.set(data.repositories);
+
+				// Save to session storage for persistence across reloads
+				if (isBrowser()) {
+					sessionStorage.setItem('repositories', JSON.stringify(data.repositories));
+				}
+			} else {
+				// Set empty array if the data structure is invalid
+				repositories.set([]);
+				console.warn('Invalid repository data structure received:', data);
 			}
 
 			fetched = true;
 		} catch (error) {
 			console.error('Error fetching repositories:', error);
+			// Set empty array on error so the UI doesn't break
+			repositories.set([]);
+			fetched = true; // Still mark as fetched to prevent retries
 		}
 	}
 }
