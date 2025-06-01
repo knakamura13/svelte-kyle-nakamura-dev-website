@@ -17,6 +17,7 @@
 	const STONE_COLOR_BLUE = 'blue';
 	let currentPlayerColor: string;
 	const FRICTION = 0.985;
+	const MIN_DRAG_DISTANCE = 30; // Minimum pullback distance for a valid launch
 
 	interface Stone {
 		x: number;
@@ -178,6 +179,13 @@
 		return null;
 	}
 
+	function resetDragState() {
+		dragStartX = null;
+		dragStartY = null;
+		dragEndX = null;
+		dragEndY = null;
+	}
+
 	function handleMouseDown(event: MouseEvent) {
 		if (!activeStone || !isStoneReadyForLaunch || activeStone.isMoving) return;
 		const pos = getMousePos(event);
@@ -208,22 +216,32 @@
 			dragEndX === null ||
 			dragEndY === null ||
 			!activeStone
-		)
+		) {
+			isDragging = false;
+			window.removeEventListener('mousemove', windowMouseMove);
+			window.removeEventListener('mouseup', windowMouseUp);
+			resetDragState();
 			return;
+		}
 
-		const launchPowerMultiplier = 0.15;
-		activeStone.velocityX = (dragStartX - dragEndX) * launchPowerMultiplier;
-		activeStone.velocityY = (dragStartY - dragEndY) * launchPowerMultiplier;
-		activeStone.isMoving = true;
-		isStoneReadyForLaunch = false;
+		const dx = dragStartX - dragEndX;
+		const dy = dragStartY - dragEndY;
+		const dragDistance = Math.sqrt(dx * dx + dy * dy);
+
+		if (dragDistance >= MIN_DRAG_DISTANCE) {
+			const launchPowerMultiplier = 0.15;
+			activeStone.velocityX = dx * launchPowerMultiplier;
+			activeStone.velocityY = dy * launchPowerMultiplier;
+			activeStone.isMoving = true;
+			isStoneReadyForLaunch = false;
+		}
+		// If dragDistance < MIN_DRAG_DISTANCE, the stone is not launched,
+		// and isStoneReadyForLaunch remains true.
 
 		isDragging = false;
 		window.removeEventListener('mousemove', windowMouseMove);
 		window.removeEventListener('mouseup', windowMouseUp);
-		dragStartX = null;
-		dragStartY = null;
-		dragEndX = null;
-		dragEndY = null;
+		resetDragState();
 	}
 
 	function handleTouchStart(event: TouchEvent) {
@@ -262,22 +280,31 @@
 			dragEndX === null ||
 			dragEndY === null ||
 			!activeStone
-		)
+		) {
+			isDragging = false;
+			window.removeEventListener('touchmove', windowTouchMove);
+			window.removeEventListener('touchend', windowTouchEnd);
+			resetDragState();
 			return;
+		}
 
-		const launchPowerMultiplier = 0.15;
-		activeStone.velocityX = (dragStartX - dragEndX) * launchPowerMultiplier;
-		activeStone.velocityY = (dragStartY - dragEndY) * launchPowerMultiplier;
-		activeStone.isMoving = true;
-		isStoneReadyForLaunch = false;
+		const dx = dragStartX - dragEndX;
+		const dy = dragStartY - dragEndY;
+		const dragDistance = Math.sqrt(dx * dx + dy * dy);
+
+		if (dragDistance >= MIN_DRAG_DISTANCE) {
+			const launchPowerMultiplier = 0.15;
+			activeStone.velocityX = dx * launchPowerMultiplier;
+			activeStone.velocityY = dy * launchPowerMultiplier;
+			activeStone.isMoving = true;
+			isStoneReadyForLaunch = false;
+		}
+		// If dragDistance < MIN_DRAG_DISTANCE, the stone is not launched.
 
 		isDragging = false;
 		window.removeEventListener('touchmove', windowTouchMove);
 		window.removeEventListener('touchend', windowTouchEnd);
-		dragStartX = null;
-		dragStartY = null;
-		dragEndX = null;
-		dragEndY = null;
+		resetDragState();
 	}
 
 	function updateGame() {
