@@ -150,8 +150,21 @@
 		) {
 			context.beginPath();
 			context.moveTo(activeStone.x, activeStone.y);
-			const aimX = activeStone.x - (dragEndX - dragStartX);
-			const aimY = activeStone.y - (dragEndY - dragStartY);
+
+			let aimingDx = dragStartX - dragEndX;
+			let aimingDy = dragStartY - dragEndY;
+			const currentAimingDistance = Math.sqrt(aimingDx * aimingDx + aimingDy * aimingDy);
+
+			if (currentAimingDistance > 0 && currentAimingDistance < MIN_DRAG_DISTANCE) {
+				const scaleFactor = MIN_DRAG_DISTANCE / currentAimingDistance;
+				aimingDx *= scaleFactor;
+				aimingDy *= scaleFactor;
+			}
+
+			// If currentAimingDistance is 0, aimingDx/Dy are 0, lineTo will be to activeStone.x,y (no visible line)
+			const aimX = activeStone.x + aimingDx;
+			const aimY = activeStone.y + aimingDy;
+
 			context.lineTo(aimX, aimY);
 			context.strokeStyle = 'rgba(0, 0, 0, 0.5)';
 			context.lineWidth = 2;
@@ -228,15 +241,24 @@
 		const dy = dragStartY - dragEndY;
 		const dragDistance = Math.sqrt(dx * dx + dy * dy);
 
-		if (dragDistance >= MIN_DRAG_DISTANCE) {
+		if (dragDistance > 0) {
+			// Any drag means a potential launch
+			let launchDx = dx;
+			let launchDy = dy;
+
+			if (dragDistance < MIN_DRAG_DISTANCE) {
+				const scaleFactor = MIN_DRAG_DISTANCE / dragDistance;
+				launchDx = dx * scaleFactor;
+				launchDy = dy * scaleFactor;
+			}
+
 			const launchPowerMultiplier = 0.15;
-			activeStone.velocityX = dx * launchPowerMultiplier;
-			activeStone.velocityY = dy * launchPowerMultiplier;
+			activeStone.velocityX = launchDx * launchPowerMultiplier;
+			activeStone.velocityY = launchDy * launchPowerMultiplier;
 			activeStone.isMoving = true;
 			isStoneReadyForLaunch = false;
 		}
-		// If dragDistance < MIN_DRAG_DISTANCE, the stone is not launched,
-		// and isStoneReadyForLaunch remains true.
+		// If dragDistance is 0 (click without drag), no launch occurs, stone remains ready.
 
 		isDragging = false;
 		window.removeEventListener('mousemove', windowMouseMove);
@@ -292,14 +314,24 @@
 		const dy = dragStartY - dragEndY;
 		const dragDistance = Math.sqrt(dx * dx + dy * dy);
 
-		if (dragDistance >= MIN_DRAG_DISTANCE) {
+		if (dragDistance > 0) {
+			// Any drag means a potential launch
+			let launchDx = dx;
+			let launchDy = dy;
+
+			if (dragDistance < MIN_DRAG_DISTANCE) {
+				const scaleFactor = MIN_DRAG_DISTANCE / dragDistance;
+				launchDx = dx * scaleFactor;
+				launchDy = dy * scaleFactor;
+			}
+
 			const launchPowerMultiplier = 0.15;
-			activeStone.velocityX = dx * launchPowerMultiplier;
-			activeStone.velocityY = dy * launchPowerMultiplier;
+			activeStone.velocityX = launchDx * launchPowerMultiplier;
+			activeStone.velocityY = launchDy * launchPowerMultiplier;
 			activeStone.isMoving = true;
 			isStoneReadyForLaunch = false;
 		}
-		// If dragDistance < MIN_DRAG_DISTANCE, the stone is not launched.
+		// If dragDistance is 0 (tap release at same spot), no launch occurs.
 
 		isDragging = false;
 		window.removeEventListener('touchmove', windowTouchMove);
