@@ -24,6 +24,7 @@
 		radius: number;
 		color: string;
 		isMoving: boolean;
+		isOutOfBounds: boolean;
 	}
 
 	let stone: Stone;
@@ -49,7 +50,8 @@
 			velocityY: 0,
 			radius: STONE_RADIUS,
 			color: STONE_COLOR,
-			isMoving: false
+			isMoving: false,
+			isOutOfBounds: false
 		};
 		isStoneReadyForLaunch = true;
 	}
@@ -116,11 +118,18 @@
 	}
 
 	function drawStone(context: CanvasRenderingContext2D, s: Stone) {
+		const originalAlpha = context.globalAlpha;
+		if (s.isOutOfBounds) {
+			context.globalAlpha = 0.5;
+		}
+
 		context.beginPath();
 		context.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
 		context.fillStyle = s.color;
 		context.fill();
 		context.closePath();
+
+		context.globalAlpha = originalAlpha;
 	}
 
 	function drawAimingLine(context: CanvasRenderingContext2D) {
@@ -270,6 +279,12 @@
 			stone.velocityX *= FRICTION;
 			stone.velocityY *= FRICTION;
 
+			if (!stone.isOutOfBounds) {
+				if (stone.x < LANE_OFFSET_X || stone.x > LANE_OFFSET_X + LANE_WIDTH) {
+					stone.isOutOfBounds = true;
+				}
+			}
+
 			if (Math.abs(stone.velocityX) < 0.05 && Math.abs(stone.velocityY) < 0.05) {
 				stone.velocityX = 0;
 				stone.velocityY = 0;
@@ -295,6 +310,7 @@
 			} else if (stone.y + stone.radius > LANE_OFFSET_Y + LANE_HEIGHT) {
 				stone.y = LANE_OFFSET_Y + LANE_HEIGHT - stone.radius;
 				stone.velocityY = 0;
+				stone.isOutOfBounds = true;
 			}
 		}
 	}
