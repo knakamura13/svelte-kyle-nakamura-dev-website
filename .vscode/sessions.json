@@ -1,38 +1,25 @@
 {
-  "$schema": "https://cdn.statically.io/gh/nguyenngoclongdev/cdn/main/schema/v10/terminal-keeper.json",
-  "theme": "tribe",
-  "active": "default",
-  "activateOnStartup": true,
-  "keepExistingTerminals": false,
-  "sessions": {
-    "default": [
-      {
-        "name": "Proxy",
-        "autoExecuteCommands": true,
-        "icon": "server-process",
-        "color": "terminal.ansiBlue",
-        "commands": [
-          "hpctl proxy --target=https://hpdvo.mhighpoint.com --port=8081"
-        ]
-      },
-      {
-        "name": "Run dev",
-        "autoExecuteCommands": true,
-        "icon": "debug-alt",
-        "color": "terminal.ansiGreen",
-        "commands": [
-          "nx run degree-audit-wizard:serve:development"
-        ]
-      },
-      {
-        "name": "Terminal",
-        "autoExecuteCommands": false,
-        "icon": "terminal",
-        "color": "terminal.ansiMagenta",
-        "commands": [
-          ""
-        ]
-      }
-    ]
-  }
+	"$schema": "https://cdn.statically.io/gh/nguyenngoclongdev/cdn/main/schema/v10/terminal-keeper.json",
+	"theme": "tribe",
+	"active": "default",
+	"activateOnStartup": true,
+	"keepExistingTerminals": false,
+	"sessions": {
+		"default": [
+			{
+				"name": "Run dev",
+				"autoExecuteCommands": true,
+				"icon": "debug-alt",
+				"color": "terminal.ansiGreen",
+				"commands": ["yarn dev"]
+			},
+			{
+				"name": "Terminal",
+				"autoExecuteCommands": false,
+				"icon": "terminal",
+				"color": "terminal.ansiMagenta",
+				"commands": [""]
+			}
+		]
+	}
 }
