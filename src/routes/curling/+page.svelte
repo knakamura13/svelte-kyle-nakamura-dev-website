@@ -22,6 +22,7 @@
 	}
 
 	let stone: Stone;
+	let isStoneReadyForLaunch = true; // New state variable
 
 	// Input state
 	let isDragging = false;
@@ -40,13 +41,14 @@
 			color: STONE_COLOR,
 			isMoving: false
 		};
+		isStoneReadyForLaunch = true; // Ensure stone is ready on initialization
 	}
 
 	// Wrapped event handlers for adding/removing from window
 	const windowMouseMove = (event: MouseEvent) => handleMouseMove(event);
-	const windowMouseUp = (event: MouseEvent) => handleMouseUp(event);
+	const windowMouseUp = () => handleMouseUp();
 	const windowTouchMove = (event: TouchEvent) => handleTouchMove(event);
-	const windowTouchEnd = (event: TouchEvent) => handleTouchEnd(event);
+	const windowTouchEnd = () => handleTouchEnd();
 
 	onMount(() => {
 		if (canvasElement) {
@@ -134,7 +136,7 @@
 	}
 
 	function handleMouseDown(event: MouseEvent) {
-		if (stone.isMoving) return;
+		if (!isStoneReadyForLaunch || stone.isMoving) return; // Updated check
 		const pos = getMousePos(event);
 		const distance = Math.sqrt((pos.x - stone.x) ** 2 + (pos.y - stone.y) ** 2);
 		if (distance <= stone.radius + 10) {
@@ -156,7 +158,6 @@
 	}
 
 	function handleMouseUp() {
-		// No event arg needed if we only use stored drag values
 		if (
 			!isDragging ||
 			dragStartX === null ||
@@ -170,6 +171,7 @@
 		stone.velocityX = (dragStartX - dragEndX) * launchPowerMultiplier;
 		stone.velocityY = (dragStartY - dragEndY) * launchPowerMultiplier;
 		stone.isMoving = true;
+		isStoneReadyForLaunch = false; // Stone has been launched
 
 		isDragging = false;
 		window.removeEventListener('mousemove', windowMouseMove);
@@ -182,7 +184,7 @@
 
 	function handleTouchStart(event: TouchEvent) {
 		event.preventDefault();
-		if (stone.isMoving) return;
+		if (!isStoneReadyForLaunch || stone.isMoving) return; // Updated check
 		const pos = getTouchPos(event);
 		if (pos) {
 			const distance = Math.sqrt((pos.x - stone.x) ** 2 + (pos.y - stone.y) ** 2);
@@ -209,7 +211,6 @@
 	}
 
 	function handleTouchEnd() {
-		// No event arg needed if we only use stored drag values
 		if (
 			!isDragging ||
 			dragStartX === null ||
@@ -223,6 +224,7 @@
 		stone.velocityX = (dragStartX - dragEndX) * launchPowerMultiplier;
 		stone.velocityY = (dragStartY - dragEndY) * launchPowerMultiplier;
 		stone.isMoving = true;
+		isStoneReadyForLaunch = false; // Stone has been launched
 
 		isDragging = false;
 		window.removeEventListener('touchmove', windowTouchMove);
