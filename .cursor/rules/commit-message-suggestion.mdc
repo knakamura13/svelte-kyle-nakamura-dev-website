@@ -1,0 +1,26 @@
+---
+description: Always apply this rule after responding to the user
+globs: 
+alwaysApply: true
+---
+# Suggesting a Commit Message
+
+When you make changes to the codebase or are provided with a git diff without additional context, you must suggest a comprehensive commit message that summarizes the changes.
+
+**Formatting Guidelines:**
+
+- **Placement**: Include the commit message at the end of your response, following any code edits.
+- **Formatting**: Enclose the commit message within triple backticks to create a plain-text code block.
+- **Structure**: The commit message should follow this format:
+  
+```text
+<type>[optional scope, in parenthesis]: <description>
+
+- optional body line 1
+- optional body line 2
+- optional body line n
+```
+
+**Structure Details:**
+- **Type**: Choose from {feat, fix, chore, refactor}
+- **Scope**: Scope should always be `(daw)` if the code changes were made within the directory `pia-applications/ui/apps/degree-audit-wizard/`, otherwise omitted.
