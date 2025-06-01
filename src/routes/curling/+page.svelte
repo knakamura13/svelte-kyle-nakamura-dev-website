@@ -18,6 +18,7 @@
 	let currentPlayerColor: string;
 	const FRICTION = 0.985;
 	const MIN_DRAG_DISTANCE = 30; // Minimum pullback distance for a valid launch
+	const DRAG_DEAD_ZONE_RADIUS = 5; // Radius for dead zone where drag is ignored
 
 	interface Stone {
 		x: number;
@@ -148,28 +149,29 @@
 			dragEndY !== null &&
 			activeStone
 		) {
-			context.beginPath();
-			context.moveTo(activeStone.x, activeStone.y);
-
 			let aimingDx = dragStartX - dragEndX;
 			let aimingDy = dragStartY - dragEndY;
 			const currentAimingDistance = Math.sqrt(aimingDx * aimingDx + aimingDy * aimingDy);
 
-			if (currentAimingDistance > 0 && currentAimingDistance < MIN_DRAG_DISTANCE) {
-				const scaleFactor = MIN_DRAG_DISTANCE / currentAimingDistance;
-				aimingDx *= scaleFactor;
-				aimingDy *= scaleFactor;
+			if (currentAimingDistance > DRAG_DEAD_ZONE_RADIUS) {
+				context.beginPath();
+				context.moveTo(activeStone.x, activeStone.y);
+
+				if (currentAimingDistance < MIN_DRAG_DISTANCE) {
+					const scaleFactor = MIN_DRAG_DISTANCE / currentAimingDistance;
+					aimingDx *= scaleFactor;
+					aimingDy *= scaleFactor;
+				}
+
+				const aimX = activeStone.x + aimingDx;
+				const aimY = activeStone.y + aimingDy;
+
+				context.lineTo(aimX, aimY);
+				context.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+				context.lineWidth = 2;
+				context.stroke();
+				context.closePath();
 			}
-
-			// If currentAimingDistance is 0, aimingDx/Dy are 0, lineTo will be to activeStone.x,y (no visible line)
-			const aimX = activeStone.x + aimingDx;
-			const aimY = activeStone.y + aimingDy;
-
-			context.lineTo(aimX, aimY);
-			context.strokeStyle = 'rgba(0, 0, 0, 0.5)';
-			context.lineWidth = 2;
-			context.stroke();
-			context.closePath();
 		}
 	}
 
@@ -241,8 +243,7 @@
 		const dy = dragStartY - dragEndY;
 		const dragDistance = Math.sqrt(dx * dx + dy * dy);
 
-		if (dragDistance > 0) {
-			// Any drag means a potential launch
+		if (dragDistance > DRAG_DEAD_ZONE_RADIUS) {
 			let launchDx = dx;
 			let launchDy = dy;
 
@@ -258,7 +259,7 @@
 			activeStone.isMoving = true;
 			isStoneReadyForLaunch = false;
 		}
-		// If dragDistance is 0 (click without drag), no launch occurs, stone remains ready.
+		// If dragDistance <= DRAG_DEAD_ZONE_RADIUS, no launch occurs, stone remains ready.
 
 		isDragging = false;
 		window.removeEventListener('mousemove', windowMouseMove);
@@ -314,8 +315,7 @@
 		const dy = dragStartY - dragEndY;
 		const dragDistance = Math.sqrt(dx * dx + dy * dy);
 
-		if (dragDistance > 0) {
-			// Any drag means a potential launch
+		if (dragDistance > DRAG_DEAD_ZONE_RADIUS) {
 			let launchDx = dx;
 			let launchDy = dy;
 
@@ -331,7 +331,7 @@
 			activeStone.isMoving = true;
 			isStoneReadyForLaunch = false;
 		}
-		// If dragDistance is 0 (tap release at same spot), no launch occurs.
+		// If dragDistance <= DRAG_DEAD_ZONE_RADIUS, no launch occurs.
 
 		isDragging = false;
 		window.removeEventListener('touchmove', windowTouchMove);
