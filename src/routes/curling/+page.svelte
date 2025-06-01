@@ -5,11 +5,16 @@
 	let ctx: CanvasRenderingContext2D | null = null;
 
 	// Game constants
-	const CANVAS_WIDTH = 400;
-	const CANVAS_HEIGHT = 800;
+	// const CANVAS_WIDTH = 400; // Old, now canvas is fullscreen
+	// const CANVAS_HEIGHT = 800; // Old, now canvas is fullscreen
+	const LANE_WIDTH = 400;
+	const LANE_HEIGHT = 800;
+	let LANE_OFFSET_X = 0;
+	let LANE_OFFSET_Y = 0;
+
 	const STONE_RADIUS = 15;
-	const STONE_COLOR = 'red'; // Player 1 stone color
-	const FRICTION = 0.985; // Friction factor, stone slows down over time
+	const STONE_COLOR = 'red';
+	const FRICTION = 0.985;
 
 	interface Stone {
 		x: number;
@@ -22,7 +27,7 @@
 	}
 
 	let stone: Stone;
-	let isStoneReadyForLaunch = true; // New state variable
+	let isStoneReadyForLaunch = true;
 
 	// Input state
 	let isDragging = false;
@@ -31,50 +36,63 @@
 	let dragEndX: number | null = null;
 	let dragEndY: number | null = null;
 
+	function calculateLaneOffsets(canvasWidth: number, canvasHeight: number) {
+		LANE_OFFSET_X = (canvasWidth - LANE_WIDTH) / 2;
+		LANE_OFFSET_Y = (canvasHeight - LANE_HEIGHT) / 2;
+	}
+
 	function initializeStone() {
 		stone = {
-			x: CANVAS_WIDTH / 2,
-			y: CANVAS_HEIGHT - 50, // Start near the bottom
+			x: LANE_OFFSET_X + LANE_WIDTH / 2, // Centered in the lane
+			y: LANE_OFFSET_Y + LANE_HEIGHT - 50, // Near the bottom of the lane
 			velocityX: 0,
 			velocityY: 0,
 			radius: STONE_RADIUS,
 			color: STONE_COLOR,
 			isMoving: false
 		};
-		isStoneReadyForLaunch = true; // Ensure stone is ready on initialization
+		isStoneReadyForLaunch = true;
 	}
 
-	// Wrapped event handlers for adding/removing from window
 	const windowMouseMove = (event: MouseEvent) => handleMouseMove(event);
 	const windowMouseUp = () => handleMouseUp();
 	const windowTouchMove = (event: TouchEvent) => handleTouchMove(event);
 	const windowTouchEnd = () => handleTouchEnd();
 
+	function handleResize() {
+		if (!canvasElement || !ctx) return;
+		canvasElement.width = window.innerWidth;
+		canvasElement.height = window.innerHeight;
+		calculateLaneOffsets(canvasElement.width, canvasElement.height);
+		initializeStone(); // Re-initialize stone to be correctly positioned
+		// No need to call drawGame() here, gameLoop will handle it
+	}
+
 	onMount(() => {
 		if (canvasElement) {
 			ctx = canvasElement.getContext('2d');
-			canvasElement.width = CANVAS_WIDTH;
-			canvasElement.height = CANVAS_HEIGHT;
+
+			// Set initial canvas size
+			canvasElement.width = window.innerWidth;
+			canvasElement.height = window.innerHeight;
+			calculateLaneOffsets(canvasElement.width, canvasElement.height);
 
 			initializeStone();
 
 			canvasElement.addEventListener('mousedown', handleMouseDown);
-			// mousemove, mouseup, mouseleave are handled by window listeners added on drag
-
-			// Touch events
 			canvasElement.addEventListener('touchstart', handleTouchStart, { passive: false });
-			// touchmove, touchend are handled by window listeners added on drag
 
-			gameLoop(); // Start the game loop
+			window.addEventListener('resize', handleResize);
+
+			gameLoop();
 		}
 
 		return () => {
-			// Cleanup canvas event listeners
 			if (canvasElement) {
 				canvasElement.removeEventListener('mousedown', handleMouseDown);
 				canvasElement.removeEventListener('touchstart', handleTouchStart);
 			}
-			// Cleanup any lingering window event listeners (important if component unmounts mid-drag)
+			window.removeEventListener('resize', handleResize);
 			window.removeEventListener('mousemove', windowMouseMove);
 			window.removeEventListener('mouseup', windowMouseUp);
 			window.removeEventListener('touchmove', windowTouchMove);
@@ -83,9 +101,18 @@
 	});
 
 	function drawBackground(context: CanvasRenderingContext2D) {
-		context.fillStyle = '#E0E0E0'; // Light grey for ice
-		context.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-		// TODO: Draw target (house) & starting line
+		// Draw outer ice (full canvas)
+		context.fillStyle = '#D0E0F0'; // Lighter blue for out-of-bounds ice
+		context.fillRect(0, 0, context.canvas.width, context.canvas.height);
+
+		// Draw curling lane
+		context.fillStyle = '#E0E0E0'; // Original light grey for lane
+		context.fillRect(LANE_OFFSET_X, LANE_OFFSET_Y, LANE_WIDTH, LANE_HEIGHT);
+		// Optional: Draw lane borders
+		context.strokeStyle = '#A0A0A0';
+		context.lineWidth = 1;
+		context.strokeRect(LANE_OFFSET_X, LANE_OFFSET_Y, LANE_WIDTH, LANE_HEIGHT);
+		// TODO: Draw target (house) & starting line (relative to lane offsets)
 	}
 
 	function drawStone(context: CanvasRenderingContext2D, s: Stone) {
@@ -243,40 +270,37 @@
 			stone.velocityX *= FRICTION;
 			stone.velocityY *= FRICTION;
 
-			// Stop stone if velocity is very low
 			if (Math.abs(stone.velocityX) < 0.05 && Math.abs(stone.velocityY) < 0.05) {
 				stone.velocityX = 0;
 				stone.velocityY = 0;
 				stone.isMoving = false;
-				// TODO: Here you could check for scoring or reset for next shot
-				// For now, let's reset the stone's position if it stops NOT at the initial spot.
-				// This is a temporary measure before full game logic.
-				// if (stone.y < CANVAS_HEIGHT - 60) { // A simple check if it moved significantly
-				// 	 initializeStone();
-				// }
+				// isStoneReadyForLaunch remains false until explicitly reset
 			}
 
-			// Wall collisions (simple stop)
+			// Wall collisions
+			// Left/Right EDGES OF FULL CANVAS
 			if (stone.x - stone.radius < 0) {
 				stone.x = stone.radius;
-				stone.velocityX = 0; // Stop horizontal movement
-			} else if (stone.x + stone.radius > CANVAS_WIDTH) {
-				stone.x = CANVAS_WIDTH - stone.radius;
-				stone.velocityX = 0; // Stop horizontal movement
+				stone.velocityX = 0;
+			} else if (stone.x + stone.radius > ctx.canvas.width) {
+				// Use dynamic canvas width
+				stone.x = ctx.canvas.width - stone.radius;
+				stone.velocityX = 0;
 			}
 
-			if (stone.y - stone.radius < 0) {
-				stone.y = stone.radius;
-				stone.velocityY = 0; // Stop vertical movement
-			} else if (stone.y + stone.radius > CANVAS_HEIGHT) {
-				stone.y = CANVAS_HEIGHT - stone.radius;
-				stone.velocityY = 0; // Stop vertical movement
+			// Top/Bottom EDGES OF THE LANE
+			if (stone.y - stone.radius < LANE_OFFSET_Y) {
+				stone.y = LANE_OFFSET_Y + stone.radius;
+				stone.velocityY = 0;
+			} else if (stone.y + stone.radius > LANE_OFFSET_Y + LANE_HEIGHT) {
+				stone.y = LANE_OFFSET_Y + LANE_HEIGHT - stone.radius;
+				stone.velocityY = 0;
 			}
 		}
 	}
 
 	function drawGame(context: CanvasRenderingContext2D) {
-		context.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT); // Clear canvas
+		context.clearRect(0, 0, context.canvas.width, context.canvas.height);
 		drawBackground(context);
 		drawStone(context, stone);
 		if (isDragging) {
@@ -286,13 +310,12 @@
 
 	function gameLoop() {
 		if (!ctx || !stone) {
-			// Ensure context and stone are initialized
-			requestAnimationFrame(gameLoop); // Try again next frame
+			requestAnimationFrame(gameLoop);
 			return;
 		}
 		updateGame();
 		drawGame(ctx);
-		requestAnimationFrame(gameLoop); // Keep the loop going
+		requestAnimationFrame(gameLoop);
 	}
 
 	// Removed drawInitialBackground as its functionality is merged into gameLoop/drawGame
@@ -308,17 +331,21 @@
 
 <style lang="scss">
 	.curling-container {
-		display: flex;
-		justify-content: center;
-		align-items: center;
-		width: 100%;
-		height: 100vh; // Use viewport height to center vertically
-		background-color: #333; // Dark background for contrast
+		display: flex; // Optional: if you want to ensure it takes full space before canvas does
+		width: 100vw;
+		height: 100vh;
+		margin: 0;
+		padding: 0;
+		overflow: hidden; // Prevent scrollbars if canvas slightly overflows due to rounding
+		background-color: #333; // Fallback, canvas should cover this
 	}
 
 	#curlingCanvas {
-		border: 1px solid black;
-		// The canvas width and height are set in the script,
-		// but you could add max-width/max-height here if needed for responsiveness.
+		display: block; // Removes extra space below canvas if it's inline
+		// width and height attributes are set in JS for rendering size
+		// CSS width/height here would scale the rendered content if different from attributes
+		// For 1:1 pixel mapping, we ensure attributes match window.innerWidth/Height
+		// and don't explicitly set CSS width/height here unless for scaling a fixed-resolution canvas.
+		// border: 1px solid black; // Removed, as it might interfere with full-screen feel
 	}
 </style>
