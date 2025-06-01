@@ -5,9 +5,7 @@
 	let ctx: CanvasRenderingContext2D | null = null;
 
 	// Game constants
-	// const CANVAS_WIDTH = 400; // Old, now canvas is fullscreen
-	// const CANVAS_HEIGHT = 800; // Old, now canvas is fullscreen
-	const LANE_WIDTH = 400;
+	const LANE_WIDTH = 300;
 	const LANE_HEIGHT = 800;
 	let LANE_OFFSET_X = 0;
 	let LANE_OFFSET_Y = 0;
@@ -16,9 +14,11 @@
 	const STONE_COLOR_RED = 'red';
 	const STONE_COLOR_BLUE = 'blue';
 	let currentPlayerColor: string;
-	const FRICTION = 0.985;
-	const MIN_DRAG_DISTANCE = 30; // Minimum pullback distance for a valid launch
-	const DRAG_DEAD_ZONE_RADIUS = 5; // Radius for dead zone where drag is ignored
+	const FRICTION = 0.992; // Adjusted friction value
+	const LINEAR_DECELERATION_PER_FRAME = 0.033;
+	const DRAG_DEAD_ZONE_RADIUS = 0;
+	const MIN_DRAG_DISTANCE = 40;
+	const MAX_DRAG_DISTANCE = 80;
 
 	interface Stone {
 		x: number;
@@ -151,14 +151,21 @@
 		) {
 			let aimingDx = dragStartX - dragEndX;
 			let aimingDy = dragStartY - dragEndY;
-			const currentAimingDistance = Math.sqrt(aimingDx * aimingDx + aimingDy * aimingDy);
+			let currentAimingDistance = Math.sqrt(aimingDx * aimingDx + aimingDy * aimingDy);
 
 			if (currentAimingDistance > DRAG_DEAD_ZONE_RADIUS) {
 				context.beginPath();
 				context.moveTo(activeStone.x, activeStone.y);
 
-				if (currentAimingDistance < MIN_DRAG_DISTANCE) {
-					const scaleFactor = MIN_DRAG_DISTANCE / currentAimingDistance;
+				let effectiveAimingDistance = currentAimingDistance;
+				if (effectiveAimingDistance < MIN_DRAG_DISTANCE) {
+					effectiveAimingDistance = MIN_DRAG_DISTANCE;
+				} else if (effectiveAimingDistance > MAX_DRAG_DISTANCE) {
+					effectiveAimingDistance = MAX_DRAG_DISTANCE;
+				}
+
+				if (currentAimingDistance !== effectiveAimingDistance && currentAimingDistance > 0) {
+					const scaleFactor = effectiveAimingDistance / currentAimingDistance;
 					aimingDx *= scaleFactor;
 					aimingDy *= scaleFactor;
 				}
@@ -246,9 +253,16 @@
 		if (dragDistance > DRAG_DEAD_ZONE_RADIUS) {
 			let launchDx = dx;
 			let launchDy = dy;
+			let effectiveDragDistance = dragDistance;
 
-			if (dragDistance < MIN_DRAG_DISTANCE) {
-				const scaleFactor = MIN_DRAG_DISTANCE / dragDistance;
+			if (effectiveDragDistance < MIN_DRAG_DISTANCE) {
+				effectiveDragDistance = MIN_DRAG_DISTANCE;
+			} else if (effectiveDragDistance > MAX_DRAG_DISTANCE) {
+				effectiveDragDistance = MAX_DRAG_DISTANCE;
+			}
+
+			if (dragDistance !== effectiveDragDistance) {
+				const scaleFactor = effectiveDragDistance / dragDistance;
 				launchDx = dx * scaleFactor;
 				launchDy = dy * scaleFactor;
 			}
@@ -318,9 +332,16 @@
 		if (dragDistance > DRAG_DEAD_ZONE_RADIUS) {
 			let launchDx = dx;
 			let launchDy = dy;
+			let effectiveDragDistance = dragDistance;
 
-			if (dragDistance < MIN_DRAG_DISTANCE) {
-				const scaleFactor = MIN_DRAG_DISTANCE / dragDistance;
+			if (effectiveDragDistance < MIN_DRAG_DISTANCE) {
+				effectiveDragDistance = MIN_DRAG_DISTANCE;
+			} else if (effectiveDragDistance > MAX_DRAG_DISTANCE) {
+				effectiveDragDistance = MAX_DRAG_DISTANCE;
+			}
+
+			if (dragDistance !== effectiveDragDistance) {
+				const scaleFactor = effectiveDragDistance / dragDistance;
 				launchDx = dx * scaleFactor;
 				launchDy = dy * scaleFactor;
 			}
