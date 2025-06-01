@@ -13,7 +13,9 @@
 	let LANE_OFFSET_Y = 0;
 
 	const STONE_RADIUS = 15;
-	const STONE_COLOR = 'red';
+	const STONE_COLOR_RED = 'red';
+	const STONE_COLOR_BLUE = 'blue';
+	let currentPlayerColor: string;
 	const FRICTION = 0.985;
 
 	interface Stone {
@@ -27,7 +29,8 @@
 		isOutOfBounds: boolean;
 	}
 
-	let stone: Stone;
+	let activeStone: Stone;
+	let playedStones: Stone[] = [];
 	let isStoneReadyForLaunch = true;
 
 	// Input state
@@ -42,14 +45,14 @@
 		LANE_OFFSET_Y = (canvasHeight - LANE_HEIGHT) / 2;
 	}
 
-	function initializeStone() {
-		stone = {
-			x: LANE_OFFSET_X + LANE_WIDTH / 2, // Centered in the lane
-			y: LANE_OFFSET_Y + LANE_HEIGHT - 50, // Near the bottom of the lane
+	function prepareNewStone() {
+		activeStone = {
+			x: LANE_OFFSET_X + LANE_WIDTH / 2,
+			y: LANE_OFFSET_Y + LANE_HEIGHT - 50,
 			velocityX: 0,
 			velocityY: 0,
 			radius: STONE_RADIUS,
-			color: STONE_COLOR,
+			color: currentPlayerColor,
 			isMoving: false,
 			isOutOfBounds: false
 		};
@@ -66,8 +69,10 @@
 		canvasElement.width = window.innerWidth;
 		canvasElement.height = window.innerHeight;
 		calculateLaneOffsets(canvasElement.width, canvasElement.height);
-		initializeStone(); // Re-initialize stone to be correctly positioned
-		// No need to call drawGame() here, gameLoop will handle it
+		// If a stone was ready, re-prepare it in new position. Played stones remain.
+		if (isStoneReadyForLaunch && activeStone && !activeStone.isMoving) {
+			prepareNewStone();
+		}
 	}
 
 	onMount(() => {
@@ -79,7 +84,8 @@
 			canvasElement.height = window.innerHeight;
 			calculateLaneOffsets(canvasElement.width, canvasElement.height);
 
-			initializeStone();
+			currentPlayerColor = STONE_COLOR_RED; // Red starts
+			prepareNewStone();
 
 			canvasElement.addEventListener('mousedown', handleMouseDown);
 			canvasElement.addEventListener('touchstart', handleTouchStart, { passive: false });
@@ -138,12 +144,13 @@
 			dragStartX !== null &&
 			dragStartY !== null &&
 			dragEndX !== null &&
-			dragEndY !== null
+			dragEndY !== null &&
+			activeStone
 		) {
 			context.beginPath();
-			context.moveTo(stone.x, stone.y);
-			const aimX = stone.x - (dragEndX - dragStartX);
-			const aimY = stone.y - (dragEndY - dragStartY);
+			context.moveTo(activeStone.x, activeStone.y);
+			const aimX = activeStone.x - (dragEndX - dragStartX);
+			const aimY = activeStone.y - (dragEndY - dragStartY);
 			context.lineTo(aimX, aimY);
 			context.strokeStyle = 'rgba(0, 0, 0, 0.5)';
 			context.lineWidth = 2;
@@ -172,10 +179,10 @@
 	}
 
 	function handleMouseDown(event: MouseEvent) {
-		if (!isStoneReadyForLaunch || stone.isMoving) return; // Updated check
+		if (!activeStone || !isStoneReadyForLaunch || activeStone.isMoving) return;
 		const pos = getMousePos(event);
-		const distance = Math.sqrt((pos.x - stone.x) ** 2 + (pos.y - stone.y) ** 2);
-		if (distance <= stone.radius + 10) {
+		const distance = Math.sqrt((pos.x - activeStone.x) ** 2 + (pos.y - activeStone.y) ** 2);
+		if (distance <= activeStone.radius + 10) {
 			isDragging = true;
 			dragStartX = pos.x;
 			dragStartY = pos.y;
@@ -199,15 +206,16 @@
 			dragStartX === null ||
 			dragStartY === null ||
 			dragEndX === null ||
-			dragEndY === null
+			dragEndY === null ||
+			!activeStone
 		)
 			return;
 
 		const launchPowerMultiplier = 0.15;
-		stone.velocityX = (dragStartX - dragEndX) * launchPowerMultiplier;
-		stone.velocityY = (dragStartY - dragEndY) * launchPowerMultiplier;
-		stone.isMoving = true;
-		isStoneReadyForLaunch = false; // Stone has been launched
+		activeStone.velocityX = (dragStartX - dragEndX) * launchPowerMultiplier;
+		activeStone.velocityY = (dragStartY - dragEndY) * launchPowerMultiplier;
+		activeStone.isMoving = true;
+		isStoneReadyForLaunch = false;
 
 		isDragging = false;
 		window.removeEventListener('mousemove', windowMouseMove);
@@ -220,11 +228,11 @@
 
 	function handleTouchStart(event: TouchEvent) {
 		event.preventDefault();
-		if (!isStoneReadyForLaunch || stone.isMoving) return; // Updated check
+		if (!activeStone || !isStoneReadyForLaunch || activeStone.isMoving) return;
 		const pos = getTouchPos(event);
 		if (pos) {
-			const distance = Math.sqrt((pos.x - stone.x) ** 2 + (pos.y - stone.y) ** 2);
-			if (distance <= stone.radius + 20) {
+			const distance = Math.sqrt((pos.x - activeStone.x) ** 2 + (pos.y - activeStone.y) ** 2);
+			if (distance <= activeStone.radius + 20) {
 				isDragging = true;
 				dragStartX = pos.x;
 				dragStartY = pos.y;
@@ -252,15 +260,16 @@
 			dragStartX === null ||
 			dragStartY === null ||
 			dragEndX === null ||
-			dragEndY === null
+			dragEndY === null ||
+			!activeStone
 		)
 			return;
 
 		const launchPowerMultiplier = 0.15;
-		stone.velocityX = (dragStartX - dragEndX) * launchPowerMultiplier;
-		stone.velocityY = (dragStartY - dragEndY) * launchPowerMultiplier;
-		stone.isMoving = true;
-		isStoneReadyForLaunch = false; // Stone has been launched
+		activeStone.velocityX = (dragStartX - dragEndX) * launchPowerMultiplier;
+		activeStone.velocityY = (dragStartY - dragEndY) * launchPowerMultiplier;
+		activeStone.isMoving = true;
+		isStoneReadyForLaunch = false;
 
 		isDragging = false;
 		window.removeEventListener('touchmove', windowTouchMove);
@@ -272,45 +281,61 @@
 	}
 
 	function updateGame() {
-		if (stone.isMoving && ctx) {
-			stone.x += stone.velocityX;
-			stone.y += stone.velocityY;
+		if (!activeStone) return; // Nothing to update if no active stone
 
-			stone.velocityX *= FRICTION;
-			stone.velocityY *= FRICTION;
+		if (activeStone.isMoving && ctx) {
+			activeStone.x += activeStone.velocityX;
+			activeStone.y += activeStone.velocityY;
 
-			if (!stone.isOutOfBounds) {
-				if (stone.x < LANE_OFFSET_X || stone.x > LANE_OFFSET_X + LANE_WIDTH) {
-					stone.isOutOfBounds = true;
+			activeStone.velocityX *= FRICTION;
+			activeStone.velocityY *= FRICTION;
+
+			if (!activeStone.isOutOfBounds) {
+				if (activeStone.x < LANE_OFFSET_X || activeStone.x > LANE_OFFSET_X + LANE_WIDTH) {
+					activeStone.isOutOfBounds = true;
 				}
 			}
 
-			if (Math.abs(stone.velocityX) < 0.05 && Math.abs(stone.velocityY) < 0.05) {
-				stone.velocityX = 0;
-				stone.velocityY = 0;
-				stone.isMoving = false;
-				// isStoneReadyForLaunch remains false until explicitly reset
+			const stoppedThreshold = 0.05;
+			const effectivelyStopped =
+				Math.abs(activeStone.velocityX) < stoppedThreshold &&
+				Math.abs(activeStone.velocityY) < stoppedThreshold;
+
+			// Wall collisions and stopping conditions
+			let hitWall = false;
+			if (activeStone.x - activeStone.radius < 0) {
+				activeStone.x = activeStone.radius;
+				activeStone.velocityX = 0;
+				hitWall = true;
+			} else if (activeStone.x + activeStone.radius > ctx.canvas.width) {
+				activeStone.x = ctx.canvas.width - activeStone.radius;
+				activeStone.velocityX = 0;
+				hitWall = true;
 			}
 
-			// Wall collisions
-			// Left/Right EDGES OF FULL CANVAS
-			if (stone.x - stone.radius < 0) {
-				stone.x = stone.radius;
-				stone.velocityX = 0;
-			} else if (stone.x + stone.radius > ctx.canvas.width) {
-				// Use dynamic canvas width
-				stone.x = ctx.canvas.width - stone.radius;
-				stone.velocityX = 0;
+			if (activeStone.y - activeStone.radius < LANE_OFFSET_Y) {
+				activeStone.y = LANE_OFFSET_Y + activeStone.radius;
+				activeStone.velocityY = 0;
+				hitWall = true;
+				activeStone.isOutOfBounds = true; // Hitting top of lane is out
+			} else if (activeStone.y + activeStone.radius > LANE_OFFSET_Y + LANE_HEIGHT) {
+				activeStone.y = LANE_OFFSET_Y + LANE_HEIGHT - activeStone.radius;
+				activeStone.velocityY = 0;
+				hitWall = true;
+				activeStone.isOutOfBounds = true;
 			}
 
-			// Top/Bottom EDGES OF THE LANE
-			if (stone.y - stone.radius < LANE_OFFSET_Y) {
-				stone.y = LANE_OFFSET_Y + stone.radius;
-				stone.velocityY = 0;
-			} else if (stone.y + stone.radius > LANE_OFFSET_Y + LANE_HEIGHT) {
-				stone.y = LANE_OFFSET_Y + LANE_HEIGHT - stone.radius;
-				stone.velocityY = 0;
-				stone.isOutOfBounds = true;
+			if (effectivelyStopped || hitWall) {
+				activeStone.isMoving = false;
+				activeStone.velocityX = 0; // Ensure it's fully stopped
+				activeStone.velocityY = 0;
+
+				playedStones.push({ ...activeStone }); // Add a copy to played stones
+
+				// Switch player and prepare next stone
+				currentPlayerColor =
+					currentPlayerColor === STONE_COLOR_RED ? STONE_COLOR_BLUE : STONE_COLOR_RED;
+				prepareNewStone();
 			}
 		}
 	}
@@ -318,14 +343,26 @@
 	function drawGame(context: CanvasRenderingContext2D) {
 		context.clearRect(0, 0, context.canvas.width, context.canvas.height);
 		drawBackground(context);
-		drawStone(context, stone);
-		if (isDragging) {
+
+		// Draw all played stones
+		for (const s of playedStones) {
+			drawStone(context, s);
+		}
+
+		// Draw the active stone (being aimed, moving, or just landed before next turn)
+		if (activeStone) {
+			drawStone(context, activeStone);
+		}
+
+		if (isDragging && activeStone && !activeStone.isMoving) {
+			// Only draw aim line if current stone is ready
 			drawAimingLine(context);
 		}
 	}
 
 	function gameLoop() {
-		if (!ctx || !stone) {
+		if (!ctx) {
+			// activeStone might not be ready first frame, but ctx should be
 			requestAnimationFrame(gameLoop);
 			return;
 		}
