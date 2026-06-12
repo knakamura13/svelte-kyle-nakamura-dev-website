@@ -51,14 +51,10 @@
 			.join(' ')
 	);
 
-	function handleClick(event: MouseEvent): void {
-		if (href !== undefined && isPDFLink) {
-			event.preventDefault();
-			event.stopPropagation();
-			window.open(href, '_blank');
-		} else {
-			onclick?.(event);
-		}
+	function handlePDFClick(event: MouseEvent): void {
+		event.preventDefault();
+		event.stopPropagation();
+		if (href) window.open(href, '_blank');
 	}
 
 	async function handleClipboardClick(): Promise<void> {
@@ -76,7 +72,7 @@
 
 {#if isExternalLink}
 	<a
-		onclick={handleClick}
+		onclick={onclick}
 		aria-label={ariaLabel}
 		title={ariaLabel}
 		{href}
@@ -108,12 +104,28 @@
 
 		<img src={icon} alt="" aria-hidden="true" class="btn-icon" />
 	</button>
-{:else}
+{:else if isPDFLink}
 	<a
-		onclick={handleClick}
+		onclick={handlePDFClick}
 		aria-label={ariaLabel}
 		title={ariaLabel}
-		href={isPDFLink ? 'javascript:void(0)' : href}
+		href={href}
+		class={classes}
+		target="_blank"
+		rel="noopener noreferrer"
+	>
+		<span class="btn-text">
+			{@render children()}
+		</span>
+
+		<img src={icon} alt="" aria-hidden="true" class="btn-icon" />
+	</a>
+{:else}
+	<a
+		onclick={onclick}
+		aria-label={ariaLabel}
+		title={ariaLabel}
+		{href}
 		class={classes}
 	>
 		<span class="btn-text">
