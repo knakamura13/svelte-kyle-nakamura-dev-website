@@ -8,16 +8,19 @@
 </script>
 
 {#if pdfPath}
-	<iframe class="pdf-viewer" src={pdfPath} title={pdfTitle}></iframe>
-	<p class="fallback">
-		Can't view the PDF?
-		<a class="prose-link" href={pdfPath} target="_blank" rel="noopener noreferrer">Open or download it</a>.
-	</p>
+	<div class="pdf-shell">
+		<iframe class="pdf-viewer" src={pdfPath} title={pdfTitle}></iframe>
+	</div>
 {:else}
-	<p>This browser does not support PDFs.</p>
+	<p class="empty">This browser does not support PDFs.</p>
 {/if}
 
 <style>
+	.pdf-shell {
+		height: 100%;
+		width: 100%;
+	}
+
 	.pdf-viewer {
 		display: block;
 		border: none;
@@ -25,9 +28,9 @@
 		width: 100%;
 	}
 
-	.fallback {
-		margin-top: 0.75rem;
-		font-size: 0.85rem;
+	.empty {
+		padding: 2rem;
 		color: var(--color-ink-muted);
+		text-align: center;
 	}
 </style>
