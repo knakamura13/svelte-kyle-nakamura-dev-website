@@ -65,6 +65,7 @@
 
 				<AnimatedButton
 					href={method.href}
+					size="big"
 					ariaLabel={method.label}
 					noUppercase={method.noUppercase || undefined}
 					clipboardText={method.clipboardText}

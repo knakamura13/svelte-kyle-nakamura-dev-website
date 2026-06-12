@@ -187,19 +187,24 @@
 	img.btn-icon {
 		position: absolute;
 		top: 0;
-		right: -4rem;
+		right: 1rem;
 		bottom: 0;
 		height: 55%;
 		width: auto;
 		margin: auto;
-		transition: all 0.3s;
+		opacity: 0;
+		transform: translateX(calc(100% + 0.75rem));
+		transition:
+			transform 0.3s ease,
+			opacity 0.3s ease;
 		aspect-ratio: 1 / 1 !important;
 		border-radius: unset;
+		pointer-events: none;
 	}
 
 	.btn-text {
 		display: inline-block;
-		transition: all 0.3s;
+		transition: transform 0.3s ease;
 	}
 
 	.animated-btn.no-uppercase {
@@ -208,13 +213,14 @@
 
 	/* Icon slide-in animation */
 	.animated-btn:hover img.btn-icon,
-	.animated-btn:focus .btn-icon {
-		right: calc(1rem + 1px);
+	.animated-btn:focus-visible img.btn-icon {
+		opacity: 1;
+		transform: translateX(0);
 	}
 
 	.animated-btn:hover .btn-text,
-	.animated-btn:focus .btn-text {
-		transform: translateX(-0.9rem);
+	.animated-btn:focus-visible .btn-text {
+		transform: translateX(-0.75rem);
 	}
 
 	/* Button size */
@@ -224,31 +230,28 @@
 	}
 
 	.animated-btn.small {
-		padding: 0.66rem 1rem;
+		padding: 0.7rem 1.35rem;
 		font-size: 0.9rem;
 	}
 
 	/* Icon size */
 	.animated-btn.icon--big img.btn-icon {
 		height: 75%;
+		right: 0.85rem;
 	}
 
-	.animated-btn.icon--big:hover img.btn-icon,
-	.animated-btn.icon--big:focus img.btn-icon {
-		right: calc(0.6rem - 1px);
+	.animated-btn.icon--big:hover .btn-text,
+	.animated-btn.icon--big:focus-visible .btn-text {
+		transform: translateX(-0.9rem);
 	}
 
 	.animated-btn.icon--small img.btn-icon {
 		height: 40%;
-	}
-
-	.animated-btn.icon--small:hover img.btn-icon,
-	.animated-btn.icon--small:focus img.btn-icon {
-		right: 0.45rem;
+		right: 0.75rem;
 	}
 
 	.animated-btn.icon--small:hover .btn-text,
-	.animated-btn.icon--small:focus .btn-text {
-		transform: translateX(-0.6rem);
+	.animated-btn.icon--small:focus-visible .btn-text {
+		transform: translateX(-0.5rem);
 	}
 </style>
