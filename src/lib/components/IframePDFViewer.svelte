@@ -1,17 +1,14 @@
-<script>
-	export let pdfPath = '';
-	export let pdfTitle = '';
+<script lang="ts">
+	interface Props {
+		pdfPath?: string;
+		pdfTitle?: string;
+	}
+
+	let { pdfPath = '', pdfTitle = '' }: Props = $props();
 </script>
 
 {#if pdfPath}
-	<iframe
-		class="pdf-viewer"
-		src={pdfPath}
-		type="application/pdf"
-		title={pdfTitle}
-		width="100%"
-		height="600px"
-	>
+	<iframe class="pdf-viewer" src={pdfPath} title={pdfTitle}>
 		This browser does not support PDFs. Please download the PDF to view it:
 		<a href={pdfPath}>Download PDF</a>.
 	</iframe>
@@ -21,7 +18,7 @@
 
 <style>
 	.pdf-viewer {
-		/* Add your styles here */
+		display: block;
 		border: none;
 		height: 100%;
 		width: 100%;
