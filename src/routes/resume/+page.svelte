@@ -22,9 +22,7 @@
 		</AnimatedButton>
 	</div>
 
-	<div class="viewer">
-		<IframePDFViewer {pdfPath} pdfTitle="Kyle Nakamura's Resume" />
-	</div>
+	<IframePDFViewer {pdfPath} pdfTitle="Kyle Nakamura's Resume" />
 
 	<p class="fallback">
 		Can't view the PDF?
@@ -34,15 +32,10 @@
 
 <style>
 	.resume-page {
-		flex: 1;
-		display: flex;
-		flex-direction: column;
 		width: 100%;
 		max-width: 72rem;
 		margin-inline: auto;
 		padding: 1.5rem;
-		gap: 0.75rem;
-		min-height: 0;
 	}
 
 	.toolbar {
@@ -50,25 +43,15 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: 1rem;
-		flex-shrink: 0;
+		margin-bottom: 1rem;
 	}
 
 	h1 {
 		font-size: 1.5rem;
 	}
 
-	.viewer {
-		flex: 1;
-		height: calc(100dvh - 11rem);
-		min-height: 32rem;
-		border: 1px solid var(--color-edge);
-		border-radius: 12px;
-		overflow: hidden;
-		background: var(--color-raised);
-	}
-
 	.fallback {
-		flex-shrink: 0;
+		margin-top: 0.75rem;
 		font-size: 0.85rem;
 		color: var(--color-ink-faint);
 		text-align: center;

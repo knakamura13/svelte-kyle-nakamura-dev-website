@@ -5,29 +5,25 @@
 	}
 
 	let { pdfPath = '', pdfTitle = '' }: Props = $props();
+
+	// Inline height as a hard fallback — HTML/CSS percentage chains collapse on iframes
+	const embedHeight = 'calc(100dvh - 10.5rem)';
 </script>
 
 {#if pdfPath}
-	<div class="pdf-shell">
-		<iframe class="pdf-viewer" src={pdfPath} title={pdfTitle}></iframe>
-	</div>
+	<iframe
+		class="resume-embed"
+		src={pdfPath}
+		title={pdfTitle}
+		style:height={embedHeight}
+		style:min-height="600px"
+		style:width="100%"
+	></iframe>
 {:else}
 	<p class="empty">This browser does not support PDFs.</p>
 {/if}
 
 <style>
-	.pdf-shell {
-		height: 100%;
-		width: 100%;
-	}
-
-	.pdf-viewer {
-		display: block;
-		border: none;
-		height: 100%;
-		width: 100%;
-	}
-
 	.empty {
 		padding: 2rem;
 		color: var(--color-ink-muted);

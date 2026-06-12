@@ -185,6 +185,18 @@
 	.prose-link:hover {
 		text-decoration-color: var(--color-accent);
 	}
+
+	/* Resume PDF embed — explicit height; percentage heights collapse inside flex layouts */
+	.resume-embed {
+		display: block;
+		width: 100%;
+		height: calc(100vh - 10.5rem);
+		height: calc(100dvh - 10.5rem);
+		min-height: 600px;
+		border: 1px solid var(--color-edge);
+		border-radius: 12px;
+		background: var(--color-raised);
+	}
 }
 
 @utility fade-rise {
