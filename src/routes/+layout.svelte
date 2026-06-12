@@ -1,21 +1,31 @@
 <script lang="ts">
-	import '../app.postcss';
-	import './styles.scss';
-	import { AppShell } from '@skeletonlabs/skeleton';
+	import '../app.css';
 	import Header from '$lib/components/Header.svelte';
-	import '@fortawesome/fontawesome-free/css/all.min.css';
+	import Footer from '$lib/components/Footer.svelte';
 
-	// Floating UI for Popups
-	import { computePosition, autoUpdate, flip, shift, offset, arrow } from '@floating-ui/dom';
-	import { storePopup } from '@skeletonlabs/skeleton';
-
-	storePopup.set({ computePosition, autoUpdate, flip, shift, offset, arrow });
+	let { children } = $props();
 </script>
 
-<AppShell>
-	<svelte:fragment slot="header">
-		<Header></Header>
-	</svelte:fragment>
+<div class="app">
+	<Header />
 
-	<slot />
-</AppShell>
+	<main>
+		{@render children()}
+	</main>
+
+	<Footer />
+</div>
+
+<style>
+	.app {
+		display: flex;
+		flex-direction: column;
+		min-height: 100dvh;
+	}
+
+	main {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+	}
+</style>

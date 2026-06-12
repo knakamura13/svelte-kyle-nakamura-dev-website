@@ -1,31 +1,55 @@
 <script lang="ts">
-	import { createEventDispatcher } from 'svelte';
-	import { clipboard } from '@skeletonlabs/skeleton';
+	import type { Snippet } from 'svelte';
 
-	type BUTTON_SIZE = 'big' | 'small';
-	type BUTTON_ICON_SIZE = 'big' | 'med' | 'small';
+	type ButtonSize = 'big' | 'small';
+	type ButtonIconSize = 'big' | 'med' | 'small';
 
-	export let href: string | undefined;
-	export let size: BUTTON_SIZE = 'small';
-	export let ariaLabel: string = '';
-	export let disabled: boolean = false;
-	export let icon: string = '/icons/icon-arrow-light.svg';
-	export let iconSize: BUTTON_ICON_SIZE = 'med';
-	export let noUppercase: boolean | undefined = false;
-	export let clipboardText: string = '';
+	interface Props {
+		href?: string;
+		size?: ButtonSize;
+		ariaLabel?: string;
+		disabled?: boolean;
+		icon?: string;
+		iconSize?: ButtonIconSize;
+		noUppercase?: boolean;
+		clipboardText?: string;
+		variant?: 'primary' | 'ghost';
+		onclick?: (event: MouseEvent) => void;
+		children: Snippet;
+	}
 
-	const dispatch = createEventDispatcher();
+	let {
+		href = undefined,
+		size = 'small',
+		ariaLabel = '',
+		disabled = false,
+		icon = '/icons/icon-arrow-light.svg',
+		iconSize = 'med',
+		noUppercase = false,
+		clipboardText = '',
+		variant = 'ghost',
+		onclick,
+		children
+	}: Props = $props();
 
-	// Determine if the link is external
-	$: isExternalLink = typeof href === 'string' && href.length && !href.startsWith('/');
+	let copied = $state(false);
 
-	// Determine if the link is a PDF
-	$: isPDFLink = typeof href === 'string' && href.length && href.endsWith('.pdf');
+	let isExternalLink = $derived(typeof href === 'string' && !!href.length && !href.startsWith('/'));
+	let isPDFLink = $derived(typeof href === 'string' && !!href.length && href.endsWith('.pdf'));
+	let isClipboardLink = $derived(typeof href === 'undefined' && !!clipboardText);
 
-	// Determine if the link is copyable text
-	$: isClipboardLink = typeof href === 'undefined' && !!clipboardText;
-
-	let copied = false;
+	let classes = $derived(
+		[
+			'animated-btn',
+			variant,
+			size,
+			`icon--${iconSize}`,
+			disabled ? 'disabled-link' : '',
+			noUppercase ? 'no-uppercase' : ''
+		]
+			.filter(Boolean)
+			.join(' ')
+	);
 
 	function handleClick(event: MouseEvent): void {
 		if (href !== undefined && isPDFLink) {
@@ -33,67 +57,52 @@
 			event.stopPropagation();
 			window.open(href, '_blank');
 		} else {
-			dispatch('clickEvent', event);
+			onclick?.(event);
 		}
 	}
 
-	function handleClipboardClick(): void {
+	async function handleClipboardClick(): Promise<void> {
+		try {
+			await navigator.clipboard.writeText(clipboardText);
+		} catch {
+			// Clipboard API unavailable; nothing else to do
+		}
 		copied = true;
 		setTimeout(() => {
 			copied = false;
 		}, 1000);
 	}
-
-	function determineClasses(): string {
-		const buttonClasses = [
-			'button',
-			'btn',
-			'variant-ghost-surface',
-			size,
-			`icon--${iconSize}`,
-			disabled ? 'disabled-link' : '',
-			noUppercase ? 'no-uppercase' : ''
-		];
-		return buttonClasses.join(' ');
-	}
-
-	function determineHref(): string {
-		if (!href) return '';
-		return isPDFLink ? 'javascript:void(0)' : href;
-	}
 </script>
 
 {#if isExternalLink}
 	<a
-		on:click={handleClick}
+		onclick={handleClick}
 		aria-label={ariaLabel}
 		title={ariaLabel}
 		{href}
-		class={determineClasses()}
+		class={classes}
 		rel="noopener noreferrer"
 		target="_blank"
-		type="button"
 	>
-		<div class="btn-text">
-			<slot />
-		</div>
+		<span class="btn-text">
+			{@render children()}
+		</span>
 
 		<img src={icon} alt="" aria-hidden="true" class="btn-icon" />
 	</a>
 {:else if isClipboardLink}
 	<button
-		use:clipboard={clipboardText}
-		on:click={handleClipboardClick}
+		onclick={handleClipboardClick}
 		aria-label={ariaLabel}
 		title={ariaLabel}
-		class={determineClasses()}
+		class={classes}
 		disabled={copied}
 	>
 		<span class="btn-text">
 			{#if copied}
 				Copied phone number 👍
 			{:else}
-				<slot />
+				{@render children()}
 			{/if}
 		</span>
 
@@ -101,29 +110,28 @@
 	</button>
 {:else}
 	<a
-		on:click={handleClick}
+		onclick={handleClick}
 		aria-label={ariaLabel}
 		title={ariaLabel}
-		href={determineHref()}
-		class={determineClasses()}
-		type="button"
+		href={isPDFLink ? 'javascript:void(0)' : href}
+		class={classes}
 	>
-		<div class="btn-text">
-			<slot />
-		</div>
+		<span class="btn-text">
+			{@render children()}
+		</span>
 
 		<img src={icon} alt="" aria-hidden="true" class="btn-icon" />
 	</a>
 {/if}
 
-<style lang="scss">
+<style>
 	.disabled-link {
 		pointer-events: none;
 		opacity: 0.6;
 		cursor: not-allowed;
 	}
 
-	.button {
+	.animated-btn {
 		position: relative;
 		display: inline-block;
 		overflow: hidden;
@@ -131,84 +139,104 @@
 		cursor: pointer;
 		text-transform: capitalize;
 		white-space: nowrap;
+		text-decoration: none;
+		font-family: var(--font-sans);
+		font-weight: 500;
+		color: var(--color-ink);
+		border-radius: 10px;
+		transition:
+			border-color 0.2s ease,
+			background-color 0.2s ease,
+			box-shadow 0.2s ease;
+	}
 
-		img.btn-icon {
-			position: absolute;
-			top: 0;
-			right: -4rem;
-			bottom: 0;
-			height: 55%;
-			width: auto;
-			margin: auto;
-			transition: all 0.3s;
-			aspect-ratio: 1 / 1 !important;
-			border-radius: unset;
-		}
+	.animated-btn.ghost {
+		background: var(--color-raised);
+		border: 1px solid var(--color-edge);
+	}
 
-		.btn-text {
-			display: inline-block;
-			transition: all 0.3s;
-		}
+	.animated-btn.ghost:hover,
+	.animated-btn.ghost:focus-visible {
+		border-color: var(--color-edge-strong);
+		background: var(--color-overlay);
+	}
 
-		&.no-uppercase {
-			text-transform: initial !important;
-		}
+	.animated-btn.primary {
+		background: var(--color-ink);
+		border: 1px solid var(--color-ink);
+		color: var(--color-base);
+	}
 
-		// Animations
-		&:hover,
-		&:focus {
-			img.btn-icon {
-				right: calc(1rem + 1px);
-			}
+	.animated-btn.primary:hover,
+	.animated-btn.primary:focus-visible {
+		box-shadow: 0 0 24px rgb(237 237 238 / 0.18);
+	}
 
-			.btn-text {
-				transform: translateX(-0.9rem);
-			}
-		}
+	img.btn-icon {
+		position: absolute;
+		top: 0;
+		right: -4rem;
+		bottom: 0;
+		height: 55%;
+		width: auto;
+		margin: auto;
+		transition: all 0.3s;
+		aspect-ratio: 1 / 1 !important;
+		border-radius: unset;
+	}
 
-		// Button Size
-		&.big {
-			padding: 0.75rem 2rem;
-			font-size: 1rem;
-		}
+	.btn-text {
+		display: inline-block;
+		transition: all 0.3s;
+	}
 
-		&.small {
-			padding: 0.66rem 1rem;
-			font-size: 0.9rem;
-		}
+	.animated-btn.no-uppercase {
+		text-transform: initial !important;
+	}
 
-		// Icon size
-		&.icon--big {
-			img.btn-icon {
-				height: 75%;
-			}
+	/* Icon slide-in animation */
+	.animated-btn:hover img.btn-icon,
+	.animated-btn:focus .btn-icon {
+		right: calc(1rem + 1px);
+	}
 
-			&:hover,
-			&:focus {
-				img.btn-icon {
-					right: calc(0.6rem - 1px);
-				}
+	.animated-btn:hover .btn-text,
+	.animated-btn:focus .btn-text {
+		transform: translateX(-0.9rem);
+	}
 
-				.btn-text {
-					transform: translateX(-0.9rem);
-				}
-			}
-		}
-		&.icon--small {
-			img.btn-icon {
-				height: 40%;
-			}
+	/* Button size */
+	.animated-btn.big {
+		padding: 0.85rem 2rem;
+		font-size: 1rem;
+	}
 
-			&:hover,
-			&:focus {
-				img.btn-icon {
-					right: 0.45rem;
-				}
+	.animated-btn.small {
+		padding: 0.66rem 1rem;
+		font-size: 0.9rem;
+	}
 
-				.btn-text {
-					transform: translateX(-0.6rem);
-				}
-			}
-		}
+	/* Icon size */
+	.animated-btn.icon--big img.btn-icon {
+		height: 75%;
+	}
+
+	.animated-btn.icon--big:hover img.btn-icon,
+	.animated-btn.icon--big:focus img.btn-icon {
+		right: calc(0.6rem - 1px);
+	}
+
+	.animated-btn.icon--small img.btn-icon {
+		height: 40%;
+	}
+
+	.animated-btn.icon--small:hover img.btn-icon,
+	.animated-btn.icon--small:focus img.btn-icon {
+		right: 0.45rem;
+	}
+
+	.animated-btn.icon--small:hover .btn-text,
+	.animated-btn.icon--small:focus .btn-text {
+		transform: translateX(-0.6rem);
 	}
 </style>
