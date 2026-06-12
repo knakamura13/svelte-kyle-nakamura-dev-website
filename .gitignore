@@ -7,6 +7,5 @@
 /.svelte-kit
 /build
 node_modules
-vite.config.*
 .aider*
 .qodo
