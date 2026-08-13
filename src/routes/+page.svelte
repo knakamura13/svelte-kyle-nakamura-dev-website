@@ -1,14 +1,8 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import { repositories, fetchRepositories } from '$lib/stores/repositories';
 	import AnimatedButton from '$lib/components/AnimatedButton.svelte';
+	import type { PageProps } from './$types';
 
-	let loading = $state(true);
-
-	onMount(async () => {
-		await fetchRepositories();
-		loading = false;
-	});
+	let { data }: PageProps = $props();
 </script>
 
 <svelte:head>
@@ -18,17 +12,17 @@
 <div class="page" id="home">
 	<p class="folio" aria-hidden="true">Software · Machine Learning</p>
 
-	<section class="hero fade-rise">
-		<p class="eyebrow"><span class="cat-no">01</span> Software Engineer &middot; Machine Learning</p>
+	<section class="hero">
+		<p class="eyebrow fade-rise"><span class="cat-no">01</span> Software Engineer &middot; Machine Learning</p>
 		<h1>
 			<em>Hello,</em>
 			I'm Kyle<span class="stop">.</span>
 		</h1>
-		<p class="tagline">
+		<p class="tagline fade-rise" style="animation-delay: 0.08s">
 			I build full-stack web applications and bring machine learning research into real products.
 		</p>
 
-		<div class="hero-actions">
+		<div class="hero-actions fade-rise" style="animation-delay: 0.12s">
 			<AnimatedButton href="/resume" size="big" variant="primary" ariaLabel="View my resume" icon="/icons/icon-arrow-light.svg" iconSize="big">
 				View my resume
 			</AnimatedButton>
@@ -74,7 +68,7 @@
 		</div>
 
 		<div class="grid">
-			{#if loading && !$repositories.length}
+			{#await data.projects}
 				{#each Array(6) as _, i (i)}
 					<div class="repo-card skeleton-card" aria-hidden="true">
 						<div class="skeleton-line w-60"></div>
@@ -83,8 +77,8 @@
 						<div class="skeleton-line w-75"></div>
 					</div>
 				{/each}
-			{:else}
-				{#each $repositories as repo (repo.html_url)}
+			{:then { repositories }}
+				{#each repositories as repo (repo.html_url)}
 					<a class="repo-card" href={repo.html_url} target="_blank" rel="noopener noreferrer">
 						<h3>{repo.name}</h3>
 						<div class="repo-meta">
@@ -98,7 +92,11 @@
 						<p>Projects are loading... If this persists, check the GitHub API connection.</p>
 					</div>
 				{/each}
-			{/if}
+			{:catch}
+				<div class="no-repos-message">
+					<p>Projects are loading... If this persists, check the GitHub API connection.</p>
+				</div>
+			{/await}
 		</div>
 
 		<AnimatedButton

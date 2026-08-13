@@ -5,6 +5,61 @@
 @import '@fontsource/ibm-plex-mono/latin-500.css';
 @import 'tailwindcss';
 
+/* Latin LCP faces — same URLs as the preloads in app.html (Fontsource keeps other subsets + axes). */
+@font-face {
+	font-family: 'Fraunces Variable';
+	font-style: italic;
+	font-display: swap;
+	font-weight: 100 900;
+	src: url('/fonts/fraunces-latin-full-italic.woff2') format('woff2-variations');
+	unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+		U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+	font-family: 'Newsreader Variable';
+	font-style: normal;
+	font-display: swap;
+	font-weight: 200 800;
+	src: url('/fonts/newsreader-latin-standard-normal.woff2') format('woff2-variations');
+	unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+		U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* Metric-matched locals so Iowan/Palatino don't blow line-height during swap. */
+@font-face {
+	font-family: 'Fraunces Fallback';
+	font-style: italic;
+	font-weight: 100 900;
+	src: local('Iowan Old Style Italic'), local('Palatino Linotype Italic'), local('Palatino Italic');
+	size-adjust: 160.47%;
+	ascent-override: 60.95%;
+	descent-override: 15.89%;
+	line-gap-override: 0%;
+}
+
+@font-face {
+	font-family: 'Fraunces Fallback';
+	font-style: normal;
+	font-weight: 100 900;
+	src: local('Iowan Old Style'), local('Palatino Linotype'), local('Palatino');
+	size-adjust: 141.56%;
+	ascent-override: 69.09%;
+	descent-override: 18.01%;
+	line-gap-override: 0%;
+}
+
+@font-face {
+	font-family: 'Newsreader Fallback';
+	font-style: normal;
+	font-weight: 200 800;
+	src: local('Iowan Old Style'), local('Palatino Linotype'), local('Palatino');
+	size-adjust: 121.65%;
+	ascent-override: 60.42%;
+	descent-override: 21.78%;
+	line-gap-override: 0%;
+}
+
 @theme {
 	/* Paper studio: warm newsprint, not near-black */
 	--color-paper: #efe4ce;
@@ -25,8 +80,9 @@
 	--color-accent: #9f1d16;
 	--color-accent-dim: #7a1611;
 
-	--font-sans: 'Newsreader Variable', 'Iowan Old Style', 'Palatino Linotype', Palatino, serif;
-	--font-display: 'Fraunces Variable', 'Fraunces', 'Iowan Old Style', serif;
+	--font-sans: 'Newsreader Variable', 'Newsreader Fallback', 'Iowan Old Style', 'Palatino Linotype',
+		Palatino, serif;
+	--font-display: 'Fraunces Variable', 'Fraunces Fallback', 'Fraunces', 'Iowan Old Style', serif;
 	--font-mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Code', monospace;
 
 	--ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
