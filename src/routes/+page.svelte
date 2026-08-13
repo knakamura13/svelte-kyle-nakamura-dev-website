@@ -218,6 +218,7 @@
 
 	.repo-card {
 		display: block;
+		min-width: 0;
 		padding: 1.25rem 1.3rem 1.4rem;
 		border-right: 1px solid var(--color-ink);
 		border-bottom: 1px solid var(--color-ink);
@@ -232,6 +233,12 @@
 	.repo-card:hover {
 		background: var(--color-raised);
 		transform: translateY(-2px);
+	}
+
+	.repo-card:active {
+		transform: translateY(0);
+		background: var(--color-overlay);
+		transition-duration: 0.08s;
 	}
 
 	.repo-card h3 {
@@ -252,8 +259,8 @@
 	}
 
 	.star-icon {
+		width: 0.9rem;
 		height: 0.9rem;
-		width: auto;
 	}
 
 	.repo-card p {
@@ -261,6 +268,8 @@
 		font-size: 0.95rem;
 		line-height: 1.55;
 		color: var(--color-ink-muted);
+		min-width: 0;
+		overflow-wrap: anywhere;
 	}
 
 	.no-repos-message {

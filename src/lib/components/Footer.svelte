@@ -21,6 +21,9 @@
 		max-width: 72rem;
 		margin-inline: auto;
 		padding: 1.35rem 1.5rem 1.6rem;
+		padding-bottom: calc(1.6rem + env(safe-area-inset-bottom, 0px));
+		padding-left: calc(1.5rem + env(safe-area-inset-left, 0px));
+		padding-right: calc(1.5rem + env(safe-area-inset-right, 0px));
 		display: flex;
 		align-items: center;
 		gap: 0.85rem;

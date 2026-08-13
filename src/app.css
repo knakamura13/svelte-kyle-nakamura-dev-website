@@ -66,7 +66,7 @@
 	--color-cream: #f8f1df;
 	--color-ink: #1a130f;
 	--color-ink-muted: #5a4c40;
-	--color-ink-faint: #8a7666;
+	--color-ink-faint: #645246;
 	--color-lacquer: #9f1d16;
 	--color-lacquer-hot: #c42a1f;
 	--color-moss: #2f4a3e;
@@ -151,6 +151,18 @@
 		outline-offset: 3px;
 	}
 
+	/* Cream + ink ring so focus stays visible on lacquer-hot primary fills (~1.4:1 outline alone). */
+	.primary:focus-visible {
+		outline: 2px solid var(--color-cream);
+		outline-offset: 3px;
+		box-shadow: 0 0 0 5px var(--color-ink);
+	}
+
+	p,
+	li {
+		text-wrap: pretty;
+	}
+
 	@media (prefers-reduced-motion: reduce) {
 		*,
 		*::before,
@@ -196,6 +208,12 @@
 		white-space: nowrap;
 		color: var(--color-ink);
 		text-decoration: none;
+	}
+
+	@media (max-width: 40rem) {
+		.link {
+			white-space: normal;
+		}
 	}
 
 	.link:focus {
@@ -253,14 +271,14 @@
 		transition-timing-function: cubic-bezier(0.4, 1, 0.8, 1);
 	}
 
-	/* Jiggle button animation (original .jiggle) */
+	/* Jiggle button animation (original .jiggle) — keep motion small so 44px targets don't collide. */
 	.jiggle {
-		transition: all 0.25s ease-in-out;
+		transition: transform 0.2s ease-in-out;
 	}
 
 	.jiggle:hover {
-		animation: jiggle 1s ease-out;
-		transform: scale(1.25);
+		animation: jiggle 0.45s ease-out;
+		transform: scale(1.06);
 	}
 
 	/* Inline prose link */
@@ -313,6 +331,50 @@
 	}
 }
 
+@media (prefers-contrast: more) {
+	.prose-link {
+		text-decoration-thickness: 2px;
+		text-decoration-color: var(--color-lacquer);
+	}
+
+	.link.link--zoomies::before,
+	.link.link--zoomies::after {
+		height: 3px;
+		background: var(--color-ink);
+	}
+
+	.primary {
+		background: var(--color-lacquer-hot);
+		border-color: var(--color-ink);
+	}
+}
+
+@media (forced-colors: active) {
+	a:focus-visible,
+	button:focus-visible,
+	.link:focus-visible,
+	.primary:focus-visible {
+		outline: auto;
+		box-shadow: none;
+	}
+
+	.site-header,
+	.site-footer,
+	.repo-card,
+	.method-card,
+	.dropdown,
+	.contact-trigger,
+	.animated-btn,
+	.resume-embed {
+		border-color: CanvasText;
+	}
+
+	.animated-btn.primary,
+	.primary {
+		border-color: ButtonText;
+	}
+}
+
 @utility fade-rise {
 	animation: fade-rise 0.7s var(--ease-out-soft) both;
 }
@@ -330,37 +392,19 @@
 
 @keyframes jiggle {
 	0% {
-		transform: rotate(0deg) scale(1.1);
+		transform: rotate(0deg) scale(1.03);
 	}
-	10% {
-		transform: rotate(-5deg) scale(1.15);
-	}
-	20% {
-		transform: rotate(5deg) scale(1.2);
-	}
-	30% {
-		transform: rotate(-4deg) scale(1.25);
-	}
-	40% {
-		transform: rotate(4deg) scale(1.25);
+	25% {
+		transform: rotate(-3deg) scale(1.05);
 	}
 	50% {
-		transform: rotate(-3deg) scale(1.25);
+		transform: rotate(3deg) scale(1.06);
 	}
-	60% {
-		transform: rotate(3deg) scale(1.25);
-	}
-	70% {
-		transform: rotate(-2deg) scale(1.25);
-	}
-	80% {
-		transform: rotate(2deg) scale(1.25);
-	}
-	90% {
-		transform: rotate(-1deg) scale(1.25);
+	75% {
+		transform: rotate(-2deg) scale(1.05);
 	}
 	100% {
-		transform: rotate(0deg) scale(1.25);
+		transform: rotate(0deg) scale(1.06);
 	}
 }
 
