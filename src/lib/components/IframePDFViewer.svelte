@@ -6,7 +6,6 @@
 
 	let { pdfPath = '', pdfTitle = '' }: Props = $props();
 
-	// Inline height as a hard fallback — HTML/CSS percentage chains collapse on iframes
 	const embedHeight = 'calc(100dvh - 10.5rem)';
 </script>
 
@@ -28,5 +27,8 @@
 		padding: 2rem;
 		color: var(--color-ink-muted);
 		text-align: center;
+		border: 1px dashed var(--color-ink);
+		font-family: var(--font-mono);
+		font-size: 0.85rem;
 	}
 </style>
