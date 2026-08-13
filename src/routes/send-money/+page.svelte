@@ -52,7 +52,10 @@
 </svelte:head>
 
 <div class="page fade-rise" id="send-money">
-	<h1>Send Money</h1>
+	<div class="section-kicker">
+		<span class="cat-no">Ledger</span>
+		<h1>Send Money</h1>
+	</div>
 	<p class="sub">Pick whichever works best for you.</p>
 
 	<div class="methods">
@@ -81,19 +84,21 @@
 
 <style>
 	h1 {
-		font-size: clamp(2rem, 5vw, 2.75rem);
-		margin-bottom: 0.5rem;
+		font-size: clamp(2.4rem, 7vw, 4.2rem);
+		margin: 0;
+		font-variation-settings: 'SOFT' 45, 'WONK' 1, 'opsz' 96;
 	}
 
 	.sub {
 		color: var(--color-ink-muted);
-		margin-bottom: 2.5rem;
+		margin: 0.75rem 0 2.25rem;
+		max-width: 28rem;
 	}
 
 	.methods {
 		display: flex;
 		flex-direction: column;
-		gap: 1rem;
+		border-top: 1px solid var(--color-ink);
 	}
 
 	.method-card {
@@ -102,30 +107,31 @@
 		justify-content: space-between;
 		flex-wrap: wrap;
 		gap: 1rem;
-		padding: 1.25rem 1.5rem;
-		border-radius: 12px;
-		background: var(--color-raised);
-		border: 1px solid var(--color-edge);
-		transition: border-color 0.25s ease;
+		padding: 1.35rem 0.15rem 1.35rem 0;
+		border-bottom: 1px solid var(--color-ink);
+		background: transparent;
+		transition: background-color 0.2s ease;
 	}
 
 	.method-card:hover {
-		border-color: var(--color-edge-strong);
+		background: rgb(251 246 234 / 0.55);
 	}
 
 	.method-info {
 		display: flex;
 		align-items: center;
-		gap: 0.85rem;
+		gap: 0.9rem;
 	}
 
 	.brand {
-		width: 2.25rem;
-		height: 2.25rem;
+		width: 2.4rem;
+		height: 2.4rem;
 		border-radius: 50%;
+		border: 1px solid var(--color-ink);
 	}
 
 	h2 {
-		font-size: 1.15rem;
+		font-size: 1.45rem;
+		font-weight: 500;
 	}
 </style>
