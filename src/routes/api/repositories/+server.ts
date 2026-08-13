@@ -1,45 +1,20 @@
-import { Octokit } from '@octokit/rest';
-import { env } from '$env/dynamic/private';
+import { loadHomeProjects } from '$lib/server/github';
 
 export async function GET(): Promise<Response> {
-	try {
-		const octokit = new Octokit({
-			auth: env.GITHUB_TOKEN || ''
-		});
+	const { repositories, error } = await loadHomeProjects();
 
-		const response = await octokit.request('GET /users/{username}/repos', {
-			username: 'knakamura13',
-			sort: 'updated'
-		});
-
-		// Get the 6 most recent repositories
-		const repositories = response.data.slice(0, 6);
-
-		const jsonData = {
-			success: true,
-			repositories
-		};
-
-		return new Response(JSON.stringify(jsonData), {
-			headers: {
-				'Content-Type': 'application/json'
-			}
-		});
-	} catch (error) {
-		console.error('Error fetching repositories from GitHub:', error);
-
-		// Return a proper error response with empty repositories array
-		const errorData = {
-			success: false,
-			error: 'Failed to fetch repositories',
-			repositories: []
-		};
-
-		return new Response(JSON.stringify(errorData), {
+	if (error) {
+		return new Response(JSON.stringify({ success: false, error, repositories }), {
 			status: 500,
 			headers: {
 				'Content-Type': 'application/json'
 			}
 		});
 	}
+
+	return new Response(JSON.stringify({ success: true, repositories }), {
+		headers: {
+			'Content-Type': 'application/json'
+		}
+	});
 }
