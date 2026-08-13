@@ -37,6 +37,7 @@
 	let isExternalLink = $derived(typeof href === 'string' && !!href.length && !href.startsWith('/'));
 	let isPDFLink = $derived(typeof href === 'string' && !!href.length && href.endsWith('.pdf'));
 	let isClipboardLink = $derived(typeof href === 'undefined' && !!clipboardText);
+	let invertIcon = $derived(variant === 'ghost' && /(white|light)/i.test(icon));
 
 	let classes = $derived(
 		[
@@ -45,7 +46,8 @@
 			size,
 			`icon--${iconSize}`,
 			disabled ? 'disabled-link' : '',
-			noUppercase ? 'no-uppercase' : ''
+			noUppercase ? 'no-uppercase' : '',
+			invertIcon ? 'invert-icon' : ''
 		]
 			.filter(Boolean)
 			.join(' ')
@@ -149,39 +151,42 @@
 		overflow: hidden;
 		line-height: 100%;
 		cursor: pointer;
-		text-transform: capitalize;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
 		white-space: nowrap;
 		text-decoration: none;
-		font-family: var(--font-sans);
+		font-family: var(--font-mono);
 		font-weight: 500;
+		font-size: 0.78rem;
 		color: var(--color-ink);
-		border-radius: 10px;
+		border-radius: 2px;
 		transition:
 			border-color 0.2s ease,
 			background-color 0.2s ease,
-			box-shadow 0.2s ease;
+			color 0.2s ease;
 	}
 
 	.animated-btn.ghost {
-		background: var(--color-raised);
-		border: 1px solid var(--color-edge);
+		background: transparent;
+		border: 1px solid var(--color-ink);
 	}
 
 	.animated-btn.ghost:hover,
 	.animated-btn.ghost:focus-visible {
-		border-color: var(--color-edge-strong);
-		background: var(--color-overlay);
+		background: var(--color-ink);
+		color: var(--color-cream);
 	}
 
 	.animated-btn.primary {
-		background: var(--color-ink);
-		border: 1px solid var(--color-ink);
-		color: var(--color-base);
+		background: var(--color-lacquer);
+		border: 1px solid var(--color-lacquer);
+		color: var(--color-cream);
 	}
 
 	.animated-btn.primary:hover,
 	.animated-btn.primary:focus-visible {
-		box-shadow: 0 0 24px rgb(237 237 238 / 0.18);
+		background: var(--color-lacquer-hot);
+		border-color: var(--color-lacquer-hot);
 	}
 
 	img.btn-icon {
@@ -196,10 +201,20 @@
 		transform: translateX(calc(100% + 0.75rem));
 		transition:
 			transform 0.3s ease,
-			opacity 0.3s ease;
+			opacity 0.3s ease,
+			filter 0.2s ease;
 		aspect-ratio: 1 / 1 !important;
 		border-radius: unset;
 		pointer-events: none;
+	}
+
+	.animated-btn.invert-icon img.btn-icon {
+		filter: invert(1);
+	}
+
+	.animated-btn.ghost:hover.invert-icon img.btn-icon,
+	.animated-btn.ghost:focus-visible.invert-icon img.btn-icon {
+		filter: invert(0);
 	}
 
 	.btn-text {
@@ -209,9 +224,9 @@
 
 	.animated-btn.no-uppercase {
 		text-transform: initial !important;
+		letter-spacing: 0.02em;
 	}
 
-	/* Icon slide-in animation */
 	.animated-btn:hover img.btn-icon,
 	.animated-btn:focus-visible img.btn-icon {
 		opacity: 1;
@@ -223,20 +238,18 @@
 		transform: translateX(-0.75rem);
 	}
 
-	/* Button size */
 	.animated-btn.big {
-		padding: 0.85rem 2rem;
-		font-size: 1rem;
+		padding: 0.95rem 1.85rem;
+		font-size: 0.8rem;
 	}
 
 	.animated-btn.small {
-		padding: 0.7rem 1.35rem;
-		font-size: 0.9rem;
+		padding: 0.72rem 1.25rem;
+		font-size: 0.75rem;
 	}
 
-	/* Icon size */
 	.animated-btn.icon--big img.btn-icon {
-		height: 75%;
+		height: 70%;
 		right: 0.85rem;
 	}
 
