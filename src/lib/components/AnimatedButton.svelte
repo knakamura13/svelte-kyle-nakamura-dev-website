@@ -163,7 +163,19 @@
 		transition:
 			border-color 0.2s ease,
 			background-color 0.2s ease,
-			color 0.2s ease;
+			color 0.2s ease,
+			transform 0.08s ease;
+	}
+
+	.animated-btn:active:not(.disabled-link) {
+		transform: translateY(1px);
+	}
+
+	@media (max-width: 40rem) {
+		.animated-btn {
+			white-space: normal;
+			overflow-wrap: anywhere;
+		}
 	}
 
 	.animated-btn.ghost {
@@ -183,10 +195,17 @@
 		color: var(--color-cream);
 	}
 
-	.animated-btn.primary:hover,
+	.animated-btn.primary:hover {
+		background: var(--color-lacquer-hot);
+		border-color: var(--color-lacquer-hot);
+	}
+
 	.animated-btn.primary:focus-visible {
 		background: var(--color-lacquer-hot);
 		border-color: var(--color-lacquer-hot);
+		outline: 2px solid var(--color-cream);
+		outline-offset: 3px;
+		box-shadow: 0 0 0 5px var(--color-ink);
 	}
 
 	img.btn-icon {

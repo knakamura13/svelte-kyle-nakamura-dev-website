@@ -1,22 +1,30 @@
 <script lang="ts">
 	import { page } from '$app/stores';
+	import type { Attachment } from 'svelte/attachments';
 
 	let urlPath = $derived($page.url.pathname);
 	let menuOpen = $state(false);
-	let menuContainer: HTMLDivElement | undefined = $state();
 
-	function handleWindowClick(event: MouseEvent) {
-		if (menuOpen && menuContainer && !menuContainer.contains(event.target as Node)) {
-			menuOpen = false;
+	const clickOutside: Attachment<HTMLElement> = (node) => {
+		function onWindowClick(event: MouseEvent) {
+			if (!node.contains(event.target as Node)) {
+				menuOpen = false;
+			}
 		}
-	}
+
+		document.addEventListener('click', onWindowClick);
+
+		return () => {
+			document.removeEventListener('click', onWindowClick);
+		};
+	};
 
 	function handleKeydown(event: KeyboardEvent) {
 		if (event.key === 'Escape') menuOpen = false;
 	}
 </script>
 
-<svelte:window onclick={handleWindowClick} onkeydown={handleKeydown} />
+<svelte:window onkeydown={handleKeydown} />
 
 <header class="site-header">
 	<div class="bleed" aria-hidden="true"></div>
@@ -24,7 +32,8 @@
 		<div class="lead">
 			{#if urlPath !== '/'}
 				<button
-					class="back-btn jiggle"
+					type="button"
+					class="back-btn"
 					title="Back"
 					aria-label="Go back"
 					onclick={() => history.back()}
@@ -37,7 +46,7 @@
 			<a href="/" class="link link--zoomies wordmark">Kyle Nakamura</a>
 		</div>
 
-		<nav class="trail" aria-label="Social links">
+		<nav class="trail" aria-label="Site">
 			<div class="social-links">
 				<a
 					href="https://linkedin.com/in/kylenakamura"
@@ -59,11 +68,13 @@
 				</a>
 			</div>
 
-			<div class="contact-menu" bind:this={menuContainer}>
+			<div class="contact-menu" {@attach clickOutside}>
 				<button
+					type="button"
 					class="contact-trigger"
+					id="contact-trigger"
 					aria-expanded={menuOpen}
-					aria-haspopup="true"
+					aria-controls={menuOpen ? 'contact-panel' : undefined}
 					onclick={(e) => {
 						e.stopPropagation();
 						menuOpen = !menuOpen;
@@ -82,9 +93,8 @@
 				</button>
 
 				{#if menuOpen}
-					<div class="dropdown" role="menu">
+					<div class="dropdown" id="contact-panel">
 						<a
-							role="menuitem"
 							href="https://linkedin.com/in/kylenakamura"
 							target="_blank"
 							rel="noopener noreferrer"
@@ -93,7 +103,6 @@
 							LinkedIn
 						</a>
 						<a
-							role="menuitem"
 							href="https://github.com/knakamura13"
 							target="_blank"
 							rel="noopener noreferrer"
@@ -101,7 +110,7 @@
 							<img src="/icons/logo-github-white.svg" height="16" width="16" alt="" />
 							GitHub
 						</a>
-						<a role="menuitem" href="mailto:knakamura13dev@gmail.com">
+						<a href="mailto:knakamura13dev@gmail.com">
 							<svg
 								viewBox="0 0 24 24"
 								width="16"
@@ -130,6 +139,9 @@
 		z-index: 50;
 		background: var(--color-paper);
 		border-bottom: 3px double var(--color-ink);
+		padding-top: env(safe-area-inset-top, 0px);
+		padding-left: env(safe-area-inset-left, 0px);
+		padding-right: env(safe-area-inset-right, 0px);
 	}
 
 	.bleed {
@@ -172,10 +184,17 @@
 	.back-btn {
 		display: grid;
 		place-items: center;
+		min-width: 44px;
+		min-height: 44px;
+		padding: 0.45rem;
 		background: none;
 		border: none;
-		padding: 0;
+		border-radius: 2px;
 		cursor: pointer;
+	}
+
+	.back-btn:active {
+		transform: scale(0.96);
 	}
 
 	.back-icon {
@@ -235,6 +254,10 @@
 	.contact-trigger:hover {
 		background: var(--color-ink);
 		color: var(--color-cream);
+	}
+
+	.contact-trigger:active {
+		transform: translateY(1px);
 	}
 
 	.caret {

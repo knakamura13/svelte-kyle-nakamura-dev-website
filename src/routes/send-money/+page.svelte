@@ -110,6 +110,7 @@
 		padding: 1.35rem 0.15rem 1.35rem 0;
 		border-bottom: 1px solid var(--color-ink);
 		background: transparent;
+		min-width: 0;
 		transition: background-color 0.2s ease;
 	}
 
