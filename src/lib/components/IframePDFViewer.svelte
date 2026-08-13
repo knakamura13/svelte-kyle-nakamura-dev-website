@@ -19,7 +19,7 @@
 		style:width="100%"
 	></iframe>
 {:else}
-	<p class="empty">This browser does not support PDFs.</p>
+	<p class="empty">No PDF file was provided.</p>
 {/if}
 
 <style>
