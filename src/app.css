@@ -1,33 +1,40 @@
-@import '@fontsource-variable/inter';
-@import '@fontsource-variable/space-grotesk';
+@import '@fontsource-variable/fraunces/full.css';
+@import '@fontsource-variable/fraunces/full-italic.css';
+@import '@fontsource-variable/newsreader/standard.css';
+@import '@fontsource/ibm-plex-mono/latin-400.css';
+@import '@fontsource/ibm-plex-mono/latin-500.css';
 @import 'tailwindcss';
 
 @theme {
-	/* Surfaces: near-black scale */
-	--color-base: #0a0a0b;
-	--color-raised: #131316;
-	--color-overlay: #1b1b1f;
-	--color-edge: #232328;
-	--color-edge-strong: #34343b;
+	/* Paper studio: warm newsprint, not near-black */
+	--color-paper: #efe4ce;
+	--color-cream: #f8f1df;
+	--color-ink: #1a130f;
+	--color-ink-muted: #5a4c40;
+	--color-ink-faint: #8a7666;
+	--color-lacquer: #9f1d16;
+	--color-lacquer-hot: #c42a1f;
+	--color-moss: #2f4a3e;
 
-	/* Ink: warm off-white text scale */
-	--color-ink: #ededee;
-	--color-ink-muted: #9b9ba1;
-	--color-ink-faint: #6b6b72;
+	/* Legacy token names remapped to the new identity */
+	--color-base: #efe4ce;
+	--color-raised: #fbf6ea;
+	--color-overlay: #e7dcc6;
+	--color-edge: #c9b48e;
+	--color-edge-strong: #1a130f;
+	--color-accent: #9f1d16;
+	--color-accent-dim: #7a1611;
 
-	/* Accent: ice blue, used sparingly */
-	--color-accent: #8ec6ff;
-	--color-accent-dim: #5e9fe0;
-
-	--font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
-	--font-display: 'Space Grotesk Variable', 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+	--font-sans: 'Newsreader Variable', 'Iowan Old Style', 'Palatino Linotype', Palatino, serif;
+	--font-display: 'Fraunces Variable', 'Fraunces', 'Iowan Old Style', serif;
+	--font-mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Code', monospace;
 
 	--ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 @layer base {
 	:root {
-		color-scheme: dark;
+		color-scheme: light;
 	}
 
 	html {
@@ -35,20 +42,29 @@
 	}
 
 	body {
-		background-color: var(--color-base);
+		background-color: var(--color-paper);
 		color: var(--color-ink);
 		font-family: var(--font-sans);
-		font-size: 1rem;
+		font-size: 1.125rem;
 		line-height: 1.7;
 		-webkit-font-smoothing: antialiased;
 		text-rendering: optimizeLegibility;
-		/* Subtle top-of-page glow */
-		background-image: radial-gradient(
-			ellipse 80% 40% at 50% -10%,
-			rgb(142 198 255 / 0.07),
-			transparent
-		);
+		background-image:
+			radial-gradient(ellipse 80% 45% at 100% -10%, rgb(196 42 31 / 0.1), transparent 55%),
+			radial-gradient(ellipse 55% 40% at -10% 110%, rgb(47 74 62 / 0.1), transparent 50%);
 		background-repeat: no-repeat;
+	}
+
+	/* Print-grain overlay — texture, not decoration chrome */
+	body::after {
+		content: '';
+		position: fixed;
+		inset: 0;
+		pointer-events: none;
+		z-index: 80;
+		opacity: 0.18;
+		mix-blend-mode: multiply;
+		background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 	}
 
 	h1,
@@ -56,14 +72,16 @@
 	h3,
 	h4 {
 		font-family: var(--font-display);
-		font-weight: 600;
-		letter-spacing: -0.02em;
-		line-height: 1.15;
+		font-weight: 500;
+		letter-spacing: -0.03em;
+		line-height: 1.05;
 		text-wrap: balance;
+		font-variation-settings: 'SOFT' 40, 'WONK' 1, 'opsz' 72;
 	}
 
 	::selection {
-		background-color: rgb(142 198 255 / 0.25);
+		background-color: rgb(196 42 31 / 0.22);
+		color: var(--color-ink);
 	}
 
 	a,
@@ -73,8 +91,8 @@
 
 	a:focus-visible,
 	button:focus-visible {
-		outline: 2px solid var(--color-accent);
-		border-radius: 4px;
+		outline: 2px solid var(--color-lacquer);
+		outline-offset: 3px;
 	}
 
 	@media (prefers-reduced-motion: reduce) {
@@ -90,12 +108,29 @@
 }
 
 @layer components {
+	.skip-link {
+		position: absolute;
+		left: 1rem;
+		top: -4rem;
+		z-index: 100;
+		padding: 0.55rem 0.9rem;
+		background: var(--color-ink);
+		color: var(--color-cream);
+		font-family: var(--font-mono);
+		font-size: 0.8rem;
+		text-decoration: none;
+	}
+
+	.skip-link:focus {
+		top: 1rem;
+	}
+
 	/* Shared content column */
 	.page {
 		width: 100%;
-		max-width: 46rem;
+		max-width: 52rem;
 		margin-inline: auto;
-		padding: 3.5rem 1.5rem 5rem;
+		padding: 3.25rem 1.5rem 5.5rem;
 	}
 
 	/* Animated underline link (original .link--zoomies) */
@@ -109,7 +144,6 @@
 
 	.link:focus {
 		outline: none;
-		background: lightgrey;
 	}
 
 	.link:focus:not(:focus-visible) {
@@ -117,7 +151,7 @@
 	}
 
 	.link:focus-visible {
-		outline: 2px solid var(--color-accent);
+		outline: 2px solid var(--color-lacquer);
 		border-radius: 0.1rem;
 		background: transparent;
 	}
@@ -126,7 +160,7 @@
 	.link::after {
 		position: absolute;
 		width: 100%;
-		height: 1px;
+		height: 2px;
 		background: currentColor;
 		top: 100%;
 		left: 0;
@@ -175,15 +209,15 @@
 
 	/* Inline prose link */
 	.prose-link {
-		color: var(--color-accent);
+		color: var(--color-lacquer);
 		text-decoration: underline;
-		text-decoration-color: rgb(142 198 255 / 0.35);
+		text-decoration-color: rgb(159 29 22 / 0.4);
 		text-underline-offset: 3px;
 		transition: text-decoration-color 0.2s ease;
 	}
 
 	.prose-link:hover {
-		text-decoration-color: var(--color-accent);
+		text-decoration-color: var(--color-lacquer);
 	}
 
 	/* Resume PDF embed — explicit height; percentage heights collapse inside flex layouts */
@@ -193,9 +227,33 @@
 		height: calc(100vh - 10.5rem);
 		height: calc(100dvh - 10.5rem);
 		min-height: 600px;
-		border: 1px solid var(--color-edge);
-		border-radius: 12px;
+		border: 1px solid var(--color-ink);
+		border-radius: 0;
 		background: var(--color-raised);
+	}
+
+	.section-kicker {
+		display: flex;
+		align-items: baseline;
+		gap: 0.85rem;
+		margin-bottom: 1.1rem;
+	}
+
+	.section-kicker .cat-no {
+		font-family: var(--font-mono);
+		font-size: 0.72rem;
+		letter-spacing: 0.16em;
+		text-transform: uppercase;
+		color: var(--color-lacquer);
+	}
+
+	.section-kicker h1,
+	.section-kicker h2 {
+		margin: 0;
+	}
+
+	.section-kicker h2 {
+		font-size: clamp(1.7rem, 3vw, 2.15rem);
 	}
 }
 
