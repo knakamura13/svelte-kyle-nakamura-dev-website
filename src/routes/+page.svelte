@@ -67,8 +67,8 @@
 			<h2>Recent Projects</h2>
 		</div>
 
-		<div class="grid">
-			{#await data.projects}
+		{#await data.projects}
+			<div class="grid" aria-busy="true">
 				{#each Array(6) as _, i (i)}
 					<div class="repo-card skeleton-card" aria-hidden="true">
 						<div class="skeleton-line w-60"></div>
@@ -77,27 +77,37 @@
 						<div class="skeleton-line w-75"></div>
 					</div>
 				{/each}
-			{:then { repositories }}
-				{#each repositories as repo (repo.html_url)}
-					<a class="repo-card" href={repo.html_url} target="_blank" rel="noopener noreferrer">
-						<h3>{repo.name}</h3>
-						<div class="repo-meta">
-							<img class="star-icon" src="/icons/icon-yellow-star.svg" alt="GitHub stars" />
-							<span>{repo.stargazers_count}</span>
-						</div>
-						<p>{repo.description ?? 'No description.'}</p>
-					</a>
-				{:else}
-					<div class="no-repos-message">
-						<p>Projects are loading... If this persists, check the GitHub API connection.</p>
+			</div>
+		{:then { repositories, error }}
+			<div class="grid" aria-busy="false">
+				{#if error}
+					<div class="no-repos-message" role="status">
+						<p>Couldn't load projects from GitHub. Try again in a bit.</p>
 					</div>
-				{/each}
-			{:catch}
-				<div class="no-repos-message">
-					<p>Projects are loading... If this persists, check the GitHub API connection.</p>
+				{:else}
+					{#each repositories as repo (repo.html_url)}
+						<a class="repo-card" href={repo.html_url} target="_blank" rel="noopener noreferrer">
+							<h3>{repo.name}</h3>
+							<div class="repo-meta">
+								<img class="star-icon" src="/icons/icon-yellow-star.svg" alt="GitHub stars" />
+								<span>{repo.stargazers_count}</span>
+							</div>
+							<p>{repo.description ?? 'No description.'}</p>
+						</a>
+					{:else}
+						<div class="no-repos-message" role="status">
+							<p>No public projects to show right now.</p>
+						</div>
+					{/each}
+				{/if}
+			</div>
+		{:catch}
+			<div class="grid" aria-busy="false">
+				<div class="no-repos-message" role="status">
+					<p>Couldn't load projects from GitHub. Try again in a bit.</p>
 				</div>
-			{/await}
-		</div>
+			</div>
+		{/await}
 
 		<AnimatedButton
 			href="https://github.com/knakamura13?tab=repositories"
