@@ -6,10 +6,12 @@
 	let { children } = $props();
 </script>
 
+<a class="skip-link" href="#main">Skip to content</a>
+
 <div class="app">
 	<Header />
 
-	<main>
+	<main id="main">
 		{@render children()}
 	</main>
 

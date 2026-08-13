@@ -13,25 +13,28 @@
 
 <style>
 	.site-footer {
-		border-top: 1px solid var(--color-edge);
+		border-top: 3px double var(--color-ink);
 		margin-top: auto;
 	}
 
 	.inner {
-		max-width: 64rem;
+		max-width: 72rem;
 		margin-inline: auto;
-		padding: 1.25rem 1.5rem;
+		padding: 1.35rem 1.5rem 1.6rem;
 		display: flex;
 		align-items: center;
-		gap: 0.75rem;
-		font-size: 0.8rem;
-		color: var(--color-ink-faint);
+		gap: 0.85rem;
+		font-family: var(--font-mono);
+		font-size: 0.72rem;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		color: var(--color-ink-muted);
 	}
 
 	.divider {
-		width: 3px;
-		height: 3px;
-		border-radius: 50%;
-		background: var(--color-edge-strong);
+		width: 4px;
+		height: 4px;
+		background: var(--color-lacquer);
+		border-radius: 0;
 	}
 </style>

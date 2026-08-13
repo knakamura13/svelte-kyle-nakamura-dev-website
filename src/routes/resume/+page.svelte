@@ -11,7 +11,10 @@
 
 <div class="resume-page fade-rise">
 	<div class="toolbar">
-		<h1>Resume</h1>
+		<div class="section-kicker">
+			<span class="cat-no">Document</span>
+			<h1>Resume</h1>
+		</div>
 		<AnimatedButton
 			href={pdfPath}
 			ariaLabel="Download my resume as a PDF"
@@ -35,7 +38,7 @@
 		width: 100%;
 		max-width: 72rem;
 		margin-inline: auto;
-		padding: 1.5rem;
+		padding: 1.75rem 1.5rem 2.5rem;
 	}
 
 	.toolbar {
@@ -43,17 +46,28 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: 1rem;
-		margin-bottom: 1rem;
+		margin-bottom: 1.15rem;
+		padding-bottom: 1rem;
+		border-bottom: 1px solid var(--color-ink);
 	}
 
 	h1 {
-		font-size: 1.5rem;
+		font-size: clamp(1.6rem, 3vw, 2.1rem);
 	}
 
 	.fallback {
-		margin-top: 0.75rem;
-		font-size: 0.85rem;
+		margin-top: 0.9rem;
+		font-family: var(--font-mono);
+		font-size: 0.75rem;
+		letter-spacing: 0.04em;
 		color: var(--color-ink-faint);
 		text-align: center;
+	}
+
+	@media (max-width: 640px) {
+		.toolbar {
+			flex-direction: column;
+			align-items: flex-start;
+		}
 	}
 </style>

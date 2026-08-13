@@ -16,16 +16,20 @@
 </svelte:head>
 
 <div class="page" id="home">
-	<!-- Hero -->
+	<p class="folio" aria-hidden="true">Software · Machine Learning</p>
+
 	<section class="hero fade-rise">
-		<p class="eyebrow">Software Engineer &middot; Machine Learning</p>
-		<h1>Hello, I'm Kyle.</h1>
+		<p class="eyebrow"><span class="cat-no">01</span> Software Engineer &middot; Machine Learning</p>
+		<h1>
+			<em>Hello,</em>
+			I'm Kyle<span class="stop">.</span>
+		</h1>
 		<p class="tagline">
 			I build full-stack web applications and bring machine learning research into real products.
 		</p>
 
 		<div class="hero-actions">
-			<AnimatedButton href="/resume" size="big" variant="primary" ariaLabel="View my resume" icon="/icons/icon-arrow-dark.svg" iconSize="big">
+			<AnimatedButton href="/resume" size="big" variant="primary" ariaLabel="View my resume" icon="/icons/icon-arrow-light.svg" iconSize="big">
 				View my resume
 			</AnimatedButton>
 			<AnimatedButton
@@ -40,9 +44,11 @@
 		</div>
 	</section>
 
-	<!-- About -->
 	<section class="about fade-rise" style="animation-delay: 0.1s">
-		<h2>About Me</h2>
+		<div class="section-kicker">
+			<span class="cat-no">02</span>
+			<h2>About Me</h2>
+		</div>
 		<p>
 			I'm a software engineer with 7 years of experience in full-stack web development and a
 			lifelong passion for machine learning. Throughout my career, I've loved integrating ML into
@@ -61,9 +67,11 @@
 		</p>
 	</section>
 
-	<!-- Projects -->
 	<section class="recent-projects fade-rise" style="animation-delay: 0.2s">
-		<h2>Recent Projects</h2>
+		<div class="section-kicker">
+			<span class="cat-no">03</span>
+			<h2>Recent Projects</h2>
+		</div>
 
 		<div class="grid">
 			{#if loading && !$repositories.length}
@@ -107,89 +115,132 @@
 
 <style>
 	.page {
+		position: relative;
+		max-width: 72rem;
 		display: flex;
 		flex-direction: column;
-		gap: 4.5rem;
-	}
-
-	/* Hero */
-	.hero {
+		gap: 5.5rem;
 		padding-top: 2.5rem;
 	}
 
-	.eyebrow {
-		font-size: 0.85rem;
-		font-weight: 500;
-		letter-spacing: 0.12em;
+	.folio {
+		display: none;
+		position: absolute;
+		left: -0.25rem;
+		top: 7.5rem;
+		font-family: var(--font-mono);
+		font-size: 0.68rem;
+		letter-spacing: 0.22em;
 		text-transform: uppercase;
-		color: var(--color-accent);
-		margin-bottom: 1rem;
+		color: var(--color-lacquer);
+		transform: rotate(-90deg);
+		transform-origin: left top;
+		white-space: nowrap;
+	}
+
+	.hero {
+		max-width: 46rem;
+		padding-top: 1.5rem;
+	}
+
+	.eyebrow {
+		font-family: var(--font-mono);
+		font-size: 0.72rem;
+		font-weight: 500;
+		letter-spacing: 0.18em;
+		text-transform: uppercase;
+		color: var(--color-lacquer);
+		margin-bottom: 1.35rem;
+	}
+
+	.eyebrow .cat-no {
+		margin-right: 0.65rem;
+		letter-spacing: 0.16em;
 	}
 
 	.hero h1 {
-		font-size: clamp(2.5rem, 7vw, 4rem);
-		margin-bottom: 1.25rem;
+		font-size: clamp(3.4rem, 12vw, 7.25rem);
+		font-weight: 500;
+		line-height: 0.92;
+		letter-spacing: -0.04em;
+		margin-bottom: 1.5rem;
+		font-variation-settings: 'SOFT' 55, 'WONK' 1, 'opsz' 144;
+	}
+
+	.hero h1 em {
+		display: block;
+		font-style: italic;
+		font-weight: 400;
+		color: var(--color-moss);
+		font-variation-settings: 'SOFT' 80, 'WONK' 1, 'opsz' 144;
+	}
+
+	.hero h1 .stop {
+		color: var(--color-lacquer-hot);
 	}
 
 	.tagline {
-		font-size: clamp(1.05rem, 2.5vw, 1.25rem);
+		font-size: clamp(1.15rem, 2.4vw, 1.4rem);
 		color: var(--color-ink-muted);
 		max-width: 34rem;
-		margin-bottom: 2.25rem;
+		margin-bottom: 2.4rem;
+		font-variation-settings: 'opsz' 18;
 	}
 
 	.hero-actions {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 0.85rem;
+		gap: 0.75rem;
 	}
 
-	/* Sections */
-	h2 {
-		font-size: 1.6rem;
-		margin-bottom: 1.25rem;
+	.about {
+		max-width: 42rem;
+		padding-top: 0.5rem;
+		border-top: 1px solid var(--color-ink);
 	}
 
 	.about p {
 		color: var(--color-ink-muted);
 		margin-bottom: 1rem;
-		max-width: 42rem;
 	}
 
-	/* Project grid */
+	.recent-projects {
+		padding-top: 0.5rem;
+		border-top: 1px solid var(--color-ink);
+	}
+
 	.grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-		gap: 1rem;
+		grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+		gap: 0;
 		margin-bottom: 2rem;
+		border-top: 1px solid var(--color-ink);
+		border-left: 1px solid var(--color-ink);
 	}
 
 	.repo-card {
 		display: block;
-		padding: 1.15rem 1.25rem;
-		border-radius: 12px;
-		background: var(--color-raised);
-		border: 1px solid var(--color-edge);
+		padding: 1.25rem 1.3rem 1.4rem;
+		border-right: 1px solid var(--color-ink);
+		border-bottom: 1px solid var(--color-ink);
+		background: var(--color-cream);
 		text-decoration: none;
 		color: inherit;
 		transition:
-			border-color 0.25s ease,
 			background-color 0.25s ease,
-			box-shadow 0.25s ease,
 			transform 0.25s var(--ease-out-soft);
 	}
 
 	.repo-card:hover {
-		border-color: rgb(142 198 255 / 0.45);
-		background: var(--color-overlay);
-		box-shadow: 0 0 28px rgb(142 198 255 / 0.08);
+		background: var(--color-raised);
 		transform: translateY(-2px);
 	}
 
 	.repo-card h3 {
-		font-size: 1rem;
-		font-weight: 600;
+		font-size: 1.15rem;
+		font-weight: 500;
 		overflow-wrap: anywhere;
+		font-variation-settings: 'SOFT' 20, 'WONK' 1, 'opsz' 36;
 	}
 
 	.repo-meta {
@@ -197,7 +248,8 @@
 		align-items: center;
 		gap: 0.3rem;
 		margin-top: 0.45rem;
-		font-size: 0.85rem;
+		font-family: var(--font-mono);
+		font-size: 0.75rem;
 		color: var(--color-ink-muted);
 	}
 
@@ -207,8 +259,8 @@
 	}
 
 	.repo-card p {
-		margin-top: 0.6rem;
-		font-size: 0.875rem;
+		margin-top: 0.65rem;
+		font-size: 0.95rem;
 		line-height: 1.55;
 		color: var(--color-ink-muted);
 	}
@@ -217,20 +269,19 @@
 		grid-column: 1 / -1;
 		text-align: center;
 		padding: 2rem;
-		border-radius: 12px;
-		border: 1px dashed var(--color-edge-strong);
+		border-right: 1px solid var(--color-ink);
+		border-bottom: 1px solid var(--color-ink);
 		color: var(--color-ink-muted);
 	}
 
-	/* Loading skeleton */
 	.skeleton-card {
 		pointer-events: none;
 	}
 
 	.skeleton-line {
 		height: 0.8rem;
-		border-radius: 4px;
-		background: var(--color-edge);
+		border-radius: 1px;
+		background: var(--color-overlay);
 		margin-bottom: 0.65rem;
 		animation: shimmer 0.9s ease-in-out infinite alternate;
 	}
@@ -250,5 +301,11 @@
 	}
 	.w-75 {
 		width: 75%;
+	}
+
+	@media (min-width: 1280px) {
+		.folio {
+			display: block;
+		}
 	}
 </style>
