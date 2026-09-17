@@ -45,7 +45,8 @@
   await move(card, 'translateY(-8px) rotate(0deg)', 420);
  }
  function release(force = false) {
-  if (!force && stage?.contains(document.activeElement)) return;
+  // Only bail if the *active* card contains focus, not any card in the stack.
+  if (!force && active?.contains(document.activeElement)) return;
   ++revision;
   if (!active) return;
   const card = active;

@@ -66,13 +66,13 @@
  <a href="#main" class="concept-skip">Skip to content</a>
  <header class="concept-header">
   <a href="#main" class="identity" aria-label="Kyle Nakamura, back to top"><span class="monogram" aria-hidden="true">kn<span>↗</span></span><span>Kyle Nakamura</span></a>
-  <nav bind:this={nav} aria-label="Main navigation" class:hidden class="floating-nav" onfocusin={() => hidden = false}>
+  <nav bind:this={nav} aria-label="Main navigation" class:nav-hidden={hidden} class="floating-nav" onfocusin={() => hidden = false}>
    <div class="capsule">
     <a class="desktop-nav" href="#work" onclick={closePanels}>Work</a>
     <a class="desktop-nav" href="#about" onclick={closePanels}>About</a>
     <a class="desktop-nav" href="/resume">Résumé <span aria-hidden="true">↗</span></a>
     <button class="mobile-menu" bind:this={menuTrigger} aria-expanded={menuOpen} aria-controls="mobile-links" onclick={() => { menuOpen = !menuOpen; contactOpen = false; }}>Menu <span aria-hidden="true">{menuOpen ? '−' : '+'}</span></button>
-    <button class="contact-trigger" bind:this={contactTrigger} aria-expanded={contactOpen} aria-controls="contact-panel" onclick={openContact}>Let’s talk <span class:turned={contactOpen} aria-hidden="true">↗</span></button>
+    <button class="contact-trigger" bind:this={contactTrigger} aria-expanded={contactOpen} aria-controls="contact-panel" onclick={openContact}>Let's talk <span class:turned={contactOpen} aria-hidden="true">↗</span></button>
    </div>
    {#if menuOpen}
     <div class="nav-panel mobile-links" id="mobile-links">
@@ -97,8 +97,8 @@
    <div class="hero-copy">
     <p class="eyeline">Senior full-stack engineer / ML</p>
     <h1 id="intro-title">Thoughtful software.<br /><span>A curious mind.</span></h1>
-    <p class="intro">I’m Kyle. I build full-stack web applications and bring machine learning research into real products.</p>
-    <div class="hero-actions"><button class="solid-button" onclick={openContact}>Let’s talk <span aria-hidden="true">↗</span></button><a class="text-link" href="/resume">View my résumé <span aria-hidden="true">↗</span></a></div>
+    <p class="intro">I'm Kyle. I build full-stack web applications and bring machine learning research into real products.</p>
+    <div class="hero-actions"><button class="solid-button" onclick={openContact}>Let's talk <span aria-hidden="true">↗</span></button><a class="text-link" href="/resume">View my r&eacute;sum&eacute; <span aria-hidden="true">↗</span></a></div>
    </div>
    <div class="hero-art" aria-label="A glimpse of selected work">
     <a href="#korean" class="hero-project korean-preview">
@@ -106,14 +106,14 @@
      <div class="korean-letter" aria-hidden="true">한<span>글</span></div>
      <p class="preview-note">A writing system.<br />A world to discover.</p>
      <img src={projects[0].image} alt={projects[0].alt} width="1280" height="720" fetchpriority="high" />
-     <div class="preview-foot"><span>Interactive learning</span><span>Explore the project ↗</span></div>
+     <div class="preview-foot"><span>Interactive learning</span><span>Explore the project &rarr;</span></div>
     </a>
     <a href="#mlrose" class="hero-project ml-preview">
      <div class="preview-top"><span>mlrose-ky</span><span aria-hidden="true">↗</span></div>
      <img src={projects[1].image} alt={projects[1].alt} width="751" height="727" />
      <div class="preview-foot"><span>Optimization, explored.</span></div>
     </a>
-    <p class="art-caption">A few things I’ve been building <span aria-hidden="true">↗</span></p>
+    <p class="art-caption">A few things I've been building <span aria-hidden="true">↗</span></p>
    </div>
    <a class="scroll-cue" href="#work">Take a look around <span aria-hidden="true">↓</span></a>
   </section>
@@ -137,9 +137,9 @@
 
   <section id="about" class="about-section" use:reveal aria-labelledby="about-heading">
    <p class="eyeline">A little about me</p><h2 id="about-heading">Interested in how things work.<br /><span>And how they could work better.</span></h2>
-   <div class="about-bottom"><p>My work connects full-stack engineering with machine learning. I completed my master’s in Computer Science at Georgia Tech, specializing in ML, and contribute to open-source tools like mlrose-ky.</p><a class="text-link" href="/resume">The longer version <span aria-hidden="true">↗</span></a></div>
+   <div class="about-bottom"><p>My work connects full-stack engineering with machine learning. I completed my master's in Computer Science at Georgia Tech, specializing in ML, and contribute to open-source tools like mlrose-ky.</p><a class="text-link" href="/resume">The longer version <span aria-hidden="true">↗</span></a></div>
   </section>
-  <section class="closing" use:reveal aria-labelledby="contact-heading"><p class="eyeline">Have something in mind?</p><h2 id="contact-heading">Let’s build<br /><span>something good.</span></h2><a class="solid-button" href="mailto:{email}">Get in touch <span aria-hidden="true">↗</span></a></section>
+  <section class="closing" use:reveal aria-labelledby="contact-heading"><p class="eyeline">Have something in mind?</p><h2 id="contact-heading">Let's build<br /><span>something good.</span></h2><a class="solid-button" href="mailto:{email}">Get in touch <span aria-hidden="true">↗</span></a></section>
  </main>
  <footer class="concept-footer"><a href="#main">Kyle Nakamura <span aria-hidden="true">↑</span></a><div><a href="https://github.com/knakamura13" target="_blank" rel="noopener noreferrer">GitHub ↗</a><a href="https://linkedin.com/in/kylenakamura" target="_blank" rel="noopener noreferrer">LinkedIn ↗</a><span>© {new Date().getFullYear()}</span></div></footer>
  <aside class="concept-switcher" aria-label="Compare design concepts"><a href="/prototype/gallery">Revised Gallery</a><a href="/prototype/gallery-original" aria-current={variant === 'gallery' ? 'page' : undefined}>Original Gallery</a><a href="/prototype/workbench" aria-current={variant === 'workbench' ? 'page' : undefined}>Workbench</a></aside>

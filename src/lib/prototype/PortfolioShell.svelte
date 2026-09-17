@@ -61,7 +61,7 @@
  <a href="#main" class="concept-skip">Skip to content</a>
  <header class="concept-header">
   <a href={galleryPath} class="identity" aria-label="Kyle Nakamura, homepage"><span class="monogram" aria-hidden="true">kn<span>↗</span></span><span>Kyle Nakamura</span></a>
-  <nav bind:this={nav} aria-label="Main navigation" class:hidden class="floating-nav" onfocusin={() => hidden = false}>
+  <nav bind:this={nav} aria-label="Main navigation" class:nav-hidden={hidden} class="floating-nav" onfocusin={() => hidden = false}>
    <div class="capsule">
     <a class="desktop-nav" href={`${galleryPath}#work`} onclick={closePanels}>Work</a>
     <a class="desktop-nav" href={`${galleryPath}#about`} onclick={closePanels}>About</a>
