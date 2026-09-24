@@ -1,138 +1,109 @@
 <script lang="ts">
-	import AnimatedButton from '$lib/components/AnimatedButton.svelte';
+	import { stack } from '$lib/motion/stack';
 
-	interface PaymentMethod {
-		name: string;
-		href?: string;
-		clipboardText?: string;
-		label: string;
-		buttonText: string;
-		noUppercase: boolean;
-		icon: string;
-	}
+	const zelle = { display: '(626) 388-5416', digits: '6263885416' };
+	const idleCaption = 'Copies the number.';
+	let zelleCaption = $state(idleCaption);
+	let copyStatus = $state('');
+	let copyTimer: ReturnType<typeof setTimeout> | undefined;
 
-	const paymentMethods: PaymentMethod[] = [
-		{
-			name: 'Venmo',
-			href: 'https://venmo.com/u/pileofkyle',
-			label: 'Pay with Venmo',
-			buttonText: 'Pay @pileofkyle',
-			noUppercase: true,
-			icon: '/icons/logo-venmo-circle.png'
-		},
-		{
-			name: 'Cash App',
-			href: 'https://cash.app/$KyleKyle',
-			label: 'Pay with Cash App',
-			buttonText: 'Pay $KyleKyle',
-			noUppercase: false,
-			icon: '/icons/logo-cash-circle.png'
-		},
-		{
-			name: 'PayPal',
-			href: 'https://paypal.me/kylenakamura12',
-			label: 'Pay with PayPal',
-			buttonText: 'Pay kylenakamura12',
-			noUppercase: true,
-			icon: '/icons/logo-paypal-circle.png'
-		},
-		{
-			name: 'Zelle',
-			clipboardText: '6263885416',
-			label: 'Pay with Zelle',
-			buttonText: 'Pay (626) 388-5416',
-			noUppercase: true,
-			icon: '/icons/logo-zelle-circle.png'
+	async function copyZelle() {
+		try {
+			await navigator.clipboard.writeText(zelle.digits);
+			zelleCaption = 'Number copied.';
+			copyStatus = 'Zelle number copied';
+		} catch {
+			zelleCaption = `Couldn’t copy. The number is ${zelle.display}.`;
+			copyStatus = `Could not copy. The Zelle number is ${zelle.display}.`;
 		}
-	];
+		clearTimeout(copyTimer);
+		copyTimer = setTimeout(() => {
+			zelleCaption = idleCaption;
+			copyStatus = '';
+		}, 4000);
+	}
 </script>
 
 <svelte:head>
-	<title>Send money to Kyle</title>
+	<title>Send money — Kyle Nakamura</title>
+	<meta name="description" content="Send Kyle money with Venmo, Cash App, PayPal, or Zelle." />
 </svelte:head>
 
-<div class="page fade-rise" id="send-money">
-	<div class="section-kicker">
-		<span class="cat-no">Ledger</span>
-		<h1>Send Money</h1>
-	</div>
-	<p class="sub">Pick whichever works best for you.</p>
+<div class="send-money">
+	<header class="page-intro">
+		<h1>Send money,<br /><span>however is easiest.</span></h1>
+		<p class="page-lede">Pick whichever works best for you.</p>
+	</header>
 
-	<div class="methods">
-		{#each paymentMethods as method (method.name)}
-			<div class="method-card">
-				<div class="method-info">
-					<img class="brand" src={method.icon} alt="{method.name} logo" />
-					<h2>{method.name}</h2>
-				</div>
-
-				<AnimatedButton
-					href={method.href}
-					size="big"
-					ariaLabel={method.label}
-					noUppercase={method.noUppercase || undefined}
-					clipboardText={method.clipboardText}
-					icon={method.icon}
-					iconSize="med"
-				>
-					{method.buttonText}
-				</AnimatedButton>
-			</div>
-		{/each}
-	</div>
+	<ul class="stack payment-stack" aria-label="Payment methods" use:stack>
+		<li>
+			<a class="stack-card pay-venmo" href="https://venmo.com/u/pileofkyle" target="_blank" rel="noopener noreferrer" data-angle="-3" data-clear="-80">
+				<span class="stack-face">
+					<span class="stack-title">Venmo <span aria-hidden="true">↗</span></span>
+					<span class="pay-handle">@pileofkyle</span>
+					<img src="/icons/logo-venmo-circle.png" alt="" width="256" height="256" />
+				</span>
+			</a>
+		</li>
+		<li>
+			<a class="stack-card pay-cash" href="https://cash.app/$KyleKyle" target="_blank" rel="noopener noreferrer" data-angle="4" data-clear="-100">
+				<span class="stack-face">
+					<span class="stack-title">Cash App <span aria-hidden="true">↗</span></span>
+					<span class="pay-handle">$KyleKyle</span>
+					<img src="/icons/logo-cash-circle.png" alt="" width="256" height="256" />
+				</span>
+			</a>
+		</li>
+		<li>
+			<a class="stack-card pay-paypal" href="https://paypal.me/kylenakamura12" target="_blank" rel="noopener noreferrer" data-angle="-5" data-clear="90">
+				<span class="stack-face">
+					<span class="stack-title">PayPal <span aria-hidden="true">↗</span></span>
+					<span class="pay-handle">kylenakamura12</span>
+					<img src="/icons/logo-paypal-circle.png" alt="" width="256" height="256" />
+				</span>
+			</a>
+		</li>
+		<li>
+			<button class="stack-card pay-zelle" type="button" data-angle="5" data-clear="80" onclick={copyZelle}>
+				<span class="stack-face">
+					<span class="stack-title">Zelle <span aria-hidden="true">⧉</span></span>
+					<span class="pay-handle">{zelle.display}</span>
+					<img src="/icons/logo-zelle-circle.png" alt="" width="256" height="256" />
+					<span class="stack-caption">{zelleCaption}</span>
+				</span>
+			</button>
+		</li>
+	</ul>
+	<p class="sr-only" aria-live="polite">{copyStatus}</p>
 </div>
 
 <style>
-	h1 {
-		font-size: clamp(2.4rem, 7vw, 4.2rem);
-		margin: 0;
-		font-variation-settings: 'SOFT' 45, 'WONK' 1, 'opsz' 96;
+	.send-money { display:grid; grid-template-columns:minmax(240px,.76fr) minmax(0,1.24fr); gap:10%; align-items:start; padding-bottom:85px; }
+	.pay-handle { display:block; font-family:'Newsreader Variable',Georgia,serif; font-size:27px; line-height:1.15; letter-spacing:-.04em; margin-top:6px; }
+	.stack-card img { width:56px; height:56px; margin-top:26px; }
+	.pay-venmo { z-index:1; }
+	.pay-cash { z-index:2; }
+	.pay-paypal { z-index:3; }
+	.pay-zelle { z-index:4; }
+	/* Soft tints of each brand's hue. PayPal and Zelle sit darker than the home tints so the four stay distinct. */
+	.pay-venmo .stack-face { background:#cbe6f6; }
+	.pay-cash .stack-face { background:#c9e9d3; }
+	.pay-paypal .stack-face { background:#b1c1e7; }
+	.pay-zelle .stack-face { background:#e0d0f1; }
+	@media(min-width:701px) {
+		.payment-stack { height:520px; margin-top:40px; }
+		.pay-venmo { left:0; top:0; width:56%; height:230px; transform:rotate(-3deg); }
+		.pay-cash { right:0; top:92px; width:54%; height:230px; transform:rotate(4deg); }
+		.pay-paypal { left:4%; top:262px; width:50%; height:220px; transform:rotate(-5deg); }
+		.pay-zelle { right:3%; top:318px; width:48%; height:200px; transform:rotate(5deg); }
 	}
-
-	.sub {
-		color: var(--color-ink-muted);
-		margin: 0.75rem 0 2.25rem;
-		max-width: 28rem;
-	}
-
-	.methods {
-		display: flex;
-		flex-direction: column;
-		border-top: 1px solid var(--color-ink);
-	}
-
-	.method-card {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		flex-wrap: wrap;
-		gap: 1rem;
-		padding: 1.35rem 0.15rem 1.35rem 0;
-		border-bottom: 1px solid var(--color-ink);
-		background: transparent;
-		min-width: 0;
-		transition: background-color 0.2s ease;
-	}
-
-	.method-card:hover {
-		background: rgb(251 246 234 / 0.55);
-	}
-
-	.method-info {
-		display: flex;
-		align-items: center;
-		gap: 0.9rem;
-	}
-
-	.brand {
-		width: 2.4rem;
-		height: 2.4rem;
-		border-radius: 50%;
-		border: 1px solid var(--color-ink);
-	}
-
-	h2 {
-		font-size: 1.45rem;
-		font-weight: 500;
+	@media(max-width:1000px) and (min-width:701px) { .pay-handle { font-size:22px; } }
+	@media(max-width:700px) {
+		.send-money { display:block; }
+		.payment-stack { margin-top:8px; }
+		.pay-handle { grid-column:2; grid-row:2; font-size:22px; margin-top:2px; }
+		.stack-face { grid-template-rows:auto auto auto; }
+		.stack-card img { grid-row:1 / 4; width:56px; height:56px; margin:0; align-self:center; }
+		.stack-caption { grid-row:3; }
 	}
 </style>

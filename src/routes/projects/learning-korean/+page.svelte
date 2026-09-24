@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { projects } from '$lib/prototype/content';
-	import { reveal } from '$lib/prototype/reveal';
+	import { projects } from '$lib/content/portfolio';
+	import { reveal } from '$lib/motion/reveal';
 	const project = projects[0];
 </script>
 
@@ -10,11 +10,11 @@
 </svelte:head>
 
 <article class="case-study">
-	<header class="case-intro">
-		<a class="text-link case-back" href="/#work"><span aria-hidden="true">←</span> All projects</a>
+	<header class="page-intro">
+		<a class="text-link page-back" href="/#work"><span aria-hidden="true">←</span> All projects</a>
 		<h1>Learning Korean,<br /><span>one experiment at a time.</span></h1>
-		<p class="case-lede">I wanted to understand how Hangul works and make time to practise it in short sessions. That became the starting point for Learning Korean: an app where you try something, get feedback, and return to it later through spaced repetition.</p>
-		<div class="case-meta">
+		<p class="page-lede">I wanted to understand how Hangul works and make time to practise it in short sessions. That became the starting point for Learning Korean: an app where you try something, get feedback, and return to it later through spaced repetition.</p>
+		<div class="page-meta">
 			<span>SvelteKit · TypeScript</span>
 			<a class="text-link" href={project.href} target="_blank" rel="noopener noreferrer">Try the first lab <span aria-hidden="true">↗</span></a>
 			<a class="text-link" href={project.source} target="_blank" rel="noopener noreferrer">Source <span aria-hidden="true">↗</span></a>

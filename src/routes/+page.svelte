@@ -1,7 +1,7 @@
 <script lang="ts">
-	import ProjectStack from '$lib/prototype/ProjectStack.svelte';
-	import { projects, email } from '$lib/prototype/content';
-	import { reveal } from '$lib/prototype/reveal';
+	import ProjectStack from '$lib/components/ProjectStack.svelte';
+	import { projects, email } from '$lib/content/portfolio';
+	import { reveal } from '$lib/motion/reveal';
 	const story = '/projects/learning-korean';
 </script>
 
@@ -75,16 +75,16 @@
 	<div><h2 id="about-heading">A little more<br />{' '}about me.</h2></div>
 	<div class="background-copy">
 		<p>I studied computer science at Georgia Tech, with a focus on machine learning. My professional background is in full-stack development, and I like having room to work across both.</p>
-		<div class="background-record">
-			<img class="university-logo" src="/images/concepts/apu.webp" alt="Azusa Pacific University logo" width="1350" height="714" loading="lazy" />
+		<div class="record">
+			<img class="logo-tile" src="/images/concepts/apu.webp" alt="Azusa Pacific University logo" width="1350" height="714" loading="lazy" />
 			<div class="record-copy">
 				<h3>Full-stack developer<br /><span>Azusa Pacific University</span></h3>
 				<p class="record-date">2017–2022</p>
 				<p>University web applications, API integrations, and mentoring junior developers.</p>
 			</div>
 		</div>
-		<div class="background-record">
-			<img class="university-logo" src="/images/concepts/georgia-tech.png" alt="Georgia Tech logo" width="675" height="675" loading="lazy" />
+		<div class="record">
+			<img class="logo-tile" src="/images/concepts/georgia-tech.png" alt="Georgia Tech logo" width="675" height="675" loading="lazy" />
 			<div class="record-copy">
 				<h3>M.S. Computer Science<br /><span>Georgia Institute of Technology</span></h3>
 				<p class="record-date">2024</p>

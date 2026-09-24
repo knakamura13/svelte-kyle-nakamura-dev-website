@@ -1,6 +1,6 @@
 <script lang="ts">
 	import '../app.css';
-	import PortfolioShell from '$lib/prototype/PortfolioShell.svelte';
+	import PortfolioShell from '$lib/components/PortfolioShell.svelte';
 
 	let { children } = $props();
 </script>
