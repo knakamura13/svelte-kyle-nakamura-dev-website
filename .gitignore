@@ -9,3 +9,5 @@
 node_modules
 .aider*
 .qodo
+/test-results
+/playwright-report
