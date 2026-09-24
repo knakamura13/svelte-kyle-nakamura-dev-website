@@ -1,6 +1,6 @@
 <script lang="ts">
  import { onMount } from 'svelte';
- import { projects } from './content';
+ import { projects } from '$lib/content/portfolio';
  let stage: HTMLElement;
  let active: HTMLAnchorElement | null = null;
  let order = 3;

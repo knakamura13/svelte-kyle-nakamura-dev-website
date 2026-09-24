@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { projects } from '$lib/prototype/content';
-	import { reveal } from '$lib/prototype/reveal';
+	import { projects } from '$lib/content/portfolio';
+	import { reveal } from '$lib/motion/reveal';
 	const project = projects[0];
 </script>
 

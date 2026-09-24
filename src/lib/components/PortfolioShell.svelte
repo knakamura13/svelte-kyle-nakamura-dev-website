@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import type { Snippet } from 'svelte';
-	import { email } from './content';
-	import './concept.css';
-	import './portfolio.css';
+	import { email } from '$lib/content/portfolio';
+	import '$lib/styles/site.css';
+	import '$lib/styles/portfolio.css';
 
 	let { children }: { children: Snippet } = $props();
 

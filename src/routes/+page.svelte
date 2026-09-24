@@ -1,7 +1,7 @@
 <script lang="ts">
-	import ProjectStack from '$lib/prototype/ProjectStack.svelte';
-	import { projects, email } from '$lib/prototype/content';
-	import { reveal } from '$lib/prototype/reveal';
+	import ProjectStack from '$lib/components/ProjectStack.svelte';
+	import { projects, email } from '$lib/content/portfolio';
+	import { reveal } from '$lib/motion/reveal';
 	const story = '/projects/learning-korean';
 </script>
 
