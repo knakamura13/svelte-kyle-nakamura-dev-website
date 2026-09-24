@@ -76,6 +76,14 @@
 	<div class="background-copy">
 		<p>I studied computer science at Georgia Tech, with a focus on machine learning. My professional background is in full-stack development, and I like having room to work across both.</p>
 		<div class="record">
+			<img class="logo-tile" src="/images/concepts/highpoint.png" alt="HighPoint logo" width="256" height="256" loading="lazy" />
+			<div class="record-copy">
+				<h3>Software engineer<br /><span>HighPoint Technology Solutions</span></h3>
+				<p class="record-date">2025–present</p>
+				<p>Higher education products, LLM integrations, and AI developer enablement.</p>
+			</div>
+		</div>
+		<div class="record">
 			<img class="logo-tile" src="/images/concepts/apu.webp" alt="Azusa Pacific University logo" width="1350" height="714" loading="lazy" />
 			<div class="record-copy">
 				<h3>Full-stack developer<br /><span>Azusa Pacific University</span></h3>
