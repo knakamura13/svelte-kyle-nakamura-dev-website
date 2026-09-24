@@ -85,7 +85,7 @@
 	.pay-cash { z-index:2; }
 	.pay-paypal { z-index:3; }
 	.pay-zelle { z-index:4; }
-	/* Soft tints of each brand's hue, at the lightness of the home page's tints. */
+	/* Soft tints of each brand's hue. PayPal and Zelle sit darker than the home tints so the four stay distinct. */
 	.pay-venmo .stack-face { background:#cbe6f6; }
 	.pay-cash .stack-face { background:#c9e9d3; }
 	.pay-paypal .stack-face { background:#b1c1e7; }

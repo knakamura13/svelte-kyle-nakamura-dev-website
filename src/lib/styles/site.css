@@ -1,6 +1,6 @@
 @import '@fontsource-variable/manrope';
 
-/* Design tokens. The home page set this palette, and every page draws from it. */
+/* Design tokens: the home page's palette, shared by every page. Colors specific to one page stay in that page. */
 :root {
  --ink:#202a24; --muted:#5c655e; --canvas:#f7f8f5; --accent:#276b42; --surface:#fff;
  --rule:#d9ded6; --tile-edge:#e2e7de; --focus:#376ce4; --selection:#cbe6b5;
