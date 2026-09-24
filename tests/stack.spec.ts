@@ -1,15 +1,18 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator } from '@playwright/test';
 import { stubClipboard } from './clipboard';
 
-/** The element painted at the centre of `target`, checked to belong to `card`. */
-async function paintsOnTop(page: Page, card: Locator, target: Locator) {
-	const box = await target.boundingBox();
-	if (!box) return false;
+/** Whether the left edge, middle, and right edge of `target`'s text are painted by `card`, not covered by another card. */
+async function paintsOnTop(card: Locator, target: Locator) {
 	const cardHandle = await card.elementHandle();
-	return page.evaluate(
-		([x, y, el]) => !!el && el.contains(document.elementFromPoint(x, y)),
-		[box.x + box.width / 2, box.y + box.height / 2, cardHandle] as const
-	);
+	return target.evaluate((el, owner) => {
+		const range = document.createRange();
+		range.selectNodeContents(el);
+		const lines = [...range.getClientRects()].filter((r) => r.width > 0);
+		return lines.length > 0 && lines.every((line) => {
+			const y = line.top + line.height / 2;
+			return [line.left + 2, line.left + line.width / 2, line.right - 2].every((x) => !!owner && owner.contains(document.elementFromPoint(x, y)));
+		});
+	}, cardHandle);
 }
 
 const lifted = (card: Locator) =>
@@ -54,15 +57,19 @@ test.describe('Payment Stack on send-money', () => {
 	test.use({ viewport: { width: 1440, height: 900 } });
 	const cards = ['venmo', 'cash', 'paypal', 'zelle'];
 
-	test('every card shows its name and handle at rest', async ({ page }) => {
-		await page.goto('/send-money');
-		await page.mouse.move(5, 890);
-		for (const id of cards) {
-			const card = page.locator(`.pay-${id}`);
-			expect(await paintsOnTop(page, card, card.locator('.stack-title')), `${id} name`).toBe(true);
-			expect(await paintsOnTop(page, card, card.locator('.pay-handle')), `${id} handle`).toBe(true);
-		}
-	});
+	// Between 701 and 1440px the cards overlap with fixed tops and heights, so check the whole range.
+	for (const width of [1440, 1000, 768, 720]) {
+		test(`every card shows its name and handle at rest at ${width}px`, async ({ page }) => {
+			await page.setViewportSize({ width, height: 900 });
+			await page.goto('/send-money');
+			await page.mouse.move(1, 899);
+			for (const id of cards) {
+				const card = page.locator(`.pay-${id}`);
+				expect(await paintsOnTop(card, card.locator('.stack-title')), `${id} name`).toBe(true);
+				expect(await paintsOnTop(card, card.locator('.pay-handle')), `${id} handle`).toBe(true);
+			}
+		});
+	}
 
 	test('links go to each payment app', async ({ page }) => {
 		await page.goto('/send-money');
