@@ -90,7 +90,7 @@
 
 <svelte:window onkeydown={keydown} />
 
-<div class="concept gallery personal">
+<div class="concept personal">
 	<a href="#main" class="concept-skip">Skip to content</a>
 	<header class="concept-header">
 		<a href="/" class="identity" aria-label="Kyle Nakamura, homepage">
