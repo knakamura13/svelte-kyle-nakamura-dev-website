@@ -32,7 +32,7 @@ body:has(.concept)::after { display:none; }
 .monogram { position:relative; font-size:30px; font-weight:750; line-height:1; letter-spacing:-.12em; padding-right:13px; }
 .monogram span { position:absolute; font-size:19px; right:0; top:-4px; color:var(--accent); }
 .floating-nav { position:fixed; top:22px; right:4%; z-index:100; transition:transform 220ms var(--ease); }
-.floating-nav.hidden { transform:translateY(calc(-100% - 30px)); }
+.floating-nav.nav-hidden { transform:translateY(calc(-100% - 30px)); }
 .floating-nav:focus-within { transform:none; }
 .capsule { display:flex; align-items:center; padding:6px; gap:3px; background:var(--surface); border-radius:100px; box-shadow:0 3px 28px #26372c0a; border:1px solid #23312808; }
 .capsule>a,.capsule>button { min-height:46px; padding:12px 23px; border-radius:100px; background:transparent; font-size:13px; font-weight:600; transition:background 160ms, color 160ms; }
