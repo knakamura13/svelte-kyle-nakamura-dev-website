@@ -17,10 +17,8 @@
 	},
 	"devDependencies": {
 		"@axe-core/playwright": "^4.13.0",
-		"@fontsource-variable/fraunces": "^5.3.0",
 		"@fontsource-variable/manrope": "^5.3.0",
 		"@fontsource-variable/newsreader": "^5.3.0",
-		"@fontsource/ibm-plex-mono": "^5.3.0",
 		"@octokit/rest": "^21.0.1",
 		"@playwright/test": "^1.63.0",
 		"@sveltejs/adapter-node": "^5.2.0",
