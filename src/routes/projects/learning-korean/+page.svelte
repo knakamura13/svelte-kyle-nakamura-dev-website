@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Arrow from '$lib/components/Arrow.svelte';
 	import { projects } from '$lib/content/portfolio';
 	import { reveal } from '$lib/motion/reveal';
 	const project = projects[0];
@@ -11,13 +12,13 @@
 
 <article class="case-study">
 	<header class="page-intro">
-		<a class="text-link page-back" href="/#work"><span aria-hidden="true">←</span> All projects</a>
+		<a class="text-link page-back" href="/#work"><span aria-hidden="true"><Arrow direction="left" /></span> All projects</a>
 		<h1>Learning Korean,<br /><span>one experiment at a time.</span></h1>
 		<p class="page-lede">I wanted to understand how Hangul works and make time to practise it in short sessions. That became the starting point for Learning Korean: an app where you try something, get feedback, and return to it later through spaced repetition.</p>
 		<div class="page-meta">
 			<span>SvelteKit · TypeScript</span>
-			<a class="text-link" href={project.href} target="_blank" rel="noopener noreferrer">Try the first lab <span aria-hidden="true">↗</span></a>
-			<a class="text-link" href={project.source} target="_blank" rel="noopener noreferrer">Source <span aria-hidden="true">↗</span></a>
+			<a class="text-link" href={project.href} target="_blank" rel="noopener noreferrer">Try the first lab <span aria-hidden="true"><Arrow /></span></a>
+			<a class="text-link" href={project.source} target="_blank" rel="noopener noreferrer">Source <span aria-hidden="true"><Arrow /></span></a>
 		</div>
 	</header>
 
@@ -47,7 +48,7 @@
 				<p>A lab introduces a pattern. The review deck brings it back over time. Completing labs unlocks material for practice, so lesson progress and retention have separate jobs.</p>
 				<p>The scheduler uses correctness and response time to assign a grade. A slow correct answer receives a different grade from a fast one. A newly introduced card cannot earn the easiest grade on its first appearance.</p>
 				<p>The scheduling function then calculates the next due time from that grade and the card’s history. The visible interaction is small, while the state underneath tracks what has been introduced, attempted, and scheduled for later.</p>
-				<a class="text-link" href="https://github.com/knakamura13/learning-korean/blob/e993c60808c3a88bb171745b8c89587fe0b2772c/app/src/lib/domain/srs.ts#L372-L465" target="_blank" rel="noopener noreferrer">Read the scheduling code <span aria-hidden="true">↗</span></a>
+				<a class="text-link" href="https://github.com/knakamura13/learning-korean/blob/e993c60808c3a88bb171745b8c89587fe0b2772c/app/src/lib/domain/srs.ts#L372-L465" target="_blank" rel="noopener noreferrer">Read the scheduling code <span aria-hidden="true"><Arrow /></span></a>
 			</section>
 			<section id="guest" use:reveal>
 				<h2>Let practice begin<br />without an account.</h2>
@@ -58,12 +59,12 @@
 				<h2>Where it stands.</h2>
 				<p>The public project contains interactive Hangul labs, a spaced-repetition review deck, browser-local progress, and optional account infrastructure. You can explore the first lab directly.</p>
 				<p>The first lab is open to try without an account. Start with the mouth diagram, then work through the letter-building exercises.</p>
-				<a class="text-link" href={project.href} target="_blank" rel="noopener noreferrer">Explore the lab <span aria-hidden="true">↗</span></a>
+				<a class="text-link" href={project.href} target="_blank" rel="noopener noreferrer">Explore the lab <span aria-hidden="true"><Arrow /></span></a>
 			</section>
 		</div>
 	</div>
 	<div class="case-end">
-		<a class="text-link" href="/#work"><span aria-hidden="true">←</span> Back to selected projects</a>
-		<a class="text-link" href="/resume">Résumé <span aria-hidden="true">↗</span></a>
+		<a class="text-link" href="/#work"><span aria-hidden="true"><Arrow direction="left" /></span> Back to selected projects</a>
+		<a class="text-link" href="/resume">Résumé <span aria-hidden="true"><Arrow /></span></a>
 	</div>
 </article>

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Arrow from '$lib/components/Arrow.svelte';
 	import { email } from '$lib/content/portfolio';
 	import { resume, type ResumeRecord } from '$lib/content/resume';
 	import { reveal } from '$lib/motion/reveal';
@@ -24,10 +25,10 @@
 		<p class="page-lede">{resume.profile}</p>
 		<div class="page-meta">
 			<span>{resume.location}</span>
-			<a class="text-link" href={resume.pdf} download="Kyle-Nakamura-Resume.pdf">Download PDF <span aria-hidden="true">↓</span></a>
-			<a class="text-link" href="mailto:{email}">Email <span aria-hidden="true">↗</span></a>
-			<a class="text-link" href="https://linkedin.com/in/kylenakamura" target="_blank" rel="noopener noreferrer">LinkedIn <span aria-hidden="true">↗</span></a>
-			<a class="text-link" href="https://github.com/knakamura13" target="_blank" rel="noopener noreferrer">GitHub <span aria-hidden="true">↗</span></a>
+			<a class="text-link" href={resume.pdf} download="Kyle-Nakamura-Resume.pdf">Download PDF <span aria-hidden="true"><Arrow direction="down" /></span></a>
+			<a class="text-link" href="mailto:{email}">Email <span aria-hidden="true"><Arrow /></span></a>
+			<a class="text-link" href="https://linkedin.com/in/kylenakamura" target="_blank" rel="noopener noreferrer">LinkedIn <span aria-hidden="true"><Arrow /></span></a>
+			<a class="text-link" href="https://github.com/knakamura13" target="_blank" rel="noopener noreferrer">GitHub <span aria-hidden="true"><Arrow /></span></a>
 		</div>
 	</header>
 
@@ -38,7 +39,7 @@
 				{#each section.records as record (record.title)}
 					<article class="record">
 						{#if record.logo === 'kn'}
-							<span class="logo-tile kn-tile" aria-hidden="true"><span class="monogram">kn<span>↗</span></span></span>
+							<span class="logo-tile kn-tile" aria-hidden="true"><span class="monogram">kn<span><Arrow /></span></span></span>
 						{:else if record.logo}
 							<img class="logo-tile" src={record.logo.src} alt={record.logo.alt} width={record.logo.width} height={record.logo.height} loading="lazy" />
 						{/if}
@@ -58,7 +59,7 @@
 							{#if record.links}
 								<div class="compact-links">
 									{#each record.links as link (link.href)}
-										<a class="text-link" href={link.href} target="_blank" rel="noopener noreferrer">{link.label} <span aria-hidden="true">↗</span></a>
+										<a class="text-link" href={link.href} target="_blank" rel="noopener noreferrer">{link.label} <span aria-hidden="true"><Arrow /></span></a>
 									{/each}
 								</div>
 							{/if}
@@ -84,7 +85,7 @@
 
 <section class="personal-contact" aria-labelledby="contact-heading" use:reveal>
 	<h2 id="contact-heading">Say hello.</h2>
-	<p>You can reach me at <a href="mailto:{email}">{email}</a><span aria-hidden="true"> ↗</span></p>
+	<p>You can reach me at <a href="mailto:{email}">{email}</a><span aria-hidden="true"> <Arrow /></span></p>
 </section>
 
 <style>

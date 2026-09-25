@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Arrow from './Arrow.svelte';
 	import { onMount } from 'svelte';
 	import type { Snippet } from 'svelte';
 	import { email } from '$lib/content/portfolio';
@@ -94,7 +95,7 @@
 	<a href="#main" class="concept-skip">Skip to content</a>
 	<header class="concept-header">
 		<a href="/" class="identity" aria-label="Kyle Nakamura, homepage">
-			<span class="monogram" aria-hidden="true">kn<span>↗</span></span>
+			<span class="monogram" aria-hidden="true">kn<span><Arrow /></span></span>
 			<span>Kyle Nakamura</span>
 		</a>
 		<nav
@@ -107,7 +108,7 @@
 			<div class="capsule">
 				<a class="desktop-nav" href="/#work" onclick={closePanels}>Work</a>
 				<a class="desktop-nav" href="/#about" onclick={closePanels}>About</a>
-				<a class="desktop-nav" href="/resume">Résumé <span aria-hidden="true">↗</span></a>
+				<a class="desktop-nav" href="/resume">Résumé <span aria-hidden="true"><Arrow /></span></a>
 				<button
 					class="mobile-menu"
 					bind:this={menuTrigger}
@@ -127,14 +128,14 @@
 					aria-controls="contact-panel"
 					onclick={openContact}
 				>
-					Contact <span class:turned={contactOpen} aria-hidden="true">↗</span>
+					Contact <span class:turned={contactOpen} aria-hidden="true"><Arrow /></span>
 				</button>
 			</div>
 			{#if menuOpen}
 				<div class="nav-panel mobile-links" id="mobile-links">
-					<a href="/#work" onclick={closePanels}>Selected work <span>↗</span></a>
-					<a href="/#about" onclick={closePanels}>About Kyle <span>↗</span></a>
-					<a href="/resume">Résumé <span>↗</span></a>
+					<a href="/#work" onclick={closePanels}>Selected work <span><Arrow /></span></a>
+					<a href="/#about" onclick={closePanels}>About Kyle <span><Arrow /></span></a>
+					<a href="/resume">Résumé <span><Arrow /></span></a>
 				</div>
 			{/if}
 			{#if contactOpen}
@@ -152,11 +153,11 @@
 							×
 						</button>
 					</div>
-					<a class="email-link" href="mailto:{email}">{email} <span aria-hidden="true">↗</span></a>
+					<a class="email-link" href="mailto:{email}">{email} <span aria-hidden="true"><Arrow /></span></a>
 					<div class="contact-options">
 						<button onclick={copyEmail}>Copy email <span aria-hidden="true">⧉</span></button>
 						<a href="https://linkedin.com/in/kylenakamura" target="_blank" rel="noopener noreferrer"
-							>LinkedIn ↗</a
+							>LinkedIn <Arrow /></a
 						>
 					</div>
 					<p class="copy-status" aria-live="polite">{copyStatus}</p>
@@ -168,11 +169,11 @@
 	<main id="main">{@render children()}</main>
 
 	<footer class="concept-footer portfolio-footer">
-		<a href="/">Kyle Nakamura <span aria-hidden="true">↗</span></a>
+		<a href="/">Kyle Nakamura <span aria-hidden="true"><Arrow /></span></a>
 		<div>
-			<a href="https://github.com/knakamura13" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
+			<a href="https://github.com/knakamura13" target="_blank" rel="noopener noreferrer">GitHub <Arrow /></a>
 			<a href="https://linkedin.com/in/kylenakamura" target="_blank" rel="noopener noreferrer"
-				>LinkedIn ↗</a
+				>LinkedIn <Arrow /></a
 			>
 			<span>© {new Date().getFullYear()}</span>
 		</div>

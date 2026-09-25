@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Arrow from '$lib/components/Arrow.svelte';
 	import ProjectStack from '$lib/components/ProjectStack.svelte';
 	import { projects, email } from '$lib/content/portfolio';
 	import { reveal } from '$lib/motion/reveal';
@@ -16,10 +17,10 @@
 		<p class="personal-role">Senior full-stack engineer<br />with a background in machine learning.</p>
 		<p class="personal-note">I work across interfaces, applications, and the systems behind them. Outside of work, my projects range from learning to read Korean to open-source tools for exploring optimization.</p>
 		<div class="personal-links">
-			<a class="text-link" href="/resume">Résumé <span aria-hidden="true">↗</span></a>
-			<a class="text-link" href="https://github.com/knakamura13" target="_blank" rel="noopener noreferrer">GitHub <span aria-hidden="true">↗</span></a>
+			<a class="text-link" href="/resume">Résumé <span aria-hidden="true"><Arrow /></span></a>
+			<a class="text-link" href="https://github.com/knakamura13" target="_blank" rel="noopener noreferrer">GitHub <span aria-hidden="true"><Arrow /></span></a>
 		</div>
-		<a class="intro-about" href="#about">A little more about me <span aria-hidden="true">↓</span></a>
+		<a class="intro-about" href="#about">A little more about me <span aria-hidden="true"><Arrow direction="down" /></span></a>
 	</section>
 
 	<ProjectStack />
@@ -36,7 +37,7 @@
 			<p>I wanted to learn Hangul by working out its patterns. This project turns that preference into short interactive labs, with a review deck to return to between lessons.</p>
 			<p class="entry-detail">The interesting part: explanations follow an attempt, and the review scheduler distinguishes a quick correct answer from a slow one.</p>
 			<div class="entry-bottom">
-				<a class="text-link" href={story}>Read the project story <span aria-hidden="true">↗</span></a>
+				<a class="text-link" href={story}>Read the project story <span aria-hidden="true"><Arrow /></span></a>
 				<span class="tech-note">SvelteKit · TypeScript</span>
 			</div>
 		</div>
@@ -50,8 +51,8 @@
 			<h3>mlrose-ky</h3>
 			<p>My work on a Python optimization library: refactoring the code, expanding test coverage, and improving documentation.</p>
 			<div class="compact-links">
-				<a class="text-link" href={projects[1].href} target="_blank" rel="noopener noreferrer">Documentation <span aria-hidden="true">↗</span></a>
-				<a class="source-link" href={projects[1].source} target="_blank" rel="noopener noreferrer">Source ↗</a>
+				<a class="text-link" href={projects[1].href} target="_blank" rel="noopener noreferrer">Documentation <span aria-hidden="true"><Arrow /></span></a>
+				<a class="source-link" href={projects[1].source} target="_blank" rel="noopener noreferrer">Source <Arrow /></a>
 			</div>
 		</div>
 	</article>
@@ -64,8 +65,8 @@
 			<h3>OC Foods</h3>
 			<p>A restaurant explorer for Orange County, built from local Reddit recommendations. Search by cuisine or city, browse a map, and trace a recommendation back to the original comment.</p>
 			<div class="compact-links">
-				<a class="text-link" href="https://oc-food.up.railway.app/" target="_blank" rel="noopener noreferrer">Explore the site <span aria-hidden="true">↗</span></a>
-				<a class="source-link" href="https://github.com/knakamura13/oc-food-recs" target="_blank" rel="noopener noreferrer">Source ↗</a>
+				<a class="text-link" href="https://oc-food.up.railway.app/" target="_blank" rel="noopener noreferrer">Explore the site <span aria-hidden="true"><Arrow /></span></a>
+				<a class="source-link" href="https://github.com/knakamura13/oc-food-recs" target="_blank" rel="noopener noreferrer">Source <Arrow /></a>
 			</div>
 		</div>
 	</article>
@@ -99,11 +100,11 @@
 				<p>Specialization in machine learning.</p>
 			</div>
 		</div>
-		<a class="text-link" href="/resume">More experience in my résumé <span aria-hidden="true">↗</span></a>
+		<a class="text-link" href="/resume">More experience in my résumé <span aria-hidden="true"><Arrow /></span></a>
 	</div>
 </section>
 
 <section class="personal-contact" aria-labelledby="contact-heading" use:reveal>
 	<h2 id="contact-heading">Say hello.</h2>
-	<p>You can reach me at <a href="mailto:{email}">{email}</a><span aria-hidden="true"> ↗</span></p>
+	<p>You can reach me at <a href="mailto:{email}">{email}</a><span aria-hidden="true"> <Arrow /></span></p>
 </section>

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Arrow from '$lib/components/Arrow.svelte';
 	import { stack } from '$lib/motion/stack';
 
 	const zelle = { display: '(626) 388-5416', digits: '6263885416' };
@@ -39,7 +40,7 @@
 		<li>
 			<a class="stack-card pay-venmo" href="https://venmo.com/u/pileofkyle" target="_blank" rel="noopener noreferrer" data-angle="-3" data-clear="-80">
 				<span class="stack-face">
-					<span class="stack-title">Venmo <span aria-hidden="true">↗</span></span>
+					<span class="stack-title">Venmo <span aria-hidden="true"><Arrow /></span></span>
 					<span class="pay-handle">@pileofkyle</span>
 					<img src="/icons/logo-venmo-circle.png" alt="" width="256" height="256" />
 				</span>
@@ -48,7 +49,7 @@
 		<li>
 			<a class="stack-card pay-cash" href="https://cash.app/$KyleKyle" target="_blank" rel="noopener noreferrer" data-angle="4" data-clear="-100">
 				<span class="stack-face">
-					<span class="stack-title">Cash App <span aria-hidden="true">↗</span></span>
+					<span class="stack-title">Cash App <span aria-hidden="true"><Arrow /></span></span>
 					<span class="pay-handle">$KyleKyle</span>
 					<img src="/icons/logo-cash-circle.png" alt="" width="256" height="256" />
 				</span>
@@ -57,7 +58,7 @@
 		<li>
 			<a class="stack-card pay-paypal" href="https://paypal.me/kylenakamura12" target="_blank" rel="noopener noreferrer" data-angle="-5" data-clear="90">
 				<span class="stack-face">
-					<span class="stack-title">PayPal <span aria-hidden="true">↗</span></span>
+					<span class="stack-title">PayPal <span aria-hidden="true"><Arrow /></span></span>
 					<span class="pay-handle">kylenakamura12</span>
 					<img src="/icons/logo-paypal-circle.png" alt="" width="256" height="256" />
 				</span>
