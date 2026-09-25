@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Arrow from '$lib/components/Arrow.svelte';
 	import { page } from '$app/state';
 
 	const missing = $derived(page.status === 404);
@@ -18,7 +19,7 @@
 			<p class="page-lede">This page could not load. Please try again in a moment.</p>
 		{/if}
 		<div class="page-meta">
-			<a class="text-link" href="/">Go to the home page <span aria-hidden="true">↗</span></a>
+			<a class="text-link" href="/">Go to the home page <span aria-hidden="true"><Arrow /></span></a>
 		</div>
 	</header>
 </article>

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Arrow from './Arrow.svelte';
 	import { projects } from '$lib/content/portfolio';
 	import { stack } from '$lib/motion/stack';
 </script>
@@ -6,7 +7,7 @@
 <nav class="stack project-stack" aria-label="Explore my projects" use:stack>
 	<a class="stack-card stack-korean" href="#korean" data-angle="-3" data-clear="-115">
 		<div class="stack-face">
-			<span class="stack-title">Learning Korean <span aria-hidden="true">↘</span></span>
+			<span class="stack-title">Learning Korean <span aria-hidden="true"><Arrow direction="down-right" /></span></span>
 			<span class="hangul" lang="ko">한<span>글</span></span>
 			<img src={projects[0].image} alt="Interactive Hangul learning lab" width="1280" height="720" fetchpriority="high" />
 			<span class="stack-caption">Learning by trying.</span>
@@ -14,14 +15,14 @@
 	</a>
 	<a class="stack-card stack-mlrose" href="#mlrose" data-angle="-5" data-clear="110">
 		<div class="stack-face">
-			<span class="stack-title">mlrose-ky <span aria-hidden="true">↘</span></span>
+			<span class="stack-title">mlrose-ky <span aria-hidden="true"><Arrow direction="down-right" /></span></span>
 			<img src={projects[1].image} alt="Optimization graph" width="751" height="727" />
 			<span class="stack-caption">Exploring optimization.</span>
 		</div>
 	</a>
 	<a class="stack-card stack-foods" href="#oc-foods" data-angle="5" data-clear="95">
 		<div class="stack-face">
-			<span class="stack-title">OC Foods <span aria-hidden="true">↘</span></span>
+			<span class="stack-title">OC Foods <span aria-hidden="true"><Arrow direction="down-right" /></span></span>
 			<img src="/images/concepts/oc-foods.png" alt="Orange with a green leaf" width="180" height="180" />
 			<span class="stack-caption">Finding a good local meal.</span>
 		</div>
