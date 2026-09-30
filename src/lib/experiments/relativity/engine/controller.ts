@@ -168,7 +168,7 @@ export class StageController {
 		try {
 			slot.layer = new LabelLayer(slot.view.querySelector<HTMLElement>('.stage-labels') ?? slot.view);
 			slot.inst = sceneFactories[slot.options.scene](
-				{ labels: slot.layer, reducedMotion: () => this.reduced.matches },
+				{ labels: slot.layer, reducedMotion: () => this.reduced.matches, compact: () => slot.view.clientWidth < 480 },
 				slot.options.params as never,
 				slot.options.readout as never
 			);

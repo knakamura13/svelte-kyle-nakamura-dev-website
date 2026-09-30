@@ -1,6 +1,6 @@
 import { CylinderGeometry, Group, MathUtils, Mesh, PerspectiveCamera, Scene, SphereGeometry, Vector3 } from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { gamma } from '../physics';
+import { gamma, lightClockHalfTick } from '../physics';
 import { palette } from '../palette';
 import { Tubes, blobShadow, clay, disposeTree, flat, glow, setOpacity, shade, studio, triangle } from '../engine/kit';
 import type { SceneFactory } from '../engine/types';
@@ -98,15 +98,15 @@ export const createLightClock: SceneFactory<LightClockParams, LightClockReadout>
 	const end = new Vector3();
 	const corner = new Vector3();
 	const from = new Vector3();
-	const to = new Vector3();
 
 	const tickText = (n: number) => `${n} ${n === 1 ? 'tick' : 'ticks'}`;
 
 	function pose(dt: number) {
 		const g = gamma(params.beta);
 		const speed = params.beta * PHOTON_SPEED;
-		const halfTick = (g * TICK) / 2;
-		const targetHalf = Math.max(MIN_HALF_RUN, 1.1 * params.beta * g * HEIGHT);
+		// How far the clock slides during one half-tick: the triangle's base, from the tested physics.
+		const { slide } = lightClockHalfTick(params.beta, HEIGHT);
+		const targetHalf = Math.max(MIN_HALF_RUN, 1.1 * slide);
 		half += (targetHalf - half) * (1 - Math.exp(-dt * 4));
 
 		if (params.playing) {
@@ -154,11 +154,11 @@ export const createLightClock: SceneFactory<LightClockParams, LightClockReadout>
 
 		// The photon's zigzag, rebuilt from the current speed so it reshapes as the slider moves.
 		const bounce = Math.floor(movingPhase * 2);
-		const xBounce = x - speed * (movingPhase * 2 - bounce) * halfTick;
+		const xBounce = x - slide * (movingPhase * 2 - bounce);
 		let count = 0;
 		points[count++].set(x, moving.photon.position.y, MOVING_Z);
 		for (let back = 0; back < MAX_SEGMENTS && bounce - back >= 0; back++) {
-			const px = xBounce - back * speed * halfTick;
+			const px = xBounce - back * slide;
 			const py = bounceY(bounce - back);
 			if (px <= -half) {
 				// The run began inside this segment: end the line at the run's left edge.
@@ -179,7 +179,7 @@ export const createLightClock: SceneFactory<LightClockParams, LightClockReadout>
 		if (showLegs) {
 			const rising = bounce % 2 === 0;
 			start.set(xBounce, bounceY(bounce), MOVING_Z);
-			end.set(xBounce + speed * halfTick, bounceY(bounce + 1), MOVING_Z);
+			end.set(xBounce + slide, bounceY(bounce + 1), MOVING_Z);
 			// The right angle sits under the end of a rising half-tick and under the start of a falling one.
 			corner.set(rising ? end.x : start.x, PLATE + 0.02, MOVING_Z);
 			from.set(start.x, PLATE + 0.02, MOVING_Z);
@@ -192,7 +192,7 @@ export const createLightClock: SceneFactory<LightClockParams, LightClockReadout>
 			pathLabel.position.set((start.x + end.x) / 2, (start.y + end.y) / 2, MOVING_Z);
 		} else legs.commit(0);
 		// A small triangle has no room for its labels.
-		const roomy = showLegs && speed * halfTick > 1;
+		const roomy = showLegs && slide > 1;
 		for (const label of [heightLabel, slideLabel, pathLabel]) label.enabled = roomy;
 
 		restLabel.position.set(0, TOP + PLATE + 0.35, REST_Z);

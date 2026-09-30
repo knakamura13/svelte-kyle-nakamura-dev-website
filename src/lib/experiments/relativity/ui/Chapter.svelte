@@ -4,7 +4,7 @@
 	import type { SceneId } from '../scenes';
 	import { useExperience } from '../experience.svelte';
 	import type { Tint } from '../palette';
-	import { stage } from './stage';
+	import { pinWhenFits, stage } from './stage';
 
 	let {
 		id,
@@ -17,6 +17,7 @@
 		label,
 		caption,
 		dockHeight = 300,
+		aspect = '1 / 1',
 		heading,
 		lede,
 		dock,
@@ -28,8 +29,8 @@
 		name: string;
 		tint: Tint;
 		scene: SceneId;
-		/** Written by the Dock, read by the scene. */
-		params: object;
+		/** Written by the Dock, read by the scene. Every scene's params say whether it is playing. */
+		params: { playing: boolean };
 		/** Written by the scene, read by the Dock. */
 		readout: object;
 		/** What the 3D view shows, for people who can't see it. */
@@ -37,6 +38,8 @@
 		caption: string;
 		/** Rough height of the Dock in px, so the Stage can leave room for it on short screens. */
 		dockHeight?: number;
+		/** The Stage's width to height on phones, as a CSS ratio. Wide scenes want a shorter Stage. */
+		aspect?: string;
 		heading: Snippet;
 		lede: Snippet;
 		dock: Snippet;
@@ -45,6 +48,11 @@
 
 	const experience = useExperience();
 
+	// If the visitor turns on "reduce motion" while the page is open, everything stops. They can still press Play.
+	$effect(() => {
+		if (experience.reducedMotion) params.playing = false;
+	});
+
 	// Any change the Dock makes to the scene's params is drawn on the next frame.
 	$effect(() => {
 		$state.snapshot(params);
@@ -52,14 +60,14 @@
 	});
 </script>
 
-<section {id} class="chapter" aria-labelledby="{id}-title" style:--tint="var(--{tint})" style:--dock="{dockHeight}px">
+<section {id} class="chapter" aria-labelledby="{id}-title" style:--tint="var(--{tint})" style:--dock="{dockHeight}px" style:--aspect={aspect}>
 	<header class="chapter-head" use:reveal>
-		<p class="chapter-kicker"><span>{number}</span>{name}</p>
+		<p class="chapter-kicker"><span>{number}</span>{' '}{name}</p>
 		<h2 id="{id}-title">{@render heading()}</h2>
 		<div class="chapter-lede">{@render lede()}</div>
 	</header>
 
-	<figure class="chapter-figure" data-stage-region>
+	<figure class="chapter-figure" data-stage-region use:pinWhenFits>
 		<!-- The view is operated with the arrow keys (see the controller). `application` tells screen readers to pass keys through; Svelte only counts widget roles as interactive. -->
 		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 		<div

@@ -50,7 +50,8 @@
 	{readout}
 	label="Earth on the left, a star on the right, and a ship flying out and back at nearly the speed of light. Two bars on the floor show each twin’s age growing. The traveling twin’s bar grows more slowly, so the twins end up different ages."
 	caption="A round trip to a star. The bars are each twin’s age; the red bracket is the difference."
-	dockHeight={380}
+	dockHeight={340}
+	aspect="4 / 3"
 >
 	{#snippet heading()}The twin who<br />came back younger.{/snippet}
 	{#snippet lede()}
@@ -115,17 +116,20 @@
 				</div>
 			</div>
 		</div>
-		<RangeField
-			id="twins-progress"
-			label="Trip progress"
-			bind:value={params.progress}
-			min={0}
-			max={1}
-			step={0.005}
-			display="{Math.round(params.progress * 100)}%"
-			spoken="{Math.round(params.progress * 100)} percent of the round trip. The stay-at-home twin is {formatYears(now.earthYears)} older and the traveling twin {formatYears(now.travelerYears)} older."
-			onuser={() => (params.playing = false)}
-		/>
+		<div class="dock-scrub">
+			<RangeField
+				id="twins-progress"
+				label="Trip progress"
+				bind:value={params.progress}
+				min={0}
+				max={1}
+				step={0.005}
+				display="{Math.round(params.progress * 100)}%"
+				spoken="{Math.round(params.progress * 100)} percent of the round trip. The stay-at-home twin is {formatYears(now.earthYears)} older and the traveling twin {formatYears(now.travelerYears)} older."
+				onuser={() => (params.playing = false)}
+			/>
+			<PlayControls bind:playing={params.playing} restart={() => (params.restart += 1)} restartLabel="Start over" />
+		</div>
 		<dl class="readouts">
 			<div data-tone="rest">
 				<dt>Stay-at-home twin</dt>
@@ -140,9 +144,6 @@
 				<dd>{trip.contractedLy.toFixed(1)} <small>ly</small></dd>
 			</div>
 		</dl>
-		<div class="dock-actions">
-			<PlayControls bind:playing={params.playing} restart={() => (params.restart += 1)} restartLabel="Start over" />
-		</div>
 	{/snippet}
 	{#snippet body()}
 		<p>

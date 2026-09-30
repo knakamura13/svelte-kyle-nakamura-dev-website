@@ -7,6 +7,8 @@ export interface SceneHost {
 	labels: LabelLayer;
 	/** True while the visitor prefers reduced motion. */
 	reducedMotion: () => boolean;
+	/** True while the Stage is narrow (a phone), so a scene can label less and frame tighter. */
+	compact: () => boolean;
 }
 
 /** Where the camera starts and how far it may be pushed. */

@@ -34,9 +34,9 @@ export interface TwinTripParams {
 
 export type TwinTripReadout = Record<string, never>;
 
-/** Scene units between Earth and the star. */
-const SPAN = 20;
-const LEFT = -SPAN / 2;
+/** Scene units between Earth and the star: shorter on a phone, so Earth and the star stay big enough to see. */
+const WIDE = 20;
+const NARROW = 13;
 /** Animation seconds for the whole round trip, and how long to linger at the end. */
 const DURATION = 18;
 const LINGER = 2.4;
@@ -77,13 +77,9 @@ export const createTwinTrip: SceneFactory<TwinTripParams, TwinTripReadout> = (ho
 
 	const map = earthTexture();
 	const earth = new Mesh(new SphereGeometry(1.7, 48, 32), clay(0xffffff, { map, roughness: 0.9 }));
-	earth.position.set(LEFT, HEIGHT, 0);
 	const atmosphere = glow(palette.rest, 6.5, 0.35);
-	atmosphere.position.copy(earth.position);
 	const star = new Mesh(new SphereGeometry(1.15, 32, 20), flat(palette.light));
-	star.position.set(-LEFT, HEIGHT, 0);
 	const starGlow = glow(palette.light, 8.5, 0.6);
-	starGlow.position.copy(star.position);
 	scene.add(earth, atmosphere, star, starGlow);
 
 	const ship = new Group();
@@ -120,8 +116,17 @@ export const createTwinTrip: SceneFactory<TwinTripParams, TwinTripReadout> = (ho
 	let hold = 0;
 	let lastRestart = params.restart;
 	let spin = 0;
+	let span = WIDE;
 
 	function pose(dt: number) {
+		const compact = host.compact();
+		span = compact ? NARROW : WIDE;
+		const left = -span / 2;
+		earth.position.set(left, HEIGHT, 0);
+		atmosphere.position.copy(earth.position);
+		star.position.set(-left, HEIGHT, 0);
+		starGlow.position.copy(star.position);
+
 		if (params.playing) {
 			spin += dt * 0.12;
 			if (params.progress >= 1) {
@@ -139,7 +144,7 @@ export const createTwinTrip: SceneFactory<TwinTripParams, TwinTripReadout> = (ho
 
 		const trip = twinTrip(params.distance, params.beta);
 		const now = twinTripAt(params.distance, params.beta, params.progress);
-		const shipX = LEFT + now.along * SPAN;
+		const shipX = left + now.along * span;
 		const turning = MathUtils.smoothstep(params.progress, 0.46, 0.54);
 		ship.position.set(shipX, HEIGHT, 0);
 		ship.rotation.y = turning * Math.PI;
@@ -149,37 +154,40 @@ export const createTwinTrip: SceneFactory<TwinTripParams, TwinTripReadout> = (ho
 
 		// The road with a tick for every light-year.
 		let segments = 0;
-		lines.set(segments++, a.set(LEFT, HEIGHT, 0), b.set(-LEFT, HEIGHT, 0), 0.03, palette.muted, 0.35);
+		lines.set(segments++, a.set(left, HEIGHT, 0), b.set(-left, HEIGHT, 0), 0.03, palette.muted, 0.35);
 		const ticks = Math.min(MAX_TICKS, Math.floor(params.distance));
 		for (let i = 1; i <= ticks; i++) {
-			const x = LEFT + (i / params.distance) * SPAN;
+			const x = left + (i / params.distance) * span;
 			lines.set(segments++, a.set(x, HEIGHT - 0.22, 0), b.set(x, HEIGHT + 0.22, 0), 0.03, palette.muted, 0.2);
 		}
 
 		// Each twin's age, as a bar from the same starting line: the gap between the ends is the age difference.
-		const earthLength = (now.earthYears / trip.earthYears) * SPAN;
-		const travelerLength = (now.travelerYears / trip.earthYears) * SPAN;
+		const earthLength = (now.earthYears / trip.earthYears) * span;
+		const travelerLength = (now.travelerYears / trip.earthYears) * span;
 		earthBar.scale.x = Math.max(earthLength, 0.001);
-		earthBar.position.set(LEFT + earthLength / 2, 0.17, BAR_Z - 0.4);
+		earthBar.position.set(left + earthLength / 2, 0.17, BAR_Z - 0.4);
 		travelerBar.scale.x = Math.max(travelerLength, 0.001);
-		travelerBar.position.set(LEFT + travelerLength / 2, 0.17, BAR_Z + 0.4);
+		travelerBar.position.set(left + travelerLength / 2, 0.17, BAR_Z + 0.4);
 		const showGap = earthLength - travelerLength > 1.8;
 		if (showGap) {
-			lines.set(segments++, a.set(LEFT + travelerLength, 0.4, BAR_Z + 0.4), b.set(LEFT + earthLength, 0.4, BAR_Z - 0.4), 0.06, palette.ghost);
+			lines.set(segments++, a.set(left + travelerLength, 0.4, BAR_Z + 0.4), b.set(left + earthLength, 0.4, BAR_Z - 0.4), 0.06, palette.ghost);
 		}
 		lines.commit(segments);
 
-		earthLabel.position.set(LEFT, HEIGHT + 2.5, 0);
-		starLabel.set(params.destination || 'A star', `${params.distance.toFixed(1)} light-years`);
-		starLabel.position.set(-LEFT, HEIGHT + 2.1, 0);
+		// On a phone the bars and the star carry the story; the other labels would only cover the scene.
+		earthLabel.position.set(left, HEIGHT + 2.5, 0);
+		earthLabel.enabled = !compact;
+		starLabel.set(params.destination || 'A star', compact ? '' : `${params.distance.toFixed(1)} light-years`);
+		starLabel.position.set(-left, HEIGHT + 2.1, 0);
 		shipLabel.position.set(shipX, HEIGHT + 1, 0);
-		shipLabel.enabled = Math.abs(shipX - LEFT) > 3.2 && Math.abs(shipX + LEFT) > 3.2;
-		earthBarLabel.set('Stay-at-home twin', formatYears(now.earthYears));
-		earthBarLabel.position.set(LEFT + earthLength, 0.35, BAR_Z - 0.4);
+		shipLabel.enabled = !compact && Math.abs(shipX - left) > 3.2 && Math.abs(shipX + left) > 3.2;
+		earthBarLabel.set(compact ? 'Home twin' : 'Stay-at-home twin', formatYears(now.earthYears));
+		earthBarLabel.position.set(left + earthLength, 0.35, BAR_Z - 0.4);
 		const younger = now.earthYears - now.travelerYears;
-		travelerBarLabel.set('Traveling twin', showGap ? `${formatYears(now.travelerYears)} · ${formatYears(younger)} younger` : formatYears(now.travelerYears));
-		travelerBarLabel.position.set(LEFT + travelerLength, 0, BAR_Z + 0.4);
-		turnLabel.position.set(-LEFT, HEIGHT - 2.1, 0);
+		const gap = showGap && !compact ? ` · ${formatYears(younger)} younger` : '';
+		travelerBarLabel.set(compact ? 'Traveler' : 'Traveling twin', `${formatYears(now.travelerYears)}${gap}`);
+		travelerBarLabel.position.set(left + travelerLength, 0, BAR_Z + 0.4);
+		turnLabel.position.set(-left, HEIGHT - 2.1, 0);
 		turnLabel.enabled = params.progress > 0.44 && params.progress < 0.6;
 
 		return params.playing;
@@ -194,10 +202,11 @@ export const createTwinTrip: SceneFactory<TwinTripParams, TwinTripReadout> = (ho
 			yaw: 0.14,
 			pitch: 0.42,
 			target: [0, 0.6, 1.4],
-			fit: { width: SPAN + 8.5, height: 8 },
+			fit: { width: WIDE + 8.5, height: 8 },
 			fov: 26,
 			pitchRange: [0.04, 1.25]
 		},
+		fit: () => (host.compact() ? { width: NARROW + 7, height: 8.4 } : { width: WIDE + 8.5, height: 8 }),
 		update(dt) {
 			if (params.restart !== lastRestart) {
 				lastRestart = params.restart;

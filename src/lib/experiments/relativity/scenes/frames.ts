@@ -130,7 +130,7 @@ export const createFrames: SceneFactory<FramesParams, FramesReadout> = (host, pa
 
 	const trainLabel = host.labels.add({ name: 'Train', tone: 'mover' });
 	const platformLabel = host.labels.add({ name: 'Platform', tone: 'rest' });
-	const pathLabel = host.labels.add({ name: 'Path seen from the train', value: 'Straight up and down', tone: 'mover' });
+	const pathLabel = host.labels.add({ name: 'Seen from the train', value: 'Straight up and down', tone: 'mover' });
 
 	let clock = 0;
 	let lastRestart = params.restart;
@@ -180,10 +180,7 @@ export const createFrames: SceneFactory<FramesParams, FramesReadout> = (host, pa
 		trainLabel.position.set(carX, 3.75, 0);
 		platformLabel.position.set(-fitWidth * 0.32, 0.7, -3.4);
 		platformLabel.enabled = blend < 0.9;
-		pathLabel.set(
-			inTrain ? 'Path seen from the train' : 'Path seen from the platform',
-			inTrain ? 'Straight up and down' : 'A curve, because the train moves'
-		);
+		pathLabel.set(inTrain ? 'Seen from the train' : 'Seen from the platform', inTrain ? 'Straight up and down' : 'A curve');
 		pathLabel.setTone(inTrain ? 'mover' : 'rest');
 		pathLabel.position.set(inTrain ? carX : 0, HAND + RISE + 0.55, BALL_Z);
 		pathLabel.enabled = airborne > 0.08 && airborne < 1;

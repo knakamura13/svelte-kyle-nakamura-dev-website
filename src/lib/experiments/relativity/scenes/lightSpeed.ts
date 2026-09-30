@@ -33,7 +33,6 @@ const DISTANCE = 4;
 const FINISH = DISTANCE * LIGHT_SECOND;
 /** Animation seconds per light-second. */
 const SLOWDOWN = 0.75;
-const C = LIGHT_SECOND / SLOWDOWN;
 const LEAD = 0.7;
 /** Animation seconds from the shot until the pulse is well past the finish line. */
 const RUN = (DISTANCE + 1.2) * SLOWDOWN;

@@ -46,7 +46,6 @@ const TICK = 2.4;
 
 /** Height of the sheet at radius r: the classic embedding of space around a mass, deepest at the horizon. */
 const sheetHeight = (r: number) => RIM - DEPTH * (2 * Math.sqrt(OUTER - 1) - 2 * Math.sqrt(Math.max(r - 1, 0)));
-const slope = (r: number) => DEPTH / Math.sqrt(Math.max(r - 1, 0.02));
 
 function buildSheet() {
 	const positions: number[] = [];
@@ -85,8 +84,19 @@ function buildSheet() {
 	return { sheet, grid };
 }
 
+/** Height of a clock's pedestal, so its face clears the steep wall of the well. */
+const PEDESTAL = 1.5;
+
+/** A desk clock: a short pedestal carrying a round face tilted toward the default view. */
 function buildClock(tone: number) {
 	const group = new Group();
+	const pedestal = new Mesh(new CylinderGeometry(0.07, 0.11, PEDESTAL, 12), clay(palette.muted));
+	pedestal.position.y = PEDESTAL / 2;
+
+	const dial = new Group();
+	dial.scale.setScalar(1.3);
+	dial.position.y = PEDESTAL;
+	dial.rotation.set(0.6, 0.5, 0, 'YXZ');
 	const face = new Mesh(new CylinderGeometry(0.9, 0.9, 0.14, 44), clay(0xffffff));
 	const rim = new Mesh(new TorusGeometry(0.9, 0.05, 10, 44), clay(tone));
 	rim.rotation.x = Math.PI / 2;
@@ -107,7 +117,8 @@ function buildClock(tone: number) {
 	hand.position.y = 0.11;
 	const cap = new Mesh(new SphereGeometry(0.1, 14, 10), clay(palette.ink));
 	cap.position.y = 0.1;
-	group.add(face, rim, ticks, hand, cap);
+	dial.add(face, rim, ticks, hand, cap);
+	group.add(pedestal, dial);
 	return { group, hand };
 }
 
@@ -136,28 +147,29 @@ export const createGravity: SceneFactory<GravityParams, GravityReadout> = (host,
 
 	const far = buildClock(palette.rest);
 	const probe = buildClock(palette.mover);
-	scene.add(far.group, probe.group);
+	// The reference clock stands beyond the rim, on flat ground: far enough outside the well that its rate is 1 by definition.
+	const stand = new Mesh(new CylinderGeometry(1.35, 1.45, 0.18, 44), clay(shade(palette.butter, 0.94)));
+	stand.position.set(-(OUTER + 3.2), RIM - 0.09, 0);
+	far.group.position.set(-(OUTER + 3.2), RIM, 0);
+	scene.add(far.group, stand, probe.group);
 
-	const farLabel = host.labels.add({ name: 'Far away', value: '0 ticks', tone: 'rest' });
+	const farLabel = host.labels.add({ name: 'Far outside the well', value: '0 ticks', tone: 'rest' });
 	const probeLabel = host.labels.add({ name: 'Near the mass', value: '0 ticks', tone: 'mover' });
 	const massLabel = host.labels.add({ name: 'Mass', tone: 'plain', side: 'below' });
 
-	const up = new Vector3(0, 1, 0);
-	const normal = new Vector3();
-	const radial = new Vector3();
 	let farPhase = 0;
 	let probePhase = 0;
 	let probeRadius = params.radius;
 	let lastRestart = params.restart;
 	let farTicks = -1;
 	let probeTicks = -1;
+	/** 0 with the probe far out, 1 with it deep in the well: the camera closes in as this grows. */
+	let closeness = 0;
+	const HOME: [number, number, number] = [-1.5, 2.6, 0];
 
-	/** Stands a clock on the sheet at `r` and angle `theta`, tilted to lie along the surface. */
+	/** Stands a clock on the sheet at `r` and angle `theta`. */
 	function place(clock: Group, r: number, theta: number) {
-		radial.set(Math.cos(theta), 0, Math.sin(theta));
-		normal.copy(radial).multiplyScalar(-slope(r)).add(up).normalize();
-		clock.position.set(r * Math.cos(theta), sheetHeight(r) + 0.1, r * Math.sin(theta));
-		clock.quaternion.setFromUnitVectors(up, normal);
+		clock.position.set(r * Math.cos(theta), sheetHeight(r), r * Math.sin(theta));
 	}
 
 	function pose(dt: number) {
@@ -172,8 +184,8 @@ export const createGravity: SceneFactory<GravityParams, GravityReadout> = (host,
 
 		far.hand.rotation.y = -farPhase * Math.PI * 2;
 		probe.hand.rotation.y = -probePhase * Math.PI * 2;
-		place(far.group, OUTER, Math.PI * 0.92);
 		place(probe.group, probeRadius, -0.62);
+		closeness = 1 - MathUtils.smoothstep(probeRadius, 1.3, 3.4);
 
 		const farNow = Math.floor(farPhase);
 		const probeNow = Math.floor(probePhase);
@@ -187,16 +199,14 @@ export const createGravity: SceneFactory<GravityParams, GravityReadout> = (host,
 			readout.probeTicks = probeNow;
 			probeLabel.setValue(`${probeNow} ${probeNow === 1 ? 'tick' : 'ticks'}`);
 		}
-		farLabel.position.copy(far.group.position).add(new Vector3(0, 1.1, 0));
-		probeLabel.position.copy(probe.group.position).add(new Vector3(0, 1.1, 0));
+		farLabel.position.set(far.group.position.x, far.group.position.y + PEDESTAL + 1.9, far.group.position.z);
+		probeLabel.position.set(probe.group.position.x, probe.group.position.y + PEDESTAL + 1.9, probe.group.position.z);
 		massLabel.position.set(0, floorY - 0.1, 0);
 
 		return params.playing || Math.abs(params.radius - probeRadius) > 0.002;
 	}
 
 	pose(0);
-	const tint = shade(palette.butter, 1);
-	void tint;
 
 	return {
 		scene,
@@ -204,10 +214,16 @@ export const createGravity: SceneFactory<GravityParams, GravityReadout> = (host,
 		rig: {
 			yaw: 0.5,
 			pitch: 0.52,
-			target: [0, 2.6, 0],
-			fit: { width: 27, height: 12.5 },
+			target: HOME,
+			fit: { width: 31, height: 12.5 },
 			fov: 26,
 			pitchRange: [0.08, 1.35]
+		},
+		fit: () => ({ width: MathUtils.lerp(31, 13, closeness), height: MathUtils.lerp(12.5, 5.6, closeness) }),
+		focus: () => {
+			const k = closeness * 0.9;
+			const { x, y, z } = probe.group.position;
+			return [MathUtils.lerp(HOME[0], x, k), MathUtils.lerp(HOME[1], y + 0.4, k), MathUtils.lerp(HOME[2], z, k)];
 		},
 		update(dt) {
 			if (params.restart !== lastRestart) {

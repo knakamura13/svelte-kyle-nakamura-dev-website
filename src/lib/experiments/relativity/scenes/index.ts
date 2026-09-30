@@ -1,4 +1,5 @@
 import { createFrames } from './frames';
+import { createGravity } from './gravity';
 import { createLightClock } from './lightClock';
 import { createLightSpeed } from './lightSpeed';
 import { createMuons } from './muons';
@@ -10,7 +11,8 @@ export const sceneFactories = {
 	lightSpeed: createLightSpeed,
 	lightClock: createLightClock,
 	twinTrip: createTwinTrip,
-	muons: createMuons
+	muons: createMuons,
+	gravity: createGravity
 };
 
 export type SceneId = keyof typeof sceneFactories;

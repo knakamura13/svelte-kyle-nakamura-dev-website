@@ -50,7 +50,7 @@
 	{readout}
 	label="Two columns of atmosphere. On the left, the ground’s view: a shower of 300 muons falls 15 kilometres and most decay on the way. On the right, the muon’s own view: the same atmosphere squashed to a fraction of its height."
 	caption="A shower of {MUON_COUNT} muons falling through 15 km of atmosphere. Purple dots are muons, red puffs are decays, green puffs are arrivals."
-	dockHeight={310}
+	dockHeight={326}
 >
 	{#snippet heading()}Muons arrive<br />because time slows.{/snippet}
 	{#snippet lede()}

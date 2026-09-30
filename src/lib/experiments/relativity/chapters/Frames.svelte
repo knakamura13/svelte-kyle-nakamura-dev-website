@@ -30,6 +30,8 @@
 	scene="frames"
 	{params}
 	{readout}
+	dockHeight={316}
+	aspect="4 / 3"
 	label="A train passes a platform. A passenger tosses a ball straight up. From the train the ball goes straight up and down; from the platform it follows a curved arc."
 	caption="A ball tossed in a passing train, in slow motion. The path is drawn as seen from whichever frame you choose."
 >

@@ -29,6 +29,8 @@
 	scene="lightSpeed"
 	{params}
 	{readout}
+	dockHeight={250}
+	aspect="4 / 3"
 	label="A ship flies along a road past a station and fires a pulse of light forward at the same moment. The light pulse races to a finish line at exactly the speed of light. A red ghost shows where Newton’s arithmetic would put it: farther ahead."
 	caption="A ship fires a light pulse forward. The solid amber pulse is what happens. The red ghost is what adding speeds would predict."
 >

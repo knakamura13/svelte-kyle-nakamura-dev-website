@@ -22,8 +22,8 @@ export const palette = {
 
 	/** The observer who is not moving: the station, the platform, Earth. */
 	rest: 0x3f63c8,
-	/** The traveler and whatever rides with them. Same green as the site's accent. */
-	mover: 0x276b42,
+	/** The traveler and whatever rides with them. A little richer than the site's accent green, so it still reads as green in a thin line. */
+	mover: 0x1e7d47,
 	/** Light. */
 	light: 0xf2a01f,
 	/** Softer clay versions of the roles, for the bodies of objects. Lines and labels use the strong ones. */
