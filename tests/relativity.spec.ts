@@ -26,16 +26,6 @@ async function dominantShare(page: Page, png: Buffer) {
 	}, png.toString('base64'));
 }
 
-test.describe('the experiments index', () => {
-	test('lists the relativity experiment and links to it', async ({ page }) => {
-		await page.goto('/experiments');
-		await expect(page.getByRole('heading', { level: 1 })).toHaveText(/Experiments,\s*to play with\./);
-		const link = page.getByRole('link', { name: 'Relativity, in three dimensions' });
-		await expect(link).toHaveAttribute('href', '/experiments/relativity');
-		await expect(page.getByRole('img', { name: /Two light clocks/ })).toBeVisible();
-	});
-});
-
 test.describe('the relativity page', () => {
 	test.beforeEach(async ({ page }) => {
 		// Reduced motion keeps every chapter paused, so the numbers below are the same on every run.

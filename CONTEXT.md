@@ -19,7 +19,7 @@ One way to send Kyle money, such as Venmo or Zelle, with its handle and one acti
 _Avoid_: payment option, platform
 
 **Experiment**:
-An interactive page under `/experiments` that explains one idea by letting the visitor change it.
+An interactive page under `/experiments` that explains one idea by letting the visitor change it. Each one is listed in `src/lib/experiments/catalog.ts`, which the `/experiments` index reads.
 _Avoid_: demo, playground, lab
 
 ### Design language
