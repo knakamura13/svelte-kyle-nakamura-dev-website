@@ -18,6 +18,10 @@ _Avoid_: CV, resume (without accents, in visible copy)
 One way to send Kyle money, such as Venmo or Zelle, with its handle and one action.
 _Avoid_: payment option, platform
 
+**Experiment**:
+An interactive page under `/experiments` that explains one idea by letting the visitor change it.
+_Avoid_: demo, playground, lab
+
 ### Design language
 
 **Opening**:
@@ -51,3 +55,19 @@ _Avoid_: card background, swatch
 **Logo tile**:
 The white rounded square that shows an organization's logo beside a Record. Work without an organization uses Kyle's "kn" mark.
 _Avoid_: badge, avatar
+
+**Chapter**:
+One numbered part of an Experiment: a short explanation beside a Stage.
+_Avoid_: step, slide, level
+
+**Stage**:
+The Tinted frame that holds one live 3D scene. While another Stage is on screen it keeps a picture of its last frame.
+_Avoid_: canvas, viewport, player
+
+**Dock**:
+The white panel of controls and readouts under a Stage.
+_Avoid_: toolbar, HUD, sidebar
+
+**Role color**:
+A color that means the same thing in every Stage of an Experiment: blue is the observer at rest, green the traveler, amber light, red what Newton's arithmetic predicts.
+_Avoid_: theme color, series color

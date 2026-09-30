@@ -171,6 +171,7 @@
 	<footer class="concept-footer portfolio-footer">
 		<a href="/">Kyle Nakamura <span aria-hidden="true"><Arrow /></span></a>
 		<div>
+			<a href="/experiments">Experiments <span aria-hidden="true"><Arrow /></span></a>
 			<a href="https://github.com/knakamura13" target="_blank" rel="noopener noreferrer">GitHub <Arrow /></a>
 			<a href="https://linkedin.com/in/kylenakamura" target="_blank" rel="noopener noreferrer"
 				>LinkedIn <Arrow /></a

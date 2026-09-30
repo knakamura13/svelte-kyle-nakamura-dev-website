@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240" fill="none" stroke-linecap="round" stroke-linejoin="round">
+	<!-- A stationary light clock: the photon climbs straight up and down. -->
+	<rect x="22" y="176" width="56" height="9" rx="4.5" fill="#7fa6e8"/>
+	<rect x="22" y="52" width="56" height="9" rx="4.5" fill="#7fa6e8"/>
+	<path d="M28 61v115M72 61v115" stroke="#fff" stroke-width="3"/>
+	<path d="M50 66v105" stroke="#3f63c8" stroke-width="2.5" stroke-dasharray="1 7"/>
+	<circle cx="50" cy="118" r="17" fill="#f2a01f" opacity=".28"/>
+	<circle cx="50" cy="118" r="8" fill="#f2a01f"/>
+	<!-- The same clock moving: the photon's path is a longer zigzag. -->
+	<path d="M100 176 140 61 180 176" stroke="#f2a01f" stroke-width="4.5" opacity=".5"/>
+	<path d="M180 176 220 61" stroke="#f2a01f" stroke-width="4.5"/>
+	<rect x="172" y="176" width="56" height="9" rx="4.5" fill="#7fb08f"/>
+	<rect x="172" y="52" width="56" height="9" rx="4.5" fill="#7fb08f"/>
+	<path d="M178 61v115M222 61v115" stroke="#fff" stroke-width="3"/>
+	<path d="M180 176h40" stroke="#276b42" stroke-width="3.5"/>
+	<path d="M220 176V66" stroke="#202a24" stroke-width="2.5" stroke-dasharray="1 6" opacity=".7"/>
+	<circle cx="200" cy="118.5" r="17" fill="#f2a01f" opacity=".28"/>
+	<circle cx="200" cy="118.5" r="8" fill="#f2a01f"/>
+</svg>
