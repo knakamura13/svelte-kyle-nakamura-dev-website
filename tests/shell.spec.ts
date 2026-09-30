@@ -63,6 +63,30 @@ test.describe('contact panel', () => {
 	});
 });
 
+test.describe('footer', () => {
+	test('links to the experiments', async ({ page }) => {
+		await page.goto('/resume');
+		const link = page.getByRole('contentinfo').getByRole('link', { name: 'Experiments' });
+		await expect(link).toHaveAttribute('href', '/experiments');
+		await link.click();
+		await expect(page).toHaveURL(/\/experiments$/);
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText(/Experiments,\s*to play with\./);
+	});
+
+	test('keeps each link on one line at 320 px', async ({ page }) => {
+		await page.setViewportSize({ width: 320, height: 800 });
+		await page.goto('/');
+		const links = page.getByRole('contentinfo').getByRole('link');
+		await expect(links).toHaveCount(4);
+		// A link taller than one line means its arrow wrapped beneath the label.
+		const oneLine = (await links.first().boundingBox())!.height;
+		for (const link of await links.all()) {
+			expect((await link.boundingBox())!.height).toBeLessThan(oneLine * 1.25);
+		}
+		expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
+	});
+});
+
 test('unknown and removed routes return the styled 404', async ({ page }) => {
 	for (const path of ['/curling', '/playground', '/does-not-exist']) {
 		const response = await page.goto(path);
