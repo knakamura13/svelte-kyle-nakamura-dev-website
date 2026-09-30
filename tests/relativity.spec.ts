@@ -1,8 +1,30 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { formatChance } from '../src/lib/experiments/relativity/format';
 import { muonSurvival } from '../src/lib/experiments/relativity/physics';
 
 const chapterIds = ['frames', 'light-speed', 'light-clock', 'twins', 'muons', 'gravity'];
+
+/** How much of a picture its most common colour takes up: close to 1 for a Stage with nothing in it. */
+async function dominantShare(page: Page, png: Buffer) {
+	return page.evaluate(async (base64) => {
+		const image = new Image();
+		image.src = `data:image/png;base64,${base64}`;
+		await image.decode();
+		const canvas = document.createElement('canvas');
+		canvas.width = image.width;
+		canvas.height = image.height;
+		const context = canvas.getContext('2d')!;
+		context.drawImage(image, 0, 0);
+		const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
+		const counts = new Map<number, number>();
+		for (let i = 0; i < data.length; i += 4) {
+			// Five bits a channel, so shading and anti-aliasing do not split one colour into many.
+			const key = ((data[i] >> 3) << 10) | ((data[i + 1] >> 3) << 5) | (data[i + 2] >> 3);
+			counts.set(key, (counts.get(key) ?? 0) + 1);
+		}
+		return Math.max(...counts.values()) / (data.length / 4);
+	}, png.toString('base64'));
+}
 
 test.describe('the experiments index', () => {
 	test('lists the relativity experiment and links to it', async ({ page }) => {
@@ -198,6 +220,108 @@ test.describe('the 3D views', () => {
 		await expect(view).toHaveAttribute('tabindex', '0');
 		await expect(view).toHaveAttribute('aria-label', /Two light clocks/);
 		await expect(page.locator('#stage-help')).toContainText('arrow keys rotate');
+	});
+
+	/**
+	 * How blank a chapter's Stage is right now. A scene hidden under the Stage tint is one flat colour, once the labels and the
+	 * site's floating menu, which can sit over the Stage, are set aside.
+	 */
+	async function blankness(page: Page, id: string) {
+		const picture = await page.locator(`#${id} .stage-view`).screenshot({ style: '.stage-labels, .concept-header { visibility: hidden !important }' });
+		return dominantShare(page, picture);
+	}
+
+	/** Waits until the chapter's Stage shows a scene. */
+	async function expectSceneInView(page: Page, id: string, when: string) {
+		await expect.poll(() => blankness(page, id), { message: `${id} is blank ${when}` }).toBeLessThan(0.85);
+	}
+
+	/** Checks the Stage over a second, and no moment of it may be blank, so a redraw that lands late is still caught. */
+	async function expectSceneStaysInView(page: Page, id: string, when: string) {
+		for (let i = 0; i < 5; i++) {
+			expect(await blankness(page, id), `${id} is blank ${when}`).toBeLessThan(0.85);
+			await page.waitForTimeout(200);
+		}
+	}
+
+	async function liveView(page: Page, id: string) {
+		const view = page.locator(`#${id} .stage-view`);
+		await view.scrollIntoViewIfNeeded();
+		await expect(view).toHaveAttribute('data-state', /^(live|unsupported)$/, { timeout: 15_000 });
+		test.skip((await view.getAttribute('data-state')) === 'unsupported', 'This browser has no WebGL.');
+	}
+
+	test('every Stage shows its scene on the frame reduced motion starts on', async ({ page }) => {
+		await page.emulateMedia({ reducedMotion: 'reduce' });
+		await page.goto('/experiments/relativity');
+		for (const id of chapterIds) {
+			await liveView(page, id);
+			await expectSceneInView(page, id, 'when the page opens');
+		}
+	});
+
+	test('pausing and restarting a looping scene leaves it in view', async ({ page }) => {
+		const restarts = { frames: 'Toss again', 'light-speed': 'Fire again', muons: 'Replay' };
+		await page.goto('/experiments/relativity');
+		for (const [id, restart] of Object.entries(restarts)) {
+			await liveView(page, id);
+			await expectSceneInView(page, id, 'while playing');
+			const chapter = page.locator(`#${id}`);
+			await chapter.getByRole('button', { name: 'Pause animation' }).click();
+			await chapter.getByRole('button', { name: restart }).click();
+			// The restart redraws the first frame, which is what the Stage must not hide.
+			await expectSceneStaysInView(page, id, 'after a restart');
+		}
+	});
+
+	test('leaving the page while the 3D engine is still downloading does not start it', async ({ page }) => {
+		// The engine is by far the largest script. Hold it back until the visitor has already left.
+		let release = () => {};
+		const held = new Promise<void>((resolve) => (release = resolve));
+		let waiting = false;
+		let delivered = false;
+		await page.route(/\/_app\/immutable\/.*\.js$/, async (route) => {
+			const response = await route.fetch();
+			const body = await response.body();
+			const engine = body.length > 300_000;
+			if (engine) {
+				waiting = true;
+				await held;
+			}
+			await route.fulfill({ response, body });
+			if (engine) delivered = true;
+		});
+		// Building the engine adds a listener for the tab being hidden, so count those.
+		await page.addInitScript(() => {
+			const counter = window as unknown as { visibilityListeners: number };
+			counter.visibilityListeners = 0;
+			const add = EventTarget.prototype.addEventListener;
+			EventTarget.prototype.addEventListener = function (this: EventTarget, ...args: Parameters<typeof add>) {
+				if (this === document && args[0] === 'visibilitychange') counter.visibilityListeners++;
+				return add.apply(this, args);
+			};
+		});
+		const listeners = () => page.evaluate(() => (window as unknown as { visibilityListeners: number }).visibilityListeners);
+
+		await page.goto('/experiments/relativity', { waitUntil: 'domcontentloaded' });
+		const first = page.locator('#frames .stage-view');
+		await first.scrollIntoViewIfNeeded();
+		await expect.poll(() => waiting).toBe(true);
+		// The page must not be waiting on the engine itself: its Stage reports the engine as on its way.
+		await expect(first).toHaveAttribute('data-state', 'loading');
+
+		await page.evaluate(() => ((window as unknown as { sameDocument: boolean }).sameDocument = true));
+		await page.getByRole('link', { name: 'All experiments' }).first().click();
+		await expect(page).toHaveURL(/\/experiments$/);
+		// Only a client-side navigation keeps the page's scripts, and with them the download still under way.
+		expect(await page.evaluate(() => (window as unknown as { sameDocument?: boolean }).sameDocument)).toBe(true);
+		const before = await listeners();
+
+		release();
+		await expect.poll(() => delivered).toBe(true);
+		// Time for the engine's module to run, if it is going to.
+		await page.waitForTimeout(500);
+		expect(await listeners()).toBe(before);
 	});
 });
 

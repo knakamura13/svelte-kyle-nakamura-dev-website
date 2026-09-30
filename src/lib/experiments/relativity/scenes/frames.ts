@@ -96,7 +96,7 @@ export const createFrames: SceneFactory<FramesParams, FramesReadout> = (host, pa
 	const scene = new Scene();
 	studio(scene, palette.sage, { pool: 34, fog: [46, 120] });
 	const camera = new PerspectiveCamera(26, 1, 0.1, 300);
-	const fader = new Fader(scene, camera, palette.sage);
+	const fader = new Fader(scene, camera, palette.sage, { cycle: CYCLE, fade: FADE }, params.playing);
 
 	// The ground: sleepers, rails, and a platform with lamp posts. Nothing here ever moves.
 	const sleepers = new InstancedMesh(new BoxGeometry(0.3, 0.1, 2.2), clay(shade(palette.sage, 0.62)), 121);
@@ -145,7 +145,10 @@ export const createFrames: SceneFactory<FramesParams, FramesReadout> = (host, pa
 	function pose(dt: number) {
 		if (params.playing) {
 			clock += dt;
-			if (clock >= CYCLE) clock -= CYCLE;
+			if (clock >= CYCLE) {
+				clock -= CYCLE;
+				fader.restart(true);
+			}
 		}
 		const airborne = MathUtils.clamp((clock - LEAD) / AIR, 0, 1);
 		const s = airborne * FLIGHT;
@@ -156,8 +159,7 @@ export const createFrames: SceneFactory<FramesParams, FramesReadout> = (host, pa
 		for (const wheel of wheels) wheel.rotation.y = -carX / 0.34;
 
 		ball.position.set(0, ballHeight(s), BALL_Z);
-		const alpha = 1 - Math.max(MathUtils.smoothstep(clock, CYCLE - FADE, CYCLE), 1 - MathUtils.smoothstep(clock, 0, FADE));
-		fader.set(1 - alpha);
+		fader.follow(dt, clock, params.playing);
 
 		// Each frame's own view of the ball's path: a vertical line from the train, an arc from the platform.
 		const inTrain = params.view === 'train';
@@ -207,6 +209,7 @@ export const createFrames: SceneFactory<FramesParams, FramesReadout> = (host, pa
 			if (params.restart !== lastRestart) {
 				lastRestart = params.restart;
 				clock = 0;
+				fader.restart(params.playing);
 			}
 			return pose(dt);
 		},

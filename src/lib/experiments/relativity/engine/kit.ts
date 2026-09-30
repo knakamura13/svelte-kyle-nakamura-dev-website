@@ -8,6 +8,7 @@ import {
 	GridHelper,
 	HemisphereLight,
 	InstancedMesh,
+	MathUtils,
 	Matrix4,
 	Mesh,
 	MeshBasicMaterial,
@@ -200,13 +201,22 @@ export function setOpacity(root: Object3D, amount: number) {
 }
 
 /**
- * A sheet of Stage tint in front of the camera. Fading to it hides a loop's reset, so a scene can
- * snap its objects back to the start without anyone seeing them jump.
+ * A sheet of Stage tint in front of the camera. A looping scene closes it as the loop ends and opens
+ * it again as the loop starts over, so the scene can snap its objects back to the start without anyone
+ * seeing them jump. Only a playing scene is ever veiled: the frame you paused on, or the one reduced
+ * motion starts on, stays in plain view.
  */
 export class Fader {
 	private readonly mesh: Mesh;
+	private readonly cycle: number;
+	private readonly fade: number;
+	/** Seconds until the tint has finished opening after the loop last started over. */
+	private opening: number;
 
-	constructor(scene: Scene, camera: PerspectiveCamera, tint: number) {
+	constructor(scene: Scene, camera: PerspectiveCamera, tint: number, loop: { cycle: number; fade: number }, playing: boolean) {
+		this.cycle = loop.cycle;
+		this.fade = loop.fade;
+		this.opening = playing ? loop.fade : 0;
 		this.mesh = new Mesh(
 			new PlaneGeometry(6, 6),
 			new MeshBasicMaterial({ color: tint, transparent: true, opacity: 0, depthTest: false, depthWrite: false, fog: false })
@@ -219,10 +229,19 @@ export class Fader {
 		scene.add(camera);
 	}
 
-	/** 0 shows the scene, 1 shows only the tint. */
-	set(amount: number) {
-		const material = this.mesh.material as MeshBasicMaterial;
-		material.opacity = amount;
+	/** The loop has started over. A playing scene fades back in; a paused one is simply shown. */
+	restart(playing: boolean) {
+		this.opening = playing ? this.fade : 0;
+	}
+
+	/** Once a frame, after the scene has moved. `clock` is the seconds into the loop's cycle. */
+	follow(dt: number, clock: number, playing: boolean) {
+		this.opening = playing ? Math.max(0, this.opening - dt) : 0;
+		// 0 shows the scene, 1 shows only the tint.
+		const amount = playing
+			? Math.max(MathUtils.smoothstep(this.opening, 0, this.fade), MathUtils.smoothstep(clock, this.cycle - this.fade, this.cycle))
+			: 0;
+		(this.mesh.material as MeshBasicMaterial).opacity = amount;
 		this.mesh.visible = amount > 0.001;
 	}
 }

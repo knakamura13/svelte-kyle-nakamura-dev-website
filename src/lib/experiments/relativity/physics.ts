@@ -61,6 +61,8 @@ export function twinTripAt(distanceLy: number, beta: number, progress: number) {
 export const MUON_LIFETIME_S = 2.1969811e-6;
 /** Roughly where cosmic-ray muons are made, metres above the ground. */
 export const MUON_HEIGHT_M = 15_000;
+/** How many muons the shower in the Muons chapter follows. */
+export const MUON_COUNT = 300;
 
 /** Mean distance a muon travels before decaying, as measured from the ground. */
 export const muonDecayLength = (beta: number, dilated: boolean) =>

@@ -17,7 +17,7 @@ import {
 } from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { formatMicroseconds } from '../format';
-import { MUON_HEIGHT_M, gamma, muonDecayLength, muonTrip, seededRandom } from '../physics';
+import { MUON_COUNT, MUON_HEIGHT_M, gamma, muonDecayLength, muonTrip, seededRandom } from '../physics';
 import { palette } from '../palette';
 import { Fader, Tubes, blobShadow, clay, disposeTree, flat, glow, shade, studio } from '../engine/kit';
 import type { SceneFactory } from '../engine/types';
@@ -36,7 +36,6 @@ export interface MuonsReadout {
 	landed: number;
 }
 
-export const MUON_COUNT = 300;
 /** Draw that decides whether the highlighted muon survives. */
 const HERO_DRAW = 0.02;
 
@@ -50,12 +49,13 @@ const SPREAD = 3.5;
 const HERO_START = 0.6;
 const POP = 0.55;
 const CYCLE = SPREAD + FALL + 2.4;
+const FADE = 0.4;
 
 export const createMuons: SceneFactory<MuonsParams, MuonsReadout> = (host, params, readout) => {
 	const scene = new Scene();
 	studio(scene, palette.peach, { pool: 16, fog: [40, 100] });
 	const camera = new PerspectiveCamera(26, 1, 0.1, 300);
-	const fader = new Fader(scene, camera, palette.peach);
+	const fader = new Fader(scene, camera, palette.peach, { cycle: CYCLE, fade: FADE }, params.playing);
 
 	const floor = new Mesh(new RoundedBoxGeometry(13.2, 0.4, 5.6, 3, 0.08), clay(shade(palette.sage, 0.97)));
 	floor.position.set(0, -0.2, 0);
@@ -132,7 +132,10 @@ export const createMuons: SceneFactory<MuonsParams, MuonsReadout> = (host, param
 	function pose(dt: number) {
 		if (params.playing) {
 			clock += dt;
-			if (clock >= CYCLE) clock -= CYCLE;
+			if (clock >= CYCLE) {
+				clock -= CYCLE;
+				fader.restart(true);
+			}
 		}
 		const dilated = params.relativity;
 		const g = dilated ? gamma(params.beta) : 1;
@@ -220,7 +223,7 @@ export const createMuons: SceneFactory<MuonsParams, MuonsReadout> = (host, param
 		heroLabel.setValue(formatMicroseconds(muonNow));
 		heroLabel.enabled = showClocks;
 		detectorLabel.position.set(TALL_X, 0, FOOT / 2);
-		fader.set(1 - Math.min(MathUtils.smoothstep(clock, 0, 0.4), 1 - MathUtils.smoothstep(clock, CYCLE - 0.4, CYCLE)));
+		fader.follow(dt, clock, params.playing);
 
 		return params.playing || Math.abs(targetContraction - contraction) > 0.0005;
 	}
@@ -242,6 +245,7 @@ export const createMuons: SceneFactory<MuonsParams, MuonsReadout> = (host, param
 			if (params.restart !== lastRestart) {
 				lastRestart = params.restart;
 				clock = 0;
+				fader.restart(params.playing);
 			}
 			return pose(dt);
 		},

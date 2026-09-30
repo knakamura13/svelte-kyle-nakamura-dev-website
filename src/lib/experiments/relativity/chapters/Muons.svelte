@@ -2,8 +2,8 @@
 	import { onMount } from 'svelte';
 	import { formatBeta, formatChance, formatGamma, formatMicroseconds } from '../format';
 	import { prefersReducedMotion, useExperience } from '../experience.svelte';
-	import { betaFromNines, muonSurvival, muonTrip, ninesFromBeta } from '../physics';
-	import { MUON_COUNT, type MuonsParams, type MuonsReadout } from '../scenes/muons';
+	import { MUON_COUNT, betaFromNines, muonSurvival, muonTrip, ninesFromBeta } from '../physics';
+	import type { MuonsParams, MuonsReadout } from '../scenes/muons';
 	import Chapter from '../ui/Chapter.svelte';
 	import PlayControls from '../ui/PlayControls.svelte';
 	import RangeField from '../ui/RangeField.svelte';

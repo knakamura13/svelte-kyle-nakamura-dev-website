@@ -3,7 +3,6 @@ import {
 	CapsuleGeometry,
 	CylinderGeometry,
 	Group,
-	MathUtils,
 	Mesh,
 	PerspectiveCamera,
 	Scene,
@@ -45,7 +44,7 @@ export const createLightSpeed: SceneFactory<LightSpeedParams, LightSpeedReadout>
 	const scene = new Scene();
 	studio(scene, palette.cream, { pool: 24, grid: 60, fog: [40, 120] });
 	const camera = new PerspectiveCamera(26, 1, 0.1, 300);
-	const fader = new Fader(scene, camera, palette.cream);
+	const fader = new Fader(scene, camera, palette.cream, { cycle: CYCLE, fade: FADE }, params.playing);
 
 	const road = new Mesh(new RoundedBoxGeometry(1, 0.06, 2.8, 2, 0.02), clay(shade(palette.cream, 0.9)));
 	road.scale.x = FINISH + 12;
@@ -128,6 +127,7 @@ export const createLightSpeed: SceneFactory<LightSpeedParams, LightSpeedReadout>
 			if (clock >= CYCLE) {
 				clock -= CYCLE;
 				arrived = false;
+				fader.restart(true);
 			}
 		}
 		// World time in station seconds: the pulse leaves the ship at t = 0, when the ship passes the station.
@@ -156,7 +156,7 @@ export const createLightSpeed: SceneFactory<LightSpeedParams, LightSpeedReadout>
 		trails.set(1, a.set(0, LANE + 0.02, 0), b.set(ghostX, LANE + 0.02, 0), 0.03, palette.ghost, 0.35);
 		trails.commit(fired ? (showGhost ? 2 : 1) : 0);
 
-		fader.set(1 - Math.min(MathUtils.smoothstep(clock, 0, FADE), 1 - MathUtils.smoothstep(clock, CYCLE - FADE, CYCLE)));
+		fader.follow(dt, clock, params.playing);
 
 		stationLabel.position.set(0, 4.7, -2.4);
 		shipLabel.position.set(shipX, LANE - 0.75, 0);
@@ -192,6 +192,7 @@ export const createLightSpeed: SceneFactory<LightSpeedParams, LightSpeedReadout>
 				lastRestart = params.restart;
 				clock = 0;
 				arrived = false;
+				fader.restart(params.playing);
 			}
 			return pose(dt);
 		},

@@ -16,6 +16,8 @@ export class Experience {
 	announcement = $state('');
 	private controller: StageController | null = null;
 	private loading: Promise<StageController | null> | null = null;
+	/** Counts teardowns, so a download that finishes after one can tell it is no longer wanted. */
+	private generation = 0;
 	private announceTimer: ReturnType<typeof setTimeout> | undefined;
 
 	/** Browser only. Returns the cleanup. */
@@ -27,6 +29,7 @@ export class Experience {
 		return () => {
 			query.removeEventListener('change', update);
 			clearTimeout(this.announceTimer);
+			this.generation++;
 			this.controller?.destroy();
 			this.controller = null;
 			this.loading = null;
@@ -34,8 +37,13 @@ export class Experience {
 	}
 
 	private load() {
+		const generation = this.generation;
 		this.loading ??= import('./engine/controller')
-			.then(({ StageController }) => (this.controller = new StageController()))
+			.then(({ StageController }) => {
+				// The visitor may have left while the engine was still downloading. Nothing would ever stop it then.
+				if (generation !== this.generation) return null;
+				return (this.controller = new StageController());
+			})
 			.catch((error) => {
 				console.error('The 3D scenes could not load.', error);
 				return null;
