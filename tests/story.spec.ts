@@ -99,3 +99,122 @@ test.describe('on phones', () => {
 		expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 	});
 });
+
+test.describe('Hangul syllable builder', () => {
+	test.use({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
+
+	const stage = (page: Page) => page.locator('.builder .stage');
+	const toggle = (page: Page) => page.getByRole('button', { name: /Build syllable|Separate pieces/ });
+	const result = (page: Page) => page.locator('.builder .result');
+	const rect = async (page: Page, selector: string) => {
+		const box = await page.locator(`.builder ${selector}`).boundingBox();
+		if (!box) throw new Error(`${selector} not rendered`);
+		return box;
+	};
+
+	test('both equations are readable text before and without JavaScript', async ({ browser }) => {
+		const context = await browser.newContext({ javaScriptEnabled: false });
+		const page = await context.newPage();
+		await page.goto('/projects/learning-korean');
+		const equations = page.locator('.equations li');
+		await expect(equations).toHaveCount(2);
+		await expect(equations.nth(0)).toContainText('ㅂ + ㅏ → 바');
+		await expect(equations.nth(0)).toContainText('tall vowel');
+		await expect(equations.nth(1)).toContainText('ㅅ + ㅗ → 소');
+		await expect(equations.nth(1)).toContainText('wide vowel');
+		await expect(page.locator('.builder button, .builder input')).toHaveCount(0);
+		expect((await page.locator('.builder').boundingBox())?.height ?? 1).toBeLessThan(2);
+		await context.close();
+	});
+
+	test('ba assembles with the consonant beside the vowel, then separates', async ({ page }) => {
+		await page.goto('/projects/learning-korean');
+		await expect(stage(page)).toHaveAttribute('data-state', 'separated');
+		const apart = { c: await rect(page, '.consonant'), v: await rect(page, '.vowel') };
+		await toggle(page).click();
+		await expect(stage(page)).toHaveAttribute('data-state', 'assembled');
+		await expect(result(page)).toContainText('ㅂ + ㅏ = 바 (ba)');
+		const together = { c: await rect(page, '.consonant'), v: await rect(page, '.vowel') };
+		const centre = (box: { x: number; width: number }) => box.x + box.width / 2;
+		expect(centre(together.c)).toBeLessThan(centre(together.v));
+		expect(Math.abs(together.c.y - together.v.y)).toBeLessThan(2);
+		expect(centre(together.v) - centre(together.c)).toBeLessThan(centre(apart.v) - centre(apart.c));
+		await expect(page.locator('.builder .glyph')).toHaveCSS('opacity', '1');
+		await toggle(page).click();
+		await expect(stage(page)).toHaveAttribute('data-state', 'separated');
+		await expect(page.locator('.builder .glyph')).toHaveCSS('opacity', '0');
+		await expect(result(page)).toContainText('ㅂ and ㅏ are apart.');
+	});
+
+	test('so stacks the consonant above the vowel, and switching examples resets to separated', async ({ page }) => {
+		await page.goto('/projects/learning-korean');
+		await page.getByLabel(/ㅅ \+ ㅗ/).check();
+		await expect(stage(page)).toHaveAttribute('data-example', 'so');
+		await expect(stage(page)).toHaveAttribute('data-state', 'separated');
+		await toggle(page).click();
+		await expect(result(page)).toContainText('ㅅ + ㅗ = 소 (so)');
+		const c = await rect(page, '.consonant');
+		const v = await rect(page, '.vowel');
+		expect(c.y + c.height / 2).toBeLessThan(v.y + v.height / 2);
+		expect(Math.abs(c.x - v.x)).toBeLessThan(30);
+		await page.getByLabel(/ㅂ \+ ㅏ/).check();
+		await expect(stage(page)).toHaveAttribute('data-state', 'separated');
+		await expect(result(page)).toContainText('ㅂ and ㅏ are apart.');
+		await expect(page.locator('.builder .piece.consonant')).toHaveText('ㅂ');
+	});
+
+	test('rapid toggling settles on the last state and focus stays on the button', async ({ page }) => {
+		await page.goto('/projects/learning-korean');
+		for (let i = 0; i < 7; i++) await toggle(page).click();
+		await expect(stage(page)).toHaveAttribute('data-state', 'assembled');
+		// Safari does not focus buttons on click, so focus explicitly before using the keyboard.
+		await page.getByRole('button', { name: 'Separate pieces' }).focus();
+		await page.keyboard.press('Space');
+		await expect(stage(page)).toHaveAttribute('data-state', 'separated');
+		await page.keyboard.press('Enter');
+		await expect(stage(page)).toHaveAttribute('data-state', 'assembled');
+		await expect(page.getByRole('button', { name: 'Separate pieces' })).toBeFocused();
+	});
+
+	test('the figure is decorative to assistive tech and the result is a single polite region', async ({ page }) => {
+		await page.goto('/projects/learning-korean');
+		await expect(stage(page)).toHaveAttribute('aria-hidden', 'true');
+		await expect(page.locator('.builder [aria-live="polite"]')).toHaveCount(1);
+	});
+
+	test('only Hangul is marked as Korean, so English and romanization keep the page language', async ({ page }) => {
+		await page.goto('/projects/learning-korean');
+		await toggle(page).click();
+		await expect(result(page)).toContainText('ㅏ is a tall vowel, so the consonant sits beside it.');
+		const korean = await page.locator('.builder .result [lang="ko"], .equations [lang="ko"]').allTextContents();
+		expect(korean.length).toBeGreaterThan(0);
+		for (const text of korean) expect(text, `lang="ko" text: ${text}`).not.toMatch(/[A-Za-z]/);
+		expect(await result(page).getAttribute('lang')).toBeNull();
+	});
+
+	test('reduced motion changes state with no running animation', async ({ page }) => {
+		await page.goto('/projects/learning-korean');
+		await toggle(page).click();
+		expect(await page.locator('.builder .piece').first().evaluate((el) => el.getAnimations().length)).toBe(0);
+		await expect(page.locator('.builder .glyph')).toHaveCSS('opacity', '1');
+	});
+
+	test('the contents indicator still follows the reader after the lesson grew', async ({ page }) => {
+		await page.goto('/projects/learning-korean#practice');
+		await expect(active(page)).toHaveAttribute('href', '#practice');
+	});
+
+	for (const width of [320, 390]) {
+		test(`fits at ${width}px with 44px controls and no overflow`, async ({ page }) => {
+			await page.setViewportSize({ width, height: 800 });
+			await page.goto('/projects/learning-korean');
+			await expect(toggle(page)).toBeVisible();
+			expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+			for (const height of await page.locator('.builder label, .builder .toggle').evaluateAll((els) => els.map((el) => el.getBoundingClientRect().height))) {
+				expect(height).toBeGreaterThanOrEqual(44);
+			}
+			const box = await stage(page).boundingBox();
+			expect((box?.x ?? -1) + (box?.width ?? 0)).toBeLessThanOrEqual(width);
+		});
+	}
+});

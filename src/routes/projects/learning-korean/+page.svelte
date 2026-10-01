@@ -4,6 +4,7 @@
 	import Arrow from '$lib/components/Arrow.svelte';
 	import { projects } from '$lib/content/portfolio';
 	import { reveal } from '$lib/motion/reveal';
+	import SyllableBuilder from './SyllableBuilder.svelte';
 	const project = projects[0];
 	const sectionIds = ['lesson', 'practice', 'guest', 'status'];
 	// An anchor click can land a little short of the reading line when layout shifts after load, so a
@@ -81,6 +82,8 @@
 				<div class="case-example">
 					<p>Make the sound <em>mmm</em> → identify where your mouth closes → discover the letter <span lang="ko">ㅁ</span>.</p>
 				</div>
+				<p>The same idea applies to building syllables. Korean packs each one into a square block, and the vowel decides where the consonant goes.</p>
+				<SyllableBuilder />
 			</section>
 			<section id="practice" use:reveal>
 				<h2>Keep the lesson separate<br />from the practice schedule.</h2>
