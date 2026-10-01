@@ -118,12 +118,6 @@
 	.send-money { display:grid; grid-template-columns:minmax(240px,.76fr) minmax(0,1.24fr); gap:10%; align-items:start; padding-bottom:85px; }
 	.pay-handle { display:block; font-family:'Newsreader Variable',Georgia,serif; font-size:27px; line-height:1.15; letter-spacing:-.04em; margin-top:6px; }
 	.stack-card img { width:56px; height:56px; margin-top:26px; }
-	.copy-glyph { display:inline-grid; }
-	.copy-glyph>span { grid-area:1 / 1; transition:opacity 160ms ease; }
-	.glyph-check { opacity:0; }
-	.copy-glyph[data-state='success'] .glyph-copy { opacity:0; }
-	.copy-glyph[data-state='success'] .glyph-check { opacity:1; }
-	@media(prefers-reduced-motion:reduce) { .copy-glyph>span { transition:none; } }
 	.pay-venmo { z-index:1; }
 	.pay-cash { z-index:2; }
 	.pay-paypal { z-index:3; }

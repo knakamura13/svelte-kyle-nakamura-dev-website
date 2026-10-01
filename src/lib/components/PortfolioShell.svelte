@@ -1,6 +1,8 @@
 <script lang="ts">
 	import Arrow from './Arrow.svelte';
 	import { onMount } from 'svelte';
+	import { afterNavigate } from '$app/navigation';
+	import { panel } from '$lib/motion/panel';
 	import type { Snippet } from 'svelte';
 	import { email } from '$lib/content/portfolio';
 	import '$lib/styles/site.css';
@@ -11,7 +13,11 @@
 	let hidden = $state(false);
 	let contactOpen = $state(false);
 	let menuOpen = $state(false);
-	let copyStatus = $state('');
+	let copyState = $state<'idle' | 'success' | 'failure'>('idle');
+	let copyFailure = $state('');
+	let emailAddress: HTMLElement | undefined = $state();
+	let copyButton: HTMLButtonElement | undefined = $state();
+	let attempt = 0;
 	let nav: HTMLElement;
 	let contactTrigger: HTMLButtonElement;
 	let menuTrigger: HTMLButtonElement;
@@ -23,13 +29,28 @@
 		contactOpen = !contactOpen;
 		menuOpen = false;
 		hidden = false;
-		copyStatus = '';
+		resetCopy();
 	}
 
 	function closePanels() {
 		contactOpen = false;
 		menuOpen = false;
+		resetCopy();
 	}
+
+	// Closing or reopening invalidates any write still in flight and any pending reset.
+	function resetCopy() {
+		attempt++;
+		clearTimeout(copyTimer);
+		copyState = 'idle';
+	}
+
+	// An outgoing panel stays in the DOM for its exit, but must not take focus or clicks meanwhile.
+	function retire(event: Event) {
+		(event.currentTarget as HTMLElement).inert = true;
+	}
+
+	afterNavigate(closePanels);
 
 	function keydown(event: KeyboardEvent) {
 		if (event.key === 'Escape' && (contactOpen || menuOpen)) {
@@ -41,15 +62,28 @@
 	}
 
 	async function copyEmail() {
+		const current = ++attempt;
+		clearTimeout(copyTimer);
+		let result: 'success' | 'failure' = 'success';
 		try {
 			await navigator.clipboard.writeText(email);
-			copyStatus = 'Email copied';
 		} catch {
-			copyStatus = 'Could not copy. Select the email address above.';
+			result = 'failure';
 		}
-		clearTimeout(copyTimer);
-		copyTimer = setTimeout(() => (copyStatus = ''), 4000);
+		if (current !== attempt) return;
+		copyState = result;
+		if (result === 'failure') {
+			const touch = matchMedia('(pointer: coarse)').matches;
+			copyFailure = touch ? 'Could not copy. Touch and hold the address to copy it.' : 'Could not copy. Select the email address above.';
+			// Select the address-only element; some engines blur the active control when the selection moves, so put focus back.
+			if (emailAddress) getSelection()?.selectAllChildren(emailAddress);
+			copyButton?.focus({ preventScroll: true });
+		} else {
+			copyTimer = setTimeout(() => (copyState = 'idle'), 4000);
+		}
 	}
+
+	let copyStatus = $derived(copyState === 'success' ? 'Email copied' : copyState === 'failure' ? copyFailure : '');
 
 	onMount(() => {
 		let last = window.scrollY;
@@ -84,6 +118,7 @@
 		return () => {
 			window.removeEventListener('scroll', onScroll);
 			document.removeEventListener('pointerdown', outside);
+			attempt++;
 			clearTimeout(copyTimer);
 		};
 	});
@@ -132,14 +167,14 @@
 				</button>
 			</div>
 			{#if menuOpen}
-				<div class="nav-panel mobile-links" id="mobile-links">
+				<div class="nav-panel mobile-links" id="mobile-links" transition:panel onoutrostart={retire}>
 					<a href="/#work" onclick={closePanels}>Selected work <span><Arrow /></span></a>
 					<a href="/#about" onclick={closePanels}>About Kyle <span><Arrow /></span></a>
 					<a href="/resume">Résumé <span><Arrow /></span></a>
 				</div>
 			{/if}
 			{#if contactOpen}
-				<div class="nav-panel contact-panel" id="contact-panel">
+				<div class="nav-panel contact-panel" id="contact-panel" transition:panel onoutrostart={retire}>
 					<div class="panel-heading">
 						<p>Start a conversation.</p>
 						<button
@@ -153,9 +188,15 @@
 							×
 						</button>
 					</div>
-					<a class="email-link" href="mailto:{email}">{email} <span aria-hidden="true"><Arrow /></span></a>
+					<a class="email-link" href="mailto:{email}"><span bind:this={emailAddress}>{email}</span> <span aria-hidden="true"><Arrow /></span></a>
 					<div class="contact-options">
-						<button onclick={copyEmail}>Copy email <span aria-hidden="true">⧉</span></button>
+						<button bind:this={copyButton} onclick={copyEmail}>
+							Copy email
+							<span class="copy-glyph" aria-hidden="true" data-state={copyState}>
+								<span class="glyph-copy">⧉</span>
+								<span class="glyph-check">✓</span>
+							</span>
+						</button>
 						<a href="https://linkedin.com/in/kylenakamura" target="_blank" rel="noopener noreferrer"
 							>LinkedIn <Arrow /></a
 						>

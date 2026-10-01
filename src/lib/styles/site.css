@@ -43,7 +43,7 @@ body:has(.concept)::after { display:none; }
 .contact-trigger span { display:inline-block; transition:transform 180ms var(--ease); }
 .contact-trigger .turned { transform:rotate(90deg); }
 .capsule>.mobile-menu { display:none; }
-.nav-panel { position:absolute; right:0; top:calc(100% + 9px); width:420px; max-width:calc(100vw - 32px); background:var(--surface); padding:26px; border-radius:25px; box-shadow:0 15px 40px #20322612; animation:panel-in 200ms var(--ease); }
+.nav-panel { position:absolute; right:0; top:calc(100% + 9px); width:420px; max-width:calc(100vw - 32px); background:var(--surface); padding:26px; border-radius:25px; box-shadow:0 15px 40px #20322612; }
 .panel-heading { display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; gap:12px; }
 .panel-heading p { font-size:24px; letter-spacing:-.04em; }
 .close-contact { width:44px; height:44px; background:#f1f3ef; border-radius:50%; font-size:25px!important; flex-shrink:0; }
@@ -51,7 +51,7 @@ body:has(.concept)::after { display:none; }
 .contact-options { display:flex; align-items:center; gap:22px; border-top:1px solid #e7e9e3; margin-top:14px; padding-top:12px; font-size:13px; }
 .contact-options button { min-height:44px; background:transparent; padding:0 10px 0 0; }
 .contact-options a { padding-block:12px; }
-.copy-status { min-height:20px; font-size:12px; color:var(--accent); }
+.copy-status { min-height:34px; font-size:12px; color:var(--accent); }
 .mobile-links a { display:flex; justify-content:space-between; padding:14px 4px; border-bottom:1px solid #eee; }
 
 /* Links. */
@@ -68,7 +68,14 @@ body:has(.concept)::after { display:none; }
 .concept-footer a { padding-block:12px; }
 .concept-footer span { color:var(--muted); }
 .concept .reveal-pending { opacity:0; transform:translateY(18px); }
-@keyframes panel-in { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:translateY(0); } }
+/* Copy buttons crossfade their glyph to a checkmark once the clipboard write succeeds. */
+.copy-glyph { display:inline-grid; }
+.copy-glyph>span { grid-area:1 / 1; transition:opacity 160ms ease; }
+.glyph-check { opacity:0; }
+.copy-glyph[data-state='success'] .glyph-copy { opacity:0; }
+.copy-glyph[data-state='success'] .glyph-check { opacity:1; }
+@media(prefers-reduced-motion:reduce) { .copy-glyph>span { transition:none; } }
+
 
 /* Stack: overlapping, tilted cards. motion/stack.ts brings a card forward; each Stack places its own cards. */
 .stack { position:relative; isolation:isolate; }

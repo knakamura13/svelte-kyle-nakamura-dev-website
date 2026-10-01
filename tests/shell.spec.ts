@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { stubClipboard } from './clipboard';
 
 test.describe('floating nav', () => {
@@ -60,6 +60,124 @@ test.describe('contact panel', () => {
 		await page.getByRole('button', { name: /Copy email/ }).click();
 		await expect(page.locator('.copy-status')).toHaveText('Could not copy. Select the email address above.');
 		await expect(page.locator('.email-link')).toContainText('knakamura13dev@gmail.com');
+	});
+});
+
+test.describe('contact panel feedback and motion', () => {
+	const trigger = (page: Page) => page.getByRole('button', { name: /^Contact/ });
+	const copyButton = (page: Page) => page.getByRole('button', { name: /Copy email/ });
+
+	test('success shows a checkmark, keeps focus on Copy email, and clears after four seconds', async ({ page }) => {
+		await page.clock.install();
+		await stubClipboard(page, 'succeed');
+		await page.goto('/');
+		await trigger(page).click();
+		await copyButton(page).focus();
+		await page.keyboard.press('Enter');
+		await expect(page.locator('.contact-panel .copy-glyph')).toHaveAttribute('data-state', 'success');
+		await expect(page.locator('.contact-panel .glyph-check')).toHaveCSS('opacity', '1');
+		await expect(page.locator('.copy-status')).toHaveText('Email copied');
+		await expect(copyButton(page)).toBeFocused();
+		await page.clock.fastForward(4100);
+		await expect(page.locator('.contact-panel .copy-glyph')).toHaveAttribute('data-state', 'idle');
+		await expect(page.locator('.copy-status')).toHaveText('');
+	});
+
+	test('failure shows no checkmark, selects only the address, keeps focus, and persists until retry or dismissal', async ({ page }) => {
+		await page.clock.install();
+		await stubClipboard(page, 'fail');
+		await page.goto('/');
+		await trigger(page).click();
+		await copyButton(page).click();
+		await expect(page.locator('.contact-panel .copy-glyph')).toHaveAttribute('data-state', 'failure');
+		await expect(page.locator('.contact-panel .glyph-check')).toHaveCSS('opacity', '0');
+		await expect(page.locator('.copy-status')).toHaveText('Could not copy. Select the email address above.');
+		expect(await page.evaluate(() => getSelection()?.toString())).toBe('knakamura13dev@gmail.com');
+		await expect(copyButton(page)).toBeFocused();
+		await page.clock.fastForward(10_000);
+		await expect(page.locator('.copy-status')).toHaveText('Could not copy. Select the email address above.');
+		await page.keyboard.press('Escape');
+		await expect(page.locator('#contact-panel')).toHaveCount(0);
+		await trigger(page).click();
+		await expect(page.locator('.copy-status')).toHaveText('');
+	});
+
+	test('a late write cannot change a closed and reopened panel', async ({ page }) => {
+		await page.addInitScript(() => {
+			Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: () => new Promise((resolve) => setTimeout(resolve, 500)) } });
+		});
+		await page.goto('/');
+		await trigger(page).click();
+		await copyButton(page).click();
+		await page.keyboard.press('Escape');
+		await expect(page.locator('#contact-panel')).toHaveCount(0);
+		await trigger(page).click();
+		await page.waitForTimeout(800);
+		await expect(page.locator('.copy-status')).toHaveText('');
+		await expect(page.locator('.contact-panel .copy-glyph')).toHaveAttribute('data-state', 'idle');
+	});
+
+	test('the leaving panel is inert, and rapid toggling ends with one coherent panel', async ({ page }) => {
+		await page.goto('/');
+		await trigger(page).click();
+		await expect(page.locator('#contact-panel')).toBeVisible();
+		await trigger(page).click();
+		await expect(trigger(page)).toHaveAttribute('aria-expanded', 'false');
+		await expect(page.locator('#contact-panel')).toHaveAttribute('inert', '');
+		await expect(page.locator('#contact-panel')).toHaveCount(0);
+		for (let i = 0; i < 5; i++) await trigger(page).click();
+		await expect(trigger(page)).toHaveAttribute('aria-expanded', 'true');
+		await expect(page.locator('#contact-panel')).toHaveCount(1);
+		await expect(page.locator('#contact-panel')).not.toHaveAttribute('inert', '');
+		await expect(copyButton(page)).toBeEnabled();
+	});
+
+	test('reduced motion removes the panel immediately and animates nothing', async ({ page }) => {
+		await page.emulateMedia({ reducedMotion: 'reduce' });
+		await page.goto('/');
+		await trigger(page).click();
+		expect(await page.locator('#contact-panel').evaluate((el) => el.getAnimations().length)).toBe(0);
+		await page.keyboard.press('Escape');
+		await expect(page.locator('#contact-panel')).toHaveCount(0, { timeout: 100 });
+	});
+
+	test('status changes do not change the panel height', async ({ page }) => {
+		await stubClipboard(page, 'fail');
+		await page.goto('/');
+		await trigger(page).click();
+		const before = Math.round((await page.locator('#contact-panel').boundingBox())?.height ?? 0);
+		await copyButton(page).click();
+		await expect(page.locator('.copy-status')).not.toHaveText('');
+		expect(Math.round((await page.locator('#contact-panel').boundingBox())?.height ?? -1)).toBe(before);
+	});
+
+	test('navigating away closes the panel', async ({ page }) => {
+		await page.goto('/');
+		await trigger(page).click();
+		await page.getByRole('link', { name: /^Résumé/ }).first().click();
+		await expect(page).toHaveURL(/\/resume$/);
+		await expect(page.locator('#contact-panel')).toHaveCount(0);
+	});
+
+	test.describe('on phones', () => {
+		test.use({ viewport: { width: 320, height: 700 }, hasTouch: true });
+
+		test('Menu and Contact swap without leaving two live panels, and both fit', async ({ page }) => {
+			await page.goto('/');
+			const menu = page.getByRole('button', { name: /^Menu/ });
+			await menu.click();
+			await expect(page.locator('#mobile-links')).toBeVisible();
+			await trigger(page).click();
+			await expect(page.locator('#mobile-links')).toHaveCount(0);
+			await expect(page.locator('#contact-panel')).toHaveCount(1);
+			await expect(menu).toHaveAttribute('aria-expanded', 'false');
+			const box = await page.locator('#contact-panel').boundingBox();
+			expect((box?.x ?? -1) + (box?.width ?? 0)).toBeLessThanOrEqual(320);
+			expect(box?.x ?? -1).toBeGreaterThanOrEqual(0);
+			for (const b of await page.locator('#contact-panel').getByRole('button').evaluateAll((els) => els.map((el) => el.getBoundingClientRect().height))) {
+				expect(b).toBeGreaterThanOrEqual(44);
+			}
+		});
 	});
 });
 
