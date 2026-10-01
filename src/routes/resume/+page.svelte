@@ -103,6 +103,30 @@
 	@media(min-width:701px) {
 		.resume-section h2 { position:sticky; top:120px; }
 	}
+	/*
+	 * Approximate spatial progress through a section, drawn under its sticky label. The section owns
+	 * the view timeline; only the heading's decorative ::after is bound to it. The 120px inset matches
+	 * the sticky offset, so the `contain` range runs from the section's top reaching the label to its
+	 * bottom reaching the viewport's lower edge. Everything is gated on the properties it uses.
+	 */
+	@media(min-width:701px) and (prefers-reduced-motion:no-preference) {
+		@supports (animation-timeline:view()) and (view-timeline-inset:0) {
+			.resume-section { view-timeline:--resume-section block; view-timeline-inset:120px 0; }
+			.resume-section h2::after {
+				content:''; display:block; height:2px; margin-top:12px; background:var(--accent);
+				transform-origin:left; transform:scaleX(0);
+				animation:resume-progress linear both; animation-timeline:--resume-section; animation-range:contain;
+			}
+		}
+	}
+	/* Short sections near the end of the page may never scroll their top to the label, so they finish once fully in view. */
+	@media(min-width:701px) and (prefers-reduced-motion:no-preference) {
+		@supports (animation-timeline:view()) and (view-timeline-inset:0) {
+			#education h2::after, #skills h2::after { animation-range:entry; }
+		}
+	}
+	@keyframes resume-progress { to { transform:scaleX(1); } }
+	@media print { .resume-section h2::after { display:none; } }
 	/* On phones the logo sits beside the title block only, so points use the full width. */
 	@media(max-width:700px) {
 		.record:has(> .logo-tile) { display:grid; grid-template-columns:64px minmax(0,1fr); gap:0 15px; align-items:start; }
