@@ -182,6 +182,16 @@ test.describe('Hangul syllable builder', () => {
 		await expect(page.locator('.builder [aria-live="polite"]')).toHaveCount(1);
 	});
 
+	test('only Hangul is marked as Korean, so English and romanization keep the page language', async ({ page }) => {
+		await page.goto('/projects/learning-korean');
+		await toggle(page).click();
+		await expect(result(page)).toContainText('ㅏ is a tall vowel, so the consonant sits beside it.');
+		const korean = await page.locator('.builder .result [lang="ko"], .equations [lang="ko"]').allTextContents();
+		expect(korean.length).toBeGreaterThan(0);
+		for (const text of korean) expect(text, `lang="ko" text: ${text}`).not.toMatch(/[A-Za-z]/);
+		expect(await result(page).getAttribute('lang')).toBeNull();
+	});
+
 	test('reduced motion changes state with no running animation', async ({ page }) => {
 		await page.goto('/projects/learning-korean');
 		await toggle(page).click();

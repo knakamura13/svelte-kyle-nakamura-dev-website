@@ -5,9 +5,10 @@
 	// (app/src/lib/content/lab01.ts, "assemble" steps): a tall vowel takes the consonant beside it,
 	// a wide vowel takes it above.
 	const examples = [
-		{ id: 'ba', consonant: 'ㅂ', vowel: 'ㅏ', syllable: '바', reading: 'ba', layout: 'beside', why: 'ㅏ is a tall vowel, so the consonant sits beside it.' },
-		{ id: 'so', consonant: 'ㅅ', vowel: 'ㅗ', syllable: '소', reading: 'so', layout: 'above', why: 'ㅗ is a wide vowel, so the consonant sits above it.' }
+		{ id: 'ba', consonant: 'ㅂ', vowel: 'ㅏ', syllable: '바', reading: 'ba', shape: 'tall', layout: 'beside' },
+		{ id: 'so', consonant: 'ㅅ', vowel: 'ㅗ', syllable: '소', reading: 'so', shape: 'wide', layout: 'above' }
 	] as const;
+	type Example = (typeof examples)[number];
 
 	let selected = $state<(typeof examples)[number]['id']>('ba');
 	let assembled = $state(false);
@@ -16,12 +17,6 @@
 	onMount(() => (interactive = true));
 
 	let example = $derived(examples.find((item) => item.id === selected) ?? examples[0]);
-	let result = $derived(
-		assembled
-			? `${example.consonant} + ${example.vowel} = ${example.syllable} (${example.reading}). ${example.why}`
-			: `${example.consonant} and ${example.vowel} are apart.`
-	);
-
 	function choose(id: (typeof examples)[number]['id']) {
 		selected = id;
 		assembled = false;
@@ -32,10 +27,14 @@
 	<noscript><style>.builder { min-height:0 !important; padding:0 !important; background:none !important; }</style></noscript>
 </svelte:head>
 
+<!-- Only the Hangul is marked lang="ko"; the English and the romanization stay in the page language,
+     so screen readers do not switch to a Korean voice for the explanation. -->
+{#snippet why(item: Example)}<span lang="ko">{item.vowel}</span> is a {item.shape} vowel, so the consonant sits {item.layout} it.{/snippet}
+
 <ul class="equations">
 	{#each examples as item (item.id)}
 		<li>
-			<span lang="ko">{item.consonant} + {item.vowel} → {item.syllable}</span> ({item.reading}). {item.why}
+			<span lang="ko">{item.consonant} + {item.vowel} → {item.syllable}</span> ({item.reading}). {@render why(item)}
 		</li>
 	{/each}
 </ul>
@@ -60,7 +59,13 @@
 		</div>
 
 		<button type="button" class="toggle" onclick={() => (assembled = !assembled)}>{assembled ? 'Separate pieces' : 'Build syllable'}</button>
-		<p class="result" aria-live="polite"><span lang="ko">{result}</span></p>
+		<p class="result" aria-live="polite">
+			{#if assembled}
+				<span lang="ko">{example.consonant}</span> + <span lang="ko">{example.vowel}</span> = <span lang="ko">{example.syllable}</span> ({example.reading}). {@render why(example)}
+			{:else}
+				<span lang="ko">{example.consonant}</span> and <span lang="ko">{example.vowel}</span> are apart.
+			{/if}
+		</p>
 	{/if}
 </div>
 
