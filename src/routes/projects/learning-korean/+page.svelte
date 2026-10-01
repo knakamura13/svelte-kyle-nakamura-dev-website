@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ScheduleExplorer from './ScheduleExplorer.svelte';
 	import { onMount } from 'svelte';
 	import Arrow from '$lib/components/Arrow.svelte';
 	import { projects } from '$lib/content/portfolio';
@@ -89,6 +90,7 @@
 				<p>A lab introduces a pattern. The review deck brings it back over time. Completing labs unlocks material for practice, so lesson progress and retention have separate jobs.</p>
 				<p>The scheduler uses correctness and response time to assign a grade. A slow correct answer receives a different grade from a fast one. A newly introduced card cannot earn the easiest grade on its first appearance.</p>
 				<p>The scheduling function then calculates the next due time from that grade and the card’s history. The visible interaction is small, while the state underneath tracks what has been introduced, attempted, and scheduled for later.</p>
+				<ScheduleExplorer />
 				<a class="text-link" href="https://github.com/knakamura13/learning-korean/blob/e993c60808c3a88bb171745b8c89587fe0b2772c/app/src/lib/domain/srs.ts#L372-L465" target="_blank" rel="noopener noreferrer">Read the scheduling code <span aria-hidden="true"><Arrow /></span></a>
 			</section>
 			<section id="guest" use:reveal>
