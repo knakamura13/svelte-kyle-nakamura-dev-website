@@ -115,7 +115,7 @@ test.describe('route transitions', () => {
 	test('back restores the scroll position and focus behaves like ordinary navigation', async ({ page }) => {
 		await watchTransitions(page);
 		await page.goto('/projects/learning-korean');
-		await page.evaluate(() => scrollTo(0, document.documentElement.scrollHeight));
+		await page.evaluate(() => scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' }));
 		const before = await page.evaluate(() => scrollY);
 		await storyResumeLink(page).click();
 		await expect(page).toHaveURL(/\/resume$/);
@@ -155,7 +155,7 @@ test.describe('route transitions', () => {
 			});
 			await page.goto('/projects/learning-korean');
 			if (where === 'bottom') {
-				await page.evaluate(() => scrollTo(0, document.documentElement.scrollHeight));
+				await page.evaluate(() => scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' }));
 				await storyResumeLink(page).click();
 			} else {
 				await page.locator('.capsule').getByRole('link', { name: /^Résumé/ }).click();
