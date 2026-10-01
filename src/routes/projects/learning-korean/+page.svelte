@@ -1,8 +1,46 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import Arrow from '$lib/components/Arrow.svelte';
 	import { projects } from '$lib/content/portfolio';
 	import { reveal } from '$lib/motion/reveal';
 	const project = projects[0];
+	const sectionIds = ['lesson', 'practice', 'guest', 'status'];
+	// An anchor click can land a little short of the reading line when layout shifts after load, so a
+	// heading this close below the line already counts as reached.
+	const slack = 32;
+	let activeId = $state('');
+
+	// The active section is the last one whose heading has crossed the reading line, which is the same
+	// offset anchor links land on. Scroll and resize only schedule a recompute (at most one per frame);
+	// the answer always comes from geometry, so long sections, large jumps and the short final section agree.
+	onMount(() => {
+		const sections = sectionIds.map((id) => document.getElementById(id)).filter((el): el is HTMLElement => !!el);
+		if (!sections.length) return;
+		const update = () => {
+			const line = parseFloat(getComputedStyle(sections[0]).scrollMarginTop) || 0;
+			const atBottom = window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 2;
+			let current = '';
+			for (const section of sections) {
+				// A section waiting on its reveal is translated down; measure where it will rest instead.
+				const shift = new DOMMatrixReadOnly(getComputedStyle(section).transform).m42;
+				if ((section.querySelector('h2') ?? section).getBoundingClientRect().top - shift <= line + slack) current = section.id;
+			}
+			activeId = atBottom ? sections[sections.length - 1].id : current;
+		};
+		let frame = 0;
+		const schedule = () => {
+			cancelAnimationFrame(frame);
+			frame = requestAnimationFrame(update);
+		};
+		window.addEventListener('scroll', schedule, { passive: true });
+		window.addEventListener('resize', schedule, { passive: true });
+		update();
+		return () => {
+			cancelAnimationFrame(frame);
+			window.removeEventListener('scroll', schedule);
+			window.removeEventListener('resize', schedule);
+		};
+	});
 </script>
 
 <svelte:head>
@@ -29,10 +67,10 @@
 
 	<div class="case-body">
 		<aside class="case-contents" aria-label="In this project">
-			<a href="#lesson">The lesson</a>
-			<a href="#practice">The practice loop</a>
-			<a href="#guest">The first session</a>
-			<a href="#status">Where it stands</a>
+			<a href="#lesson" data-active={activeId === 'lesson' ? 'true' : undefined}>The lesson</a>
+			<a href="#practice" data-active={activeId === 'practice' ? 'true' : undefined}>The practice loop</a>
+			<a href="#guest" data-active={activeId === 'guest' ? 'true' : undefined}>The first session</a>
+			<a href="#status" data-active={activeId === 'status' ? 'true' : undefined}>Where it stands</a>
 		</aside>
 		<div class="case-sections">
 			<section id="lesson" use:reveal>
@@ -68,3 +106,20 @@
 		<a class="text-link" href="/resume">Résumé <span aria-hidden="true"><Arrow /></span></a>
 	</div>
 </article>
+
+<style>
+	.case-contents a { position:relative; transition:color 160ms ease; }
+	.case-contents a::before {
+		content:''; position:absolute; left:-14px; top:50%; width:4px; height:14px; margin-top:-7px;
+		border-radius:2px; background:var(--accent); opacity:0; transition:opacity 160ms ease;
+	}
+	.case-contents a[data-active] { color:var(--ink); }
+	.case-contents a[data-active]::before { opacity:1; }
+	/* On phones the list wraps in the page flow, so the tick becomes an underline in the same colour. */
+	@media(max-width:700px) {
+		.case-contents a::before { left:0; right:0; top:auto; bottom:6px; width:auto; height:2px; margin-top:0; }
+	}
+	@media(prefers-reduced-motion:reduce) {
+		.case-contents a, .case-contents a::before { transition:none; }
+	}
+</style>
