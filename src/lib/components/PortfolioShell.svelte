@@ -1,7 +1,8 @@
 <script lang="ts">
 	import Arrow from './Arrow.svelte';
 	import { onMount } from 'svelte';
-	import { afterNavigate } from '$app/navigation';
+	import { afterNavigate, onNavigate } from '$app/navigation';
+	import { routeTransition } from '$lib/motion/routeTransition';
 	import { page } from '$app/state';
 	import { destinationFor, type Destination } from '$lib/nav/destination';
 	import { panel } from '$lib/motion/panel';
@@ -95,6 +96,8 @@
 	}
 
 	afterNavigate(closePanels);
+	// An open panel would be frozen into the snapshot, so navigate plainly while one is open.
+	onNavigate((navigation) => (contactOpen || menuOpen ? undefined : routeTransition(navigation)));
 
 	function keydown(event: KeyboardEvent) {
 		if (event.key === 'Escape' && (contactOpen || menuOpen)) {
