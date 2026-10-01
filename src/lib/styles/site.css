@@ -135,3 +135,21 @@ button.stack-card { background:none; padding:0; text-align:left; }
  .concept .reveal-pending { opacity:1; transform:none; }
  .stack-card:active .stack-face { scale:1; }
 }
+
+/*
+ * Route transitions (#19). Names exist only while a transition runs, so they never affect layout.
+ * The visible screen (the root snapshot) crossfades: 160ms out, 240ms in. Animating the visible
+ * screen rather than <main> keeps the fade where the reader is, even far down a long page. The
+ * capsule is captured separately and held still; the identity too, but only when it was on screen
+ * (routeTransition.ts sets data-route-identity). Back/forward is not transitioned.
+ */
+:root[data-route-transition] .floating-nav { view-transition-name:site-nav; transition:none; }
+:root[data-route-identity] .identity { view-transition-name:site-identity; }
+::view-transition-group(site-nav),::view-transition-group(site-identity),
+::view-transition-old(site-nav),::view-transition-new(site-nav),
+::view-transition-old(site-identity),::view-transition-new(site-identity) { animation:none; }
+::view-transition-old(root) { animation:route-out 160ms ease-in both; }
+::view-transition-new(root) { animation:route-in 240ms var(--ease) both; }
+@keyframes route-out { to { opacity:0; } }
+@keyframes route-in { from { opacity:0; } }
+@media(prefers-reduced-motion:reduce) { ::view-transition-group(*),::view-transition-old(*),::view-transition-new(*) { animation:none!important; } }
