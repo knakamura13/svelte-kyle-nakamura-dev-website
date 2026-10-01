@@ -140,3 +140,16 @@
  .personal .portfolio-work .compact-entry p { font-size:12px; }
  .personal .portfolio-work .compact-entry h3 { font-size:27px; }
 }
+
+/*
+ * Anchor arrival (#26): the destination a link landed on carries a quiet accent while its fragment is
+ * current. It decorates a child, never changes size or hitboxes, and stays distinct from the blue focus
+ * ring. [data-arrived] is set from the URL on the client; :target covers ordinary and no-JS anchors.
+ */
+.personal .compact-entry:is(:target,[data-arrived]) .compact-image { box-shadow:inset 0 0 0 2px var(--accent); animation:arrive-frame 420ms var(--ease) both; }
+.personal :is(#work,#about):is(:target,[data-arrived]) h2 { position:relative; }
+.personal :is(#work,#about):is(:target,[data-arrived]) h2::before { content:''; position:absolute; left:-14px; top:.15em; bottom:.15em; width:3px; border-radius:2px; background:var(--accent); animation:arrive 420ms var(--ease) both; }
+@keyframes arrive { from { opacity:0; } }
+/* Only the accent settles; the thumbnail itself never fades. */
+@keyframes arrive-frame { from { box-shadow:inset 0 0 0 2px transparent; } }
+@media(prefers-reduced-motion:reduce) { .personal .compact-entry:is(:target,[data-arrived]) .compact-image, .personal :is(#work,#about):is(:target,[data-arrived]) h2::before { animation:none; } }
