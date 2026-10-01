@@ -96,8 +96,9 @@
 	}
 
 	afterNavigate(closePanels);
-	// An open panel would be frozen into the snapshot, so navigate plainly while one is open.
-	onNavigate((navigation) => (contactOpen || menuOpen ? undefined : routeTransition(navigation)));
+	// A panel would be frozen into the snapshot, so navigate plainly while one is open or still
+	// leaving (a Menu link closes its panel on click, just before the navigation starts).
+	onNavigate((navigation) => (nav?.querySelector('.nav-panel') ? undefined : routeTransition(navigation)));
 
 	function keydown(event: KeyboardEvent) {
 		if (event.key === 'Escape' && (contactOpen || menuOpen)) {

@@ -1,11 +1,24 @@
 import type { OnNavigate } from '@sveltejs/kit';
 
-/** Routes that take part. The homepage stays out until #16's homepage freeze is lifted. */
+/** Routes that take part with each other. */
 const eligible = new Set(['/projects/learning-korean', '/resume', '/send-money']);
+const STORY = '/projects/learning-korean';
+
+/**
+ * The homepage takes part only with the Learning Korean story: home to the story, and the story back
+ * to `/` or `/#work`. Any position on the home page or the story may be the starting point; other
+ * home journeys and same-page hash links stay ordinary navigation.
+ */
+function isHomeStoryPair(from: URL, to: URL): boolean {
+	if (from.pathname === '/' && to.pathname === STORY) return !to.hash;
+	if (from.pathname === STORY && to.pathname === '/') return to.hash === '' || to.hash === '#work';
+	return false;
+}
 
 export function isEligible(from: URL | undefined, to: URL | undefined): boolean {
-	if (!from || !to || from.origin !== to.origin) return false;
-	if (from.hash || to.hash || from.pathname === to.pathname) return false;
+	if (!from || !to || from.origin !== to.origin || from.pathname === to.pathname) return false;
+	if (isHomeStoryPair(from, to)) return true;
+	if (from.hash || to.hash) return false;
 	return eligible.has(from.pathname) && eligible.has(to.pathname);
 }
 

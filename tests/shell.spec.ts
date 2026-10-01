@@ -171,11 +171,13 @@ test.describe('contact panel feedback and motion', () => {
 			await expect(page.locator('#mobile-links')).toHaveCount(0);
 			await expect(page.locator('#contact-panel')).toHaveCount(1);
 			await expect(menu).toHaveAttribute('aria-expanded', 'false');
+			// Measure after the panel's entrance; mid-slide, float rounding can read 44px as 43.99999px.
+			await expect.poll(() => page.locator('#contact-panel').evaluate((el) => el.getAnimations().length)).toBe(0);
 			const box = await page.locator('#contact-panel').boundingBox();
 			expect((box?.x ?? -1) + (box?.width ?? 0)).toBeLessThanOrEqual(320);
 			expect(box?.x ?? -1).toBeGreaterThanOrEqual(0);
 			for (const b of await page.locator('#contact-panel').getByRole('button').evaluateAll((els) => els.map((el) => el.getBoundingClientRect().height))) {
-				expect(b).toBeGreaterThanOrEqual(44);
+				expect(Math.round(b * 100) / 100).toBeGreaterThanOrEqual(44);
 			}
 		});
 	});

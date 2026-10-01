@@ -58,17 +58,107 @@ test.describe('route transitions', () => {
 		await expect(page.locator('.capsule')).toHaveCount(1);
 	});
 
-	test('home, hash, external and other routes use ordinary navigation', async ({ page }) => {
+	test('hash links and routes outside the eligible pairs use ordinary navigation', async ({ page }) => {
 		const calls = await watchTransitions(page);
 		await page.goto('/projects/learning-korean');
 		await page.locator('.case-contents a[href="#practice"]').click();
 		await expect(page).toHaveURL(/#practice$/);
-		await page.locator('.case-end').getByRole('link', { name: 'Back to selected projects' }).click();
-		await expect(page).toHaveURL(/\/#work$/);
 		await page.goto('/resume');
 		await page.getByRole('contentinfo').getByRole('link', { name: 'Experiments' }).click();
 		await expect(page).toHaveURL(/\/experiments$/);
 		expect(await calls()).toEqual([]);
+	});
+
+	test.describe('home and the Learning Korean story', () => {
+		// The capsule hides on scroll; reveal it before using its links.
+		const showCapsule = async (page: Page) => {
+			const nav = page.getByRole('navigation', { name: 'Main navigation' });
+			await expect
+				.poll(async () => {
+					await page.mouse.wheel(0, -80);
+					return nav.evaluate((el) => !el.classList.contains('nav-hidden') && el.getBoundingClientRect().top >= 0);
+				})
+				.toBe(true);
+		};
+
+		for (const [name, locate] of [
+			['thumbnail', (page: Page) => page.locator('#korean .korean-thumbnail')],
+			['title', (page: Page) => page.locator('#korean h3 a')],
+			['"Read the project story"', (page: Page) => page.locator('#korean').getByRole('link', { name: 'Read the project story' })]
+		] as const) {
+			test(`the ${name} link transitions from home to the story`, async ({ page }) => {
+				const calls = await watchTransitions(page);
+				await page.goto('/#work');
+				await locate(page).click();
+				await expect(page).toHaveURL(/\/projects\/learning-korean$/);
+				await expect(page.getByRole('heading', { level: 1 })).toHaveText(/Learning Korean,/);
+				await settled(page);
+				expect(await calls()).toHaveLength(1);
+			});
+		}
+
+		for (const [name, locate] of [
+			['"All projects"', (page: Page) => page.locator('.page-back')],
+			['"Back to selected projects"', (page: Page) => page.locator('.case-end').getByRole('link', { name: 'Back to selected projects' })],
+			['capsule Work', (page: Page) => page.locator('.capsule').getByRole('link', { name: 'Work' })]
+		] as const) {
+			test(`the ${name} link transitions from the story to /#work and the arrival cue shows`, async ({ page }) => {
+				const calls = await watchTransitions(page);
+				await page.goto('/projects/learning-korean');
+				if (name === '"Back to selected projects"') await page.evaluate(() => scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' }));
+				if (name === 'capsule Work') await showCapsule(page);
+				await locate(page).click();
+				await expect(page).toHaveURL(/\/#work$/);
+				await settled(page);
+				expect(await calls()).toHaveLength(1);
+				await expect(page.locator('#work')).toHaveAttribute('data-arrived', '');
+				await expect.poll(() => page.locator('#work').evaluate((el) => Math.round(el.getBoundingClientRect().top))).toBeLessThan(200);
+			});
+		}
+
+		test('the mobile Menu\'s Selected work link navigates plainly, since its panel is still closing', async ({ page }) => {
+			await page.setViewportSize({ width: 390, height: 844 });
+			const calls = await watchTransitions(page);
+			await page.goto('/projects/learning-korean');
+			await page.getByRole('button', { name: /^Menu/ }).click();
+			// The link closes the Menu on click; the leaving panel would be frozen into the snapshot.
+			await page.locator('#mobile-links').getByRole('link', { name: /Selected work/ }).click();
+			await expect(page).toHaveURL(/\/#work$/);
+			await settled(page);
+			expect(await calls()).toEqual([]);
+		});
+
+		test('other home journeys stay ordinary: same-page hashes, home to résumé, home to experiments, the Project Stack card', async ({ page }) => {
+			const calls = await watchTransitions(page);
+			await page.goto('/');
+			await page.locator('.project-stack a[href="#korean"]').click();
+			await expect(page).toHaveURL(/#korean$/);
+			await page.evaluate(() => scrollTo({ top: 0, behavior: 'instant' }));
+			await page.locator('.intro-about').click();
+			await expect(page).toHaveURL(/#about$/);
+			await page.goto('/');
+			await page.locator('.personal-links').getByRole('link', { name: /^Résumé/ }).click();
+			await expect(page).toHaveURL(/\/resume$/);
+			await page.goto('/');
+			await page.getByRole('contentinfo').getByRole('link', { name: 'Experiments' }).click();
+			await expect(page).toHaveURL(/\/experiments$/);
+			await page.goto('/resume');
+			await page.locator('.capsule').getByRole('link', { name: 'Work' }).click();
+			await expect(page).toHaveURL(/\/#work$/);
+			expect(await calls()).toEqual([]);
+		});
+
+		test('Back from the story to home is ordinary navigation', async ({ page }) => {
+			const calls = await watchTransitions(page);
+			await page.goto('/#work');
+			await page.locator('#korean h3 a').click();
+			await expect(page).toHaveURL(/\/projects\/learning-korean$/);
+			await settled(page);
+			await page.goBack();
+			await expect(page).toHaveURL(/\/#work$/);
+			await settled(page);
+			expect(await calls()).toHaveLength(1);
+		});
 	});
 
 	test('direct loads show their content without a transition', async ({ page }) => {
