@@ -3,8 +3,28 @@
 	import ProjectStack from '$lib/components/ProjectStack.svelte';
 	import { projects, email } from '$lib/content/portfolio';
 	import { reveal } from '$lib/motion/reveal';
+	import { page } from '$app/state';
 	const story = '/projects/learning-korean';
+
+	// SvelteKit's client-side navigation (for example /resume -> /#work) changes the hash with
+	// pushState, which leaves CSS :target unchanged. Mirror the current hash onto the known
+	// destinations so the arrival cue matches every way of getting here; :target covers no-JS.
+	// The browser's own location is the source of truth: SvelteKit's hash-only Back/Forward does not
+	// always update page.url before this runs, so also listen for hashchange and popstate.
+	const destinations = ['korean', 'mlrose', 'oc-foods', 'work', 'about'];
+	function markArrival() {
+		const id = location.hash.slice(1);
+		const target = destinations.includes(id) ? document.getElementById(id) : null;
+		for (const other of document.querySelectorAll('[data-arrived]')) if (other !== target) other.removeAttribute('data-arrived');
+		target?.setAttribute('data-arrived', '');
+	}
+	$effect(() => {
+		void page.url.hash;
+		markArrival();
+	});
 </script>
+
+<svelte:window onhashchange={markArrival} onpopstate={markArrival} />
 
 <svelte:head>
 	<title>Kyle Nakamura — Software engineer</title>
