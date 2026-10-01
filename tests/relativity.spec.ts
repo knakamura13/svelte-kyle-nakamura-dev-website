@@ -221,9 +221,13 @@ test.describe('the 3D views', () => {
 		return dominantShare(page, picture);
 	}
 
-	/** Waits until the chapter's Stage shows a scene. */
+	/**
+	 * Waits until the chapter's Stage shows a scene. Looping scenes fade to their tint once per cycle by design (muons:
+	 * about 11 s), and under load each Stage screenshot can take seconds, so the wait spans more than a full cycle rather
+	 * than failing on a sample that lands on the fade.
+	 */
 	async function expectSceneInView(page: Page, id: string, when: string) {
-		await expect.poll(() => blankness(page, id), { message: `${id} is blank ${when}` }).toBeLessThan(0.85);
+		await expect.poll(() => blankness(page, id), { message: `${id} is blank ${when}`, timeout: 20_000 }).toBeLessThan(0.85);
 	}
 
 	/** Checks the Stage over a second, and no moment of it may be blank, so a redraw that lands late is still caught. */
@@ -242,6 +246,8 @@ test.describe('the 3D views', () => {
 	}
 
 	test('every Stage shows its scene on the frame reduced motion starts on', async ({ page }) => {
+		// Screenshots every Stage repeatedly; each one is slow when the suite runs in parallel.
+		test.slow();
 		await page.emulateMedia({ reducedMotion: 'reduce' });
 		await page.goto('/experiments/relativity');
 		for (const id of chapterIds) {
@@ -251,6 +257,8 @@ test.describe('the 3D views', () => {
 	});
 
 	test('pausing and restarting a looping scene leaves it in view', async ({ page }) => {
+		// Screenshots every Stage repeatedly; each one is slow when the suite runs in parallel.
+		test.slow();
 		const restarts = { frames: 'Toss again', 'light-speed': 'Fire again', muons: 'Replay' };
 		await page.goto('/experiments/relativity');
 		for (const [id, restart] of Object.entries(restarts)) {
