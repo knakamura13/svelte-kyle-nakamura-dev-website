@@ -2,6 +2,8 @@
 	import Arrow from './Arrow.svelte';
 	import { onMount } from 'svelte';
 	import { afterNavigate } from '$app/navigation';
+	import { page } from '$app/state';
+	import { destinationFor, type Destination } from '$lib/nav/destination';
 	import { panel } from '$lib/motion/panel';
 	import type { Snippet } from 'svelte';
 	import { email } from '$lib/content/portfolio';
@@ -19,6 +21,48 @@
 	let copyButton: HTMLButtonElement | undefined = $state();
 	let attempt = 0;
 	let nav: HTMLElement;
+	let capsule: HTMLElement | undefined = $state();
+
+	// Capsule highlight: keyboard focus beats hover, which beats the route/hash the page rests on.
+	const destinations: Destination[] = ['work', 'about', 'resume'];
+	let linkEls: Partial<Record<Destination, HTMLAnchorElement>> = $state({});
+	let resting = $derived(destinationFor(page.url));
+	let hovered = $state<Destination | null>(null);
+	let focused = $state<Destination | null>(null);
+	let target = $derived(focused ?? hovered ?? resting);
+	// Measured link bounds relative to the capsule. Empty until the first valid measurement, which
+	// keeps the static per-link background in charge during SSR and hydration.
+	let bounds = $state<Partial<Record<Destination, { x: number; y: number; w: number; h: number }>>>({});
+	let pillReady = $derived(!!target && !!bounds[target]);
+	let pillMoves = $state(false);
+	// While fading out with no target, the pill stays where it last was instead of jumping home.
+	let lastTarget = $state<Destination | null>(null);
+	$effect(() => {
+		if (target) lastTarget = target;
+	});
+	let pillStyle = $derived.by(() => {
+		const shown = target ?? lastTarget;
+		const box = shown ? bounds[shown] : undefined;
+		return box ? `transform:translate(${box.x}px,${box.y}px);width:${box.w}px;height:${box.h}px` : '';
+	});
+
+	function measure() {
+		if (!capsule) return;
+		const origin = capsule.getBoundingClientRect();
+		const next: typeof bounds = {};
+		for (const name of destinations) {
+			const box = linkEls[name]?.getBoundingClientRect();
+			if (box && box.width > 0 && box.height > 0) next[name] = { x: box.left - origin.left - capsule.clientLeft, y: box.top - origin.top - capsule.clientTop, w: box.width, h: box.height };
+		}
+		bounds = next;
+	}
+
+	const pointerOn = (name: Destination) => (event: PointerEvent) => {
+		if (event.pointerType !== 'touch') hovered = name;
+	};
+	const focusOn = (name: Destination) => (event: FocusEvent) => {
+		if ((event.currentTarget as HTMLElement).matches(':focus-visible')) focused = name;
+	};
 	let contactTrigger: HTMLButtonElement;
 	let menuTrigger: HTMLButtonElement;
 	let opener: HTMLElement | null = null;
@@ -86,6 +130,13 @@
 	let copyStatus = $derived(copyState === 'success' ? 'Email copied' : copyState === 'failure' ? copyFailure : '');
 
 	onMount(() => {
+		// Measure after fonts load and whenever the capsule changes size (zoom, breakpoint, font swap).
+		// The first placement is instant; travel is enabled only once a position exists.
+		const observer = new ResizeObserver(measure);
+		if (capsule) observer.observe(capsule);
+		void document.fonts.ready.then(measure);
+		measure();
+		const enableTravel = requestAnimationFrame(() => requestAnimationFrame(() => (pillMoves = true)));
 		let last = window.scrollY;
 		let travel = 0;
 		let direction = 0;
@@ -120,6 +171,8 @@
 			document.removeEventListener('pointerdown', outside);
 			attempt++;
 			clearTimeout(copyTimer);
+			cancelAnimationFrame(enableTravel);
+			observer.disconnect();
 		};
 	});
 </script>
@@ -140,10 +193,11 @@
 			class="floating-nav"
 			onfocusin={() => (hidden = false)}
 		>
-			<div class="capsule">
-				<a class="desktop-nav" href="/#work" onclick={closePanels}>Work</a>
-				<a class="desktop-nav" href="/#about" onclick={closePanels}>About</a>
-				<a class="desktop-nav" href="/resume">Résumé <span aria-hidden="true"><Arrow /></span></a>
+			<div class="capsule" class:pill-ready={pillReady} bind:this={capsule} onpointerleave={() => (hovered = null)}>
+				<span class="nav-pill" class:moves={pillMoves} class:shown={pillReady} style={pillStyle} aria-hidden="true"></span>
+				<a class="desktop-nav" href="/#work" bind:this={linkEls.work} data-resting={resting === 'work' ? '' : undefined} onclick={closePanels} onpointerenter={pointerOn('work')} onfocus={focusOn('work')} onblur={() => (focused = null)}>Work</a>
+				<a class="desktop-nav" href="/#about" bind:this={linkEls.about} data-resting={resting === 'about' ? '' : undefined} onclick={closePanels} onpointerenter={pointerOn('about')} onfocus={focusOn('about')} onblur={() => (focused = null)}>About</a>
+				<a class="desktop-nav" href="/resume" bind:this={linkEls.resume} aria-current={page.url.pathname === '/resume' ? 'page' : undefined} data-resting={resting === 'resume' ? '' : undefined} onpointerenter={pointerOn('resume')} onfocus={focusOn('resume')} onblur={() => (focused = null)}>Résumé <span aria-hidden="true"><Arrow /></span></a>
 				<button
 					class="mobile-menu"
 					bind:this={menuTrigger}
@@ -168,9 +222,9 @@
 			</div>
 			{#if menuOpen}
 				<div class="nav-panel mobile-links" id="mobile-links" transition:panel onoutrostart={retire}>
-					<a href="/#work" onclick={closePanels}>Selected work <span><Arrow /></span></a>
-					<a href="/#about" onclick={closePanels}>About Kyle <span><Arrow /></span></a>
-					<a href="/resume">Résumé <span><Arrow /></span></a>
+					<a href="/#work" data-resting={resting === 'work' ? '' : undefined} onclick={closePanels}>Selected work <span><Arrow /></span></a>
+					<a href="/#about" data-resting={resting === 'about' ? '' : undefined} onclick={closePanels}>About Kyle <span><Arrow /></span></a>
+					<a href="/resume" aria-current={page.url.pathname === '/resume' ? 'page' : undefined} data-resting={resting === 'resume' ? '' : undefined}>Résumé <span><Arrow /></span></a>
 				</div>
 			{/if}
 			{#if contactOpen}

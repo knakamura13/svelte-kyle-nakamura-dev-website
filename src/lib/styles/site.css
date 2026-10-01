@@ -36,7 +36,15 @@ body:has(.concept)::after { display:none; }
 .floating-nav:focus-within { transform:none; }
 .capsule { display:flex; align-items:center; padding:6px; gap:3px; background:var(--surface); border-radius:100px; box-shadow:0 3px 28px #26372c0a; border:1px solid #23312808; }
 .capsule>a,.capsule>button { min-height:46px; padding:12px 23px; border-radius:100px; background:transparent; font-size:13px; font-weight:600; transition:background 160ms, color 160ms; }
-.capsule>a:hover,.capsule>.mobile-menu:hover { background:#f0f2ee; }
+.capsule { position:relative; }
+.capsule>a,.capsule>button { position:relative; z-index:1; }
+.capsule>a:hover,.capsule>.mobile-menu:hover,.capsule>a[data-resting] { background:#f0f2ee; }
+/* Once the highlight is measured it takes over from the per-link backgrounds (still the fallback until then). */
+.capsule.pill-ready>a:hover,.capsule.pill-ready>a[data-resting] { background:transparent; }
+.nav-pill { position:absolute; left:0; top:0; z-index:0; width:0; height:0; border-radius:100px; background:#f0f2ee; opacity:0; pointer-events:none; }
+.nav-pill.shown { opacity:1; }
+.nav-pill.moves { transition:transform 170ms var(--ease), width 170ms var(--ease), opacity 120ms ease; }
+@media(prefers-reduced-motion:reduce) { .nav-pill.moves { transition:none; } }
 .capsule>a span { margin-left:7px; }
 .capsule>.contact-trigger { background:var(--ink); color:white; display:flex; align-items:center; gap:22px; padding-inline:24px; }
 .capsule>.contact-trigger:hover { background:var(--accent); }
@@ -52,6 +60,7 @@ body:has(.concept)::after { display:none; }
 .contact-options button { min-height:44px; background:transparent; padding:0 10px 0 0; }
 .contact-options a { padding-block:12px; }
 .copy-status { min-height:34px; font-size:12px; color:var(--accent); }
+.mobile-links a[data-resting] { background:#f0f2ee; }
 .mobile-links a { display:flex; justify-content:space-between; padding:14px 4px; border-bottom:1px solid #eee; }
 
 /* Links. */
@@ -101,7 +110,7 @@ button.stack-card { background:none; padding:0; text-align:left; }
  .monogram { font-size:26px; }
  .floating-nav { top:20px; right:16px; }
  .capsule { padding:4px; }
- .capsule>.desktop-nav { display:none; }
+ .capsule>.desktop-nav,.nav-pill { display:none; }
  .capsule>.mobile-menu { display:flex; gap:10px; align-items:center; }
  .capsule>button { min-height:44px; font-size:11px; padding:11px 14px; }
  .capsule>.contact-trigger { padding:11px 16px; gap:10px; }
