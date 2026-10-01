@@ -101,7 +101,58 @@ test.describe('Payment Stack on send-money', () => {
 		await page.locator('.pay-zelle').click();
 		await expect(page.locator('.pay-zelle .stack-caption')).toHaveText('Number copied.');
 		await expect(page.locator('[aria-live="polite"]')).toHaveText('Zelle number copied');
+		await expect(page.locator('.pay-zelle .copy-glyph')).toHaveAttribute('data-state', 'success');
+		await expect(page.locator('.pay-zelle .glyph-check')).toHaveCSS('opacity', '1');
+		await expect(page.locator('.pay-zelle .glyph-copy')).toHaveCSS('opacity', '0');
 		expect(await writes()).toEqual(['6263885416']);
+	});
+
+	test('Zelle shows a checkmark only on success and presses the inner face, not the card', async ({ page }) => {
+		await stubClipboard(page, 'succeed');
+		await page.goto('/send-money');
+		const press = await page.locator('.pay-zelle').evaluate((card) => {
+			const face = card.querySelector('.stack-face') as HTMLElement;
+			return new Promise<{ face: number; card: number }>((resolve) => {
+				card.addEventListener('click', () => setTimeout(() => resolve({ face: face.getAnimations().length, card: (card as HTMLElement).getAnimations().length }), 50), { once: true });
+				(card as HTMLElement).click();
+			});
+		});
+		expect(press.face).toBe(1);
+		expect(press.card).toBe(0);
+	});
+
+	test('Zelle skips the press under reduced motion but still confirms', async ({ page }) => {
+		await page.emulateMedia({ reducedMotion: 'reduce' });
+		await stubClipboard(page, 'succeed');
+		await page.goto('/send-money');
+		await page.locator('.pay-zelle').click();
+		await expect(page.locator('.pay-zelle .copy-glyph')).toHaveAttribute('data-state', 'success');
+		expect(await page.locator('.pay-zelle .stack-face').evaluate((face) => face.getAnimations().length)).toBe(0);
+	});
+
+	test('Zelle ignores a stale slow result and keeps focus on the button', async ({ page }) => {
+		await page.addInitScript(() => {
+			let calls = 0;
+			Object.defineProperty(navigator, 'clipboard', {
+				configurable: true,
+				value: {
+					writeText: () => {
+						calls++;
+						return calls === 1 ? new Promise((resolve) => setTimeout(resolve, 600)) : Promise.reject(new DOMException('Denied', 'NotAllowedError'));
+					}
+				}
+			});
+		});
+		await page.goto('/send-money');
+		const zelle = page.locator('.pay-zelle');
+		await zelle.focus();
+		await page.keyboard.press('Enter');
+		await page.keyboard.press('Space');
+		await expect(zelle.locator('.copy-glyph')).toHaveAttribute('data-state', 'failure');
+		await page.waitForTimeout(900);
+		await expect(zelle.locator('.copy-glyph')).toHaveAttribute('data-state', 'failure');
+		await expect(zelle).toBeFocused();
+		await expect(zelle).toBeEnabled();
 	});
 
 	test('Zelle reports a failed copy and shows the number', async ({ page }) => {
@@ -110,6 +161,8 @@ test.describe('Payment Stack on send-money', () => {
 		await page.locator('.pay-zelle').click();
 		await expect(page.locator('.pay-zelle .stack-caption')).toHaveText('Couldn’t copy. The number is (626) 388-5416.');
 		await expect(page.locator('[aria-live="polite"]')).toHaveText('Could not copy. The Zelle number is (626) 388-5416.');
+		await expect(page.locator('.pay-zelle .copy-glyph')).toHaveAttribute('data-state', 'failure');
+		await expect(page.locator('.pay-zelle .glyph-check')).toHaveCSS('opacity', '0');
 	});
 });
 

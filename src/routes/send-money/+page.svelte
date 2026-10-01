@@ -1,28 +1,58 @@
 <script lang="ts">
+	import { onDestroy } from 'svelte';
 	import Arrow from '$lib/components/Arrow.svelte';
 	import { stack } from '$lib/motion/stack';
 
 	const zelle = { display: '(626) 388-5416', digits: '6263885416' };
 	const idleCaption = 'Copies the number.';
-	let zelleCaption = $state(idleCaption);
-	let copyStatus = $state('');
+	const feedbackMs = 4000;
+	let copyState = $state<'idle' | 'success' | 'failure'>('idle');
+	let zelleFace: HTMLElement | undefined = $state();
+	let attempt = 0;
 	let copyTimer: ReturnType<typeof setTimeout> | undefined;
 
+	let zelleCaption = $derived(
+		copyState === 'success'
+			? 'Number copied.'
+			: copyState === 'failure'
+				? `Couldn’t copy. The number is ${zelle.display}.`
+				: idleCaption
+	);
+	let copyStatus = $derived(
+		copyState === 'success'
+			? 'Zelle number copied'
+			: copyState === 'failure'
+				? `Could not copy. The Zelle number is ${zelle.display}.`
+				: ''
+	);
+
+	function pressAndReturn() {
+		if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+		zelleFace?.animate([{ translate: '0 0' }, { translate: '0 2px' }, { translate: '0 0' }], {
+			duration: 160,
+			easing: 'ease-out'
+		});
+	}
+
 	async function copyZelle() {
+		const current = ++attempt;
+		clearTimeout(copyTimer);
+		let result: 'success' | 'failure' = 'success';
 		try {
 			await navigator.clipboard.writeText(zelle.digits);
-			zelleCaption = 'Number copied.';
-			copyStatus = 'Zelle number copied';
 		} catch {
-			zelleCaption = `Couldn’t copy. The number is ${zelle.display}.`;
-			copyStatus = `Could not copy. The Zelle number is ${zelle.display}.`;
+			result = 'failure';
 		}
-		clearTimeout(copyTimer);
-		copyTimer = setTimeout(() => {
-			zelleCaption = idleCaption;
-			copyStatus = '';
-		}, 4000);
+		if (current !== attempt) return;
+		copyState = result;
+		if (result === 'success') pressAndReturn();
+		copyTimer = setTimeout(() => (copyState = 'idle'), feedbackMs);
 	}
+
+	onDestroy(() => {
+		attempt++;
+		clearTimeout(copyTimer);
+	});
 </script>
 
 <svelte:head>
@@ -66,8 +96,14 @@
 		</li>
 		<li>
 			<button class="stack-card pay-zelle" type="button" data-angle="5" data-clear="80" onclick={copyZelle}>
-				<span class="stack-face">
-					<span class="stack-title">Zelle <span aria-hidden="true">⧉</span></span>
+				<span class="stack-face" bind:this={zelleFace}>
+					<span class="stack-title">
+						Zelle
+						<span class="copy-glyph" aria-hidden="true" data-state={copyState}>
+							<span class="glyph-copy">⧉</span>
+							<span class="glyph-check">✓</span>
+						</span>
+					</span>
 					<span class="pay-handle">{zelle.display}</span>
 					<img src="/icons/logo-zelle-circle.png" alt="" width="256" height="256" />
 					<span class="stack-caption">{zelleCaption}</span>
@@ -82,6 +118,12 @@
 	.send-money { display:grid; grid-template-columns:minmax(240px,.76fr) minmax(0,1.24fr); gap:10%; align-items:start; padding-bottom:85px; }
 	.pay-handle { display:block; font-family:'Newsreader Variable',Georgia,serif; font-size:27px; line-height:1.15; letter-spacing:-.04em; margin-top:6px; }
 	.stack-card img { width:56px; height:56px; margin-top:26px; }
+	.copy-glyph { display:inline-grid; }
+	.copy-glyph>span { grid-area:1 / 1; transition:opacity 160ms ease; }
+	.glyph-check { opacity:0; }
+	.copy-glyph[data-state='success'] .glyph-copy { opacity:0; }
+	.copy-glyph[data-state='success'] .glyph-check { opacity:1; }
+	@media(prefers-reduced-motion:reduce) { .copy-glyph>span { transition:none; } }
 	.pay-venmo { z-index:1; }
 	.pay-cash { z-index:2; }
 	.pay-paypal { z-index:3; }
