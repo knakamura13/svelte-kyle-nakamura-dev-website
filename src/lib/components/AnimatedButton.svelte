@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { Snippet } from 'svelte';
+	import { onDestroy, type Snippet } from 'svelte';
 
 	type ButtonSize = 'big' | 'small';
 	type ButtonIconSize = 'big' | 'med' | 'small';
@@ -32,7 +32,12 @@
 		children
 	}: Props = $props();
 
-	let copied = $state(false);
+	const COPY_FEEDBACK_MS = 4000;
+
+	let copyStatus = $state<'idle' | 'success' | 'failure'>('idle');
+	let copyButton: HTMLButtonElement | undefined = $state();
+	let attempt = 0;
+	let resetTimer: ReturnType<typeof setTimeout> | undefined;
 
 	let isExternalLink = $derived(typeof href === 'string' && !!href.length && !href.startsWith('/'));
 	let isPDFLink = $derived(typeof href === 'string' && !!href.length && href.endsWith('.pdf'));
@@ -59,17 +64,35 @@
 		if (href) window.open(href, '_blank');
 	}
 
+	function pressAndReturn(): void {
+		if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+		copyButton?.animate(
+			[{ transform: 'translateY(0)' }, { transform: 'translateY(2px)' }, { transform: 'translateY(0)' }],
+			{ duration: 160, easing: 'ease-out' }
+		);
+	}
+
 	async function handleClipboardClick(): Promise<void> {
+		const current = ++attempt;
+		clearTimeout(resetTimer);
+		let result: 'success' | 'failure' = 'success';
 		try {
 			await navigator.clipboard.writeText(clipboardText);
 		} catch {
-			// Clipboard API unavailable; nothing else to do
+			result = 'failure';
 		}
-		copied = true;
-		setTimeout(() => {
-			copied = false;
-		}, 1000);
+		if (current !== attempt) return;
+		copyStatus = result;
+		if (result === 'success') pressAndReturn();
+		resetTimer = setTimeout(() => {
+			copyStatus = 'idle';
+		}, COPY_FEEDBACK_MS);
 	}
+
+	onDestroy(() => {
+		attempt++;
+		clearTimeout(resetTimer);
+	});
 </script>
 
 {#if isExternalLink}
@@ -90,22 +113,34 @@
 	</a>
 {:else if isClipboardLink}
 	<button
+		bind:this={copyButton}
 		onclick={handleClipboardClick}
 		aria-label={ariaLabel}
 		title={ariaLabel}
-		class={classes}
-		disabled={copied}
+		class={[classes, copyStatus === 'success' && 'copied']}
 	>
 		<span class="btn-text">
-			{#if copied}
-				Copied phone number 👍
+			{#if copyStatus === 'success'}
+				Copied phone number
+			{:else if copyStatus === 'failure'}
+				Copy failed: {clipboardText}
 			{:else}
 				{@render children()}
 			{/if}
 		</span>
 
 		<img src={icon} alt="" aria-hidden="true" class="btn-icon" />
+		<svg class="btn-check" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+			<path d="M5 12.5l4.5 4.5L19 7.5" />
+		</svg>
 	</button>
+	<span class="copy-status" role="status">
+		{#if copyStatus === 'success'}
+			Copied phone number to clipboard
+		{:else if copyStatus === 'failure'}
+			Could not copy automatically. Select the number {clipboardText} to copy it manually.
+		{/if}
+	</span>
 {:else if isPDFLink}
 	<a
 		onclick={handlePDFClick}
@@ -225,6 +260,65 @@
 		aspect-ratio: 1 / 1 !important;
 		border-radius: unset;
 		pointer-events: none;
+	}
+
+	.copy-status {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
+	}
+
+	.btn-check {
+		position: absolute;
+		top: 0;
+		right: 1rem;
+		bottom: 0;
+		height: 55%;
+		margin: auto;
+		fill: none;
+		stroke: currentColor;
+		stroke-width: 2.5;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+		opacity: 0;
+		pointer-events: none;
+		transition: opacity 0.16s ease;
+	}
+
+	.animated-btn.icon--big .btn-check {
+		height: 70%;
+		right: 0.85rem;
+	}
+
+	.animated-btn.icon--small .btn-check {
+		height: 40%;
+		right: 0.75rem;
+	}
+
+	/* Crossfade the copy glyph to a checkmark and keep the text shifted to make room. */
+	.animated-btn.copied img.btn-icon,
+	.animated-btn.copied:hover img.btn-icon,
+	.animated-btn.copied:focus-visible img.btn-icon {
+		opacity: 0;
+	}
+
+	.animated-btn.copied .btn-check {
+		opacity: 1;
+	}
+
+	.animated-btn.copied .btn-text {
+		transform: translateX(-0.75rem);
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.btn-check,
+		img.btn-icon,
+		.btn-text {
+			transition: none;
+		}
 	}
 
 	.animated-btn.invert-icon img.btn-icon {
