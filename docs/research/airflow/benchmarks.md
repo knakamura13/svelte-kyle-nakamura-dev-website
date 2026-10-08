@@ -1,6 +1,6 @@
 # Airflow experiment: published benchmark data and sources
 
-Date: 2026-10-07. Status: first pass. Sections 1 to 3 are source-checked as stated. Sections 4 and 5 are still being researched and are marked UNCONFIRMED until the second pass.
+Date: 2026-10-07. Status: all five questions are covered at the confidence stated in each section. Anything that no readable source confirms is marked UNCONFIRMED with the reason.
 
 ## How each fact was verified
 
@@ -19,8 +19,8 @@ Search-engine summaries were used as leads only. No number below rests on one. "
 | 1 | Ghia Re 1000 | Both centreline tables confirmed by 3 to 4 independent transcriptions (original unread). One entry disputed 2 to 1. Primary vortex confirmed. Ghia's own secondary-vortex values UNCONFIRMED. |
 | 2 | de Vahl Davis | Table V read on the original scan [P], reproduced by later papers. Refined solutions cross-checked. |
 | 3 | Round jet | Constants confirmed only through secondary compilations. Ranges stated. Fischer, Awbi and fan-jet constants UNCONFIRMED. |
-| 4 | Orifice and stack | UNCONFIRMED, in progress. |
-| 5 | Well-mixed decay, CADR | UNCONFIRMED, in progress. |
+| 4 | Orifice and stack | Orifice law, series area, per-opening stack flows, neutral level and Boussinesq form confirmed in several open sources and re-derived. The ASHRAE chapter (edition, equation numbers) and Linden's own A* UNCONFIRMED. |
+| 5 | Well-mixed decay, CADR | Mass balance and CADR = V (k_e - k_n) confirmed in the original documents (Nazaroff 2004, AHAM AC-1-2020). Deposition-velocity table and several original papers UNCONFIRMED. |
 
 ## 1. Lid-driven cavity, Ghia, Ghia and Shin (1982), Re = 1000
 
@@ -411,17 +411,22 @@ Notation: d nozzle diameter, U_0 exit (bulk) velocity, x axial distance from the
 
 None of the primary papers' own constants were readable (paywalled; the Cambridge pages show abstracts only [A]). The values below are read in later compilations.
 
-| Study | B | S (half-velocity radius slope) | Re (as quoted) | Sources agreeing |
-|---|---|---|---|---|
-| Wygnanski and Fiedler (1969), hot wire, self-preserving beyond about 70 d [A for the 70 d] | 5.4 | 0.086 | not in the sources read | B: J2 only. S: J5 |
-| O'Neill et al. | 5.6 | not given | not given | J2 only |
-| Hussein, Capp and George (1994), top-hat jet in a large room, hot wire and LDA | 5.8 | 0.094 | about 1e5 | B: J2, J3. S: J5. Re: J3, J6 [A] |
-| Panchapakesan and Lumley (1993), air jet | 6.06 | about 0.10 | 1.1e4 | B: J2, J3, J4. S: J2 (value 0.10). Re: J3, J4 |
-| Bhat and Narasimha (1996) | not given | 0.09 | not given | J5 |
-| Pope (2000), textbook | 5.8 | 0.094 | not applicable | B: J1 (eq. 5.6 as quoted by a paper that follows Pope). S: J1 (lecture notes citing Pope's Fig. 5.15 derive S = 8(sqrt2 - 1) x 0.028 = 0.094 from a constant eddy viscosity) |
-| Fischer et al. (1979), via Turner (1986) in J5 | not read (UNCONFIRMED) | 1/e-width slope 0.108, which is a half-width slope of 0.090 (derived) | not given | J5 |
+| Study | B | S (half-velocity radius slope) | abs(x0)/d | Re (as quoted) | Sources agreeing |
+|---|---|---|---|---|---|
+| Wygnanski and Fiedler (1969), hot wire, self-preserving beyond about 70 d [A for the 70 d] | 5.70 | 0.086 | 3.0 | about 1e5 | J14 (all four values). J2 prints B = 5.4 (conflict, see below). S also J5 |
+| Hussein, Capp and George (1994), top-hat jet in a large room, hot wire and LDA | 5.8 | 0.094 | 4.0 | about 1e5 | B: J14, J2, J3. S: J14, J5. x0: J14. Re: J14, J3, J6 [A] |
+| Panchapakesan and Lumley (1993), air jet | 6.06 | 0.096 (J2 gives 0.10) | 0.0 | 1.1e4 | B: J14, J2, J3, J4. S: J14, J2. x0: J14. Re: J14, J3, J4 |
+| Rodi (1975) | 5.90 | 0.086 | not given | 8.7e4 | J14 only |
+| O'Neill et al. | 5.6 | not given | not given | not given | J2 only |
+| Bhat and Narasimha (1996) | not given | 0.09 | not given | not given | J5 |
+| Pope (2000), textbook | 5.8 | 0.094 | not given | not applicable | B: J1 (eq. 5.6 as quoted by a paper that follows Pope). S: J1 (lecture notes citing Pope's Fig. 5.15 derive S = 8(sqrt2 - 1) x 0.028 = 0.094 from a constant eddy viscosity) |
+| Fischer et al. (1979), via Turner (1986) in J5 | not read (UNCONFIRMED) | 1/e-width slope 0.108, which is a half-width slope of 0.090 (derived) | not given | not given | J5 |
 
-Accepted range from these sources: B = 5.4 to 6.1, most quoted 5.8; S = 0.086 to 0.10, most quoted 0.094. Hussein's 1/e-width slope is 0.114 (J5), which is a half-width slope of 0.0949 (derived), consistent with 0.094. LES in J4 finds B rising with Reynolds number (5.96 at Re 3.6e3, 6.28 to 6.37 at 8.8e4, 6.55 to 7.40 at 4e5), simulation only.
+Consensus as stated by J14 for high-Reynolds-number axisymmetric jets, citing Wygnanski and Fiedler, Panchapakesan and Lumley and Hussein et al.: B about 5.7 to 6.1, S about 0.086 to 0.096, abs(x0)/D about 3 to 4. Experiments in J14's table outside that band: Birch et al. (1978) B = 4.0 with S = 0.097 (Re 1.6e4), Fukushima et al. (2002) B = 6.70 (Re 2e3), Buchwald et al. (2024) B = 6.4 with S = 0.103 (Re 3.3e4). Most quoted single values: B = 5.8, S = 0.094 (Pope, Hussein).
+
+Disagreement on Wygnanski and Fiedler's B: J14 prints 5.70 in a full row (B, S, x0, Re), J2 prints 5.4. I use 5.7 because the J14 row is complete and matches J14's stated band; the paper itself is paywalled, so this is unresolved against the original.
+
+Hussein's 1/e-width slope is 0.114 (J5), a half-width slope of 0.0949 (derived), consistent with 0.094. LES in J4 finds B rising with Reynolds number (5.96 at Re 3.6e3, 6.28 to 6.37 at 8.8e4, 6.55 to 7.40 at 4e5), simulation only.
 
 Primary-paper statements confirmed from abstracts [A], J6: Hussein et al. studied a top-hat jet, Re of about 1e5, and report that their data satisfy the momentum equations and differ from earlier work because of the smaller enclosures used earlier. Wygnanski and Fiedler: self-preserving only at about 70 d. Panchapakesan and Lumley: momentum flux across the jet within plus or minus 5 percent of the nozzle input.
 
@@ -446,20 +451,20 @@ No single accepted value exists. The result depends on the definition (0.99, 0.9
 | Han and Mungal, co-flow jet: 0.32 in the far field but only after about 35 D | 0.32 | J7 (arXiv 1903.01906) |
 | Entrainment coefficient per half-width, alpha_E | 0.054 (Fischer via Turner), 0.057 (Hussein), 0.0585 (Bhat and Narasimha) | J5 |
 
-The constant is a slope. The law is Q(x)/Q_0 = 0.32 x/d plus an offset that depends on whether Q is the total or the entrained flux (the two differ by 1). Test the slope for x/d of about 13 and above, not the absolute ratio nearer the nozzle. "x/d above 6" as the validity limit of Ricou and Spalding: UNCONFIRMED (not found in a readable source). Cross-check, derived: a Gaussian profile with U_c = B d U_0/(x - x0) and r_half = S (x - x0) gives d(Q/Q_0)/d(x/d) = 4 S^2 B / ln 2, which is 0.296 for B = 5.8 and S = 0.094, 0.309 for B = 6.06, 0.318 for S = 0.0975, against 0.32.
+The constant is a slope. The law is Q(x)/Q_0 = 0.32 x/d plus an offset that depends on whether Q is the total or the entrained flux (the two differ by 1). Test the slope for x/d of about 13 and above, not the absolute ratio nearer the nozzle. "x/d above 6" as the validity limit of Ricou and Spalding: UNCONFIRMED (not found in a readable source). Cross-check, derived: a Gaussian profile with U_c = B d U_0/(x - x0) and r_half = S (x - x0) gives d(Q/Q_0)/d(x/d) = 4 S^2 B / ln 2, which is 0.243 for Wygnanski and Fiedler (B = 5.70, S = 0.086), 0.296 for Hussein et al. (5.8, 0.094) and 0.322 for Panchapakesan and Lumley (6.06, 0.096), against 0.32.
 
 ### 3.4 Momentum flux
 
 - Conserved: M = rho integral of U^2 dA is independent of x (lecture notes in J1 that cite Pope's Fig. 5.15). Nozzle value for a top-hat exit: M = rho U_0^2 pi d^2 / 4. Confirmed to within plus or minus 5 percent by Panchapakesan and Lumley and satisfied by Hussein et al. [A, J6].
 - Derived, Gaussian profile u = U_c exp(-r^2/b^2), b = r_half / sqrt(ln 2): M = (pi/2) rho U_c^2 b^2, so U_c = 0.6643 sqrt(M/rho) / (S (x - x0)) and, for a top-hat exit, B S = sqrt(ln 2 / 2) = 0.5887.
-- The measured pairs give B S = 0.545 (Pope, 7.4 percent below 0.5887) and 0.464 (Wygnanski and Fiedler, 21 percent below). So the mean-flow Gaussian closure is only approximate. Use the measured B as the test target and the closure as a sanity check.
+- The measured pairs give B S = 0.490 (Wygnanski and Fiedler, 16.7 percent below 0.5887), 0.545 (Hussein et al. and Pope, 7.4 percent below) and 0.582 (Panchapakesan and Lumley, 1.2 percent below). So the mean-flow Gaussian closure is only approximate. Use the measured B as the test target and the closure as a sanity check.
 
 ### 3.5 Top-hat nozzle versus fan
 
 | Item | Contoured top-hat nozzle | Fan (swirl, hub wake) | Basis |
 |---|---|---|---|
 | Far-field laws (1/(x - x0) decay, linear spreading, momentum conservation) | Hold once the jet is self-similar. Wygnanski and Fiedler found self-preservation only beyond about 70 d in their hot-wire work; the onset distance for the mean velocity is UNCONFIRMED here | Hold asymptotically for any exit condition in the similarity theory of George (1989); the constants depend on the exit condition | J6 [A] (Mi et al. 2001: two nozzles gave significantly different jets over 0 to 70 d at Re 16,000, supporting George) |
-| B, x0, S | B 5.4 to 6.1, S 0.086 to 0.10 (section 3.1) | UNCONFIRMED: no readable source gives B, x0 or S for a fan jet | none found |
+| B, x0, S | B 5.7 to 6.1, S 0.086 to 0.096, abs(x0)/d 3 to 4 (section 3.1) | UNCONFIRMED: no readable source gives B, x0 or S for a fan jet | none found |
 | Swirl | none | Weak swirl, swirl number 0.15: scaled far field identical to the non-swirling jet; 0.25: only the virtual origin shifted (0.75 to -2.9 jet diameters as printed). Mean azimuthal velocity decays as 1/x^2, streamwise as 1/x, so the far jet behaves as a non-swirling jet. Measured to 50 d. Stronger swirl: UNCONFIRMED here | J9 [A] |
 | Potential core | 4 to 7 d, definition dependent | No uniform core. A hub wake fills in over some diameters (inference, no readable source) | inference |
 | Entrainment 0.32 | Measured for top-hat air jets (Re above 25,000), x/d of 13 and above | UNCONFIRMED; the near field of a swirling or non-uniform exit may entrain differently | J7 |
@@ -475,11 +480,11 @@ Form: U_x / U_0 = K sqrt(A_0) / x, valid in the fully developed zone (zone 3) of
 | Jet attached to a ceiling or wall | about 1.4 x the free-jet value | J10 [R] (cites Nottage et al. 1952 and Miller 1990) |
 | ASHRAE Handbook (1993) diameter form: U_x / U_0 = K D / (x - x_p), x_p the virtual origin | K defined; values in the cited test depend on averaging time (6.8 to 7.7 for short windows) | J12 [R] |
 | Nielsen's K_a, wall jet, U_x / U_0 = K_a sqrt(a_0) / (x + x_0), x_0 about zero | nozzles 8 to 10 (measured 8), diffusers 3 to 5, overall range 2 to 10 | J11, J13 [R] |
-| Round top-hat free jet from B (derived, K_a = 2 B / sqrt(pi) = 1.128 B, using A_0 = pi d^2 / 4) | 6.1 (B = 5.4), 6.5 (B = 5.8), 6.8 (B = 6.06) | derived from J2, J3 |
+| Round top-hat free jet from B (derived, K_a = 2 B / sqrt(pi) = 1.128 B, using A_0 = pi d^2 / 4) | 6.4 (B = 5.7), 6.5 (B = 5.8), 6.8 (B = 6.06) | derived from J14, J3 |
 | Awbi, Ventilation of Buildings, tabulated K_a | UNCONFIRMED (book not accessible) | none |
 | ASHRAE Handbook Fundamentals chapter on space air diffusion | UNCONFIRMED (paywalled) | none |
 
-Consistency check, derived: 5.7 x 1.4 = 8.0, matching Nielsen's measured nozzle value of 8. K on a sqrt(A_0) basis is 1.128 times the diameter-based B, so a quoted K of 5.8 to 7 is a sqrt(A_0)-based range (it contains 6.1 to 6.8) and is not the diameter-based B range (5.4 to 6.1).
+Consistency check, derived: 5.7 x 1.4 = 8.0, matching Nielsen's measured nozzle value of 8. K on a sqrt(A_0) basis is 1.128 times the diameter-based B, so a quoted K of 5.8 to 7 is a sqrt(A_0)-based range (it contains 6.4 to 6.8) and is not the diameter-based B range (5.7 to 6.1).
 
 ### 3.7 TypeScript data
 
@@ -487,8 +492,10 @@ Consistency check, derived: 5.7 x 1.4 = 8.0, matching Nielsen's measured nozzle 
 /** Round turbulent free jet, far field. U_c/U_0 = B d/(x - x0), r_half = S (x - x0).
  *  Values from published compilations (section 3.1); typical = Pope (2000) / Hussein et al. (1994). */
 export const ROUND_JET_FAR_FIELD = {
-	decayConstantB: { low: 5.4, typical: 5.8, high: 6.06 },
-	spreadingRateS: { low: 0.086, typical: 0.094, high: 0.1 },
+	decayConstantB: { low: 5.7, typical: 5.8, high: 6.06 },
+	spreadingRateS: { low: 0.086, typical: 0.094, high: 0.096 },
+	/** abs(x0)/d, Wygnanski and Fiedler 3.0, Hussein et al. 4.0 */
+	virtualOriginDiameters: { low: 3, high: 4 },
 	/** d(Q/Q0)/d(x/d), x/d of about 13 and above, Ricou and Spalding (1961) as quoted in two later papers */
 	entrainmentSlope: 0.32,
 	/** Potential-core length in diameters; definition dependent, no single accepted value */
@@ -502,37 +509,233 @@ export const ROUND_JET_FAR_FIELD = {
 
 ## 4. Orifice flow and stack effect
 
-Status: UNCONFIRMED, in progress. Nothing here is source-verified yet; the second pass will replace this section with confirmed formulas, ASHRAE edition and equation numbers where readable, and open equivalents (AIVC, NIST CONTAM, EnergyPlus).
+Tags for this section: O1 to O11 were read by a research agent on extracted PDF text or rendered page images (agent-read); I did not re-read them. I re-derived the stack-effect formulas in 4.3 and 4.4 myself and checked one row of the temperature-denominator table by hand. O12 and O13 are fetch-tool summaries of HTML pages and are used only for statements marked as such. The ASHRAE Handbook Fundamentals chapter on ventilation and infiltration was not read in any edition (paywalled, not bypassed), so ASHRAE edition and equation numbers are UNCONFIRMED. Linden (1999), Linden, Lane-Serff and Smeed (1990), CIBSE AM10 and Etheridge and Sandberg were not read.
 
-Forms the solver already uses, with their status:
+### 4.1 Orifice equation and discharge coefficient
 
-| Item | Form | Status |
+| Item | Statement | Sources agreeing |
 |---|---|---|
-| Sharp-edged orifice | Q = C_d A sqrt(2 dP / rho) | standard Bernoulli form; ASHRAE edition and equation number UNCONFIRMED; C_d of 0.6 to 0.65 and what changes it UNCONFIRMED |
-| Two openings in series | A_eff = 1 / sqrt(1/A1^2 + 1/A2^2) for equal C_d | derived by equating the two flows; UNCONFIRMED in a source |
-| Stack flow, openings at two heights | Q = C_d A_eff sqrt(2 g H (T_i - T_o) / T_i) | UNCONFIRMED: definition of H (opening mid-heights) and the choice of T_i versus T_o in the denominator not yet read in a source |
-| Neutral pressure level, unequal areas | height above the lower opening = H A2^2 / (A1^2 + A2^2), A1 lower and A2 upper, Boussinesq limit | derived; UNCONFIRMED |
-| Boussinesq form | Q = C_d A_eff sqrt(2 g beta dT H), beta = 1 / T_ref | derived; UNCONFIRMED. The T_i versus T_o choice changes the result by about dT / (2 T), under 2 percent for dT up to 10 K |
+| Orifice law | Q = Cd A sqrt(2 dP / rho). Mass flow m = Cd A sqrt(2 rho dP). A is the free (geometric) area, dP the pressure drop, rho the density of the air passing through. Effective area A_eff = Cd A_f, equal to the vena-contracta area | O3 Eq. 20, O2 p. 225, O4 Eq. 1, O9 Eq. 5, O10 Eq. 1, O11 slide 13 (all agree) |
+| Sharp-edged orifice Cd | 0.61 for a flat-plate orifice; 0.62 for aperture-to-wall ratio below 0.1; about 0.6 | O2 (0.61), O5 (0.62), O6 (about 0.6), O3 ("close to 0.6, slightly higher for other building openings") |
+| Windows and doors | 0.6 to 0.7 for building flow paths (O1 p. 4). 0.6 to 0.65 for small square-edged openings and 0.6 +/- 0.1 for windows and doors, both as relayed in O10. Measured windows span about 0.2 to 1.0 (O9: 0.65 to about 1.0; Kurabuchi and Ohba 0.2 to 0.4 as relayed in O10). Values above 1 are measurement artefacts (O9) | O1, O9, O10 |
+| Rounded edges | 0.9 to 0.95 | O10 (relays Andersen 2002) |
+| What changes Cd | Reynolds number: a sharp-edged orifice is Re-independent above about 100 (O4, citing Etheridge 2012), window Cd varies at small dP and plateaus at larger dP (O9, O10, O11). Geometry and edge: "sharp-edged" means L/d_h below 2, rounding raises Cd (O4, O10). Area definition (O9, O10). Temperature difference (O9: Cd falls at large dT). Wind incidence: about 0.58 at 0 degrees to about 0.1 at 90 degrees (O10 Fig. 4, relayed) | as listed |
+| Cd versus temperature difference, published fits | Kiel and Wilson 1989: Cd = 0.4 + 0.0075 dT. Riffat 1989: Cd = 0.0835 (dT/T)^-0.313. Both as relayed in O10. ASHRAE 2009: Cd = 0.40 + 0.0045 abs(Ti - To), as stated by the EnergyPlus and DesignBuilder pages, not read in ASHRAE. The trend sign is contested | O10 (relayed), O12 and O13 (fetch-tool summaries) |
+| CONTAM default | two-way single-opening Cd = 0.78, from a profile-integrated form (a different formula) | O3 p. 65 |
+| Area terminology | "effective area" differs between standards: ASHRAE 2013 uses Cd A_f, CIBSE 2005 uses Cd A_f / 0.61 | O4 |
+
+### 4.2 Openings in series and in parallel
+
+| Item | Statement | Sources agreeing |
+|---|---|---|
+| Series, general | 1 / A_eff^2 = sum over openings of 1 / (Cd_i A_i)^2. Same Q, pressure drops add | O4 Eq. 10 to 11 |
+| Series, two openings, equal Cd | A_eff = Cd A1 A2 / sqrt(A1^2 + A2^2) (Cd = 0.62 in O5 procedure B) | O5, O4. Derived by equating the two flows |
+| Validity | openings far enough apart that their streamlines do not interact, uniform density | O4 |
+| Parallel | A_eff = sum of Cd_i A_i. Same dP, flows add | O11 slide 16. Its headings for series and parallel are swapped, the formulas match the drawings |
+| Examples (derived) | two equal openings give 0.7071 A. A1 = 1 and A2 = 0.5 with Cd = 1 give 0.4472 | derived |
+
+### 4.3 Thermal stack, two openings at different heights
+
+A1 is the lower opening and A2 the upper one. H is the vertical distance between the opening mid-heights (O6, O7, O11 slide 6). Indoor and outdoor air each have uniform temperature (in K) and are ideal gases at the same pressure.
+
+| Item | Statement | Sources agreeing |
+|---|---|---|
+| Per-opening flows, Ti above To | Inflow of outdoor air at the lower opening Q_in = Cd A1 sqrt(2 g z_n (Ti - To) / Ti). Outflow of indoor air at the upper opening Q_out = Cd A2 sqrt(2 g (H - z_n)(Ti - To) / To). Mass conservation gives Q_out / Q_in = Ti / To | O1 Eq. 6 to 7 (mass flows); volume forms re-derived by me |
+| ASHRAE form | Q = Cd A sqrt(2 g dH_NPL (Ti - To) / Ti) with dH_NPL the height from the lower opening mid-point to the neutral level. The ASHRAE text itself: UNCONFIRMED | O12 (fetch-tool summary, attributes it to ASHRAE 2009) |
+| Neutral pressure level above the lower opening | z_n / H = 1 / (1 + (Ti / To)(A1 / A2)^2) | O1 Eq. 8, O7 Eq. 7; re-derived by me |
+| Boussinesq limit of the neutral level | Ti / To tends to 1: z_n = H A2^2 / (A1^2 + A2^2). It moves toward the larger opening | same sources; derived |
+| Combined inflow volume | Q_in = Cd A1 A2 sqrt(2 g H (Ti - To) / Ti) / sqrt(A2^2 + (Ti / To) A1^2). Boussinesq form: Q = Cd (A1 A2 / sqrt(A1^2 + A2^2)) sqrt(2 g H dT / T_ref) | derived from the rows above; re-derived by me and checked numerically by the agent |
+| Equal-area check (derived) | z_n = H/2 and the two forms agree: Cd A sqrt(g H dT / T) | derived |
+| Reversal, To above Ti | z_n / H = 1 / (1 + (To / Ti)(A1 / A2)^2), still measured from the lower opening. Outdoor air enters at the upper opening, Q_in = Cd A2 sqrt(2 g (H - z_n)(To - Ti) / Ti), and leaves at the lower one, Q_out = Cd A1 sqrt(2 g z_n (To - Ti) / To) | O1 Eq. 10 (agent-read). O12 uses abs(dT) / T_zone and drops the sign |
+| Pressure difference | dP_s = g dh (rho_o - rho_i) = rho_o g dh (Ti - To) / Ti = rho_i g dh (Ti - To) / To. O2 writes -rho_0 g 273 (h2 - h1)(1 / T_ext - 1 / T_int) with rho_0 = 1.29 kg/m3 at 273 K. O11 slide 6 writes -rho g H dT / Ti. For Ti above To the indoor-minus-outdoor pressure is negative below the neutral level and positive above it. ASHRAE's printed form: UNCONFIRMED | O1 (heights from the neutral level), O2 p. 232, O11 |
+| Single tall opening | Q = (Cd A / 3) sqrt(g H dT / T), H the opening height, neutral level at mid-height, no factor 2 | O3 Eq. 69, O10 Eq. 2, O11 slide 15 Eq. 10 |
+
+Printing slips found by the agent in sources: O11 slide 15 Eq. 9 drops the factor 2; O1's reversed two-opening example prints 49.9 percent where its own Eq. 10 gives 49.0; O8 Eq. 5 prints a squared numerator that is dimensionally inconsistent. None of these is used.
+
+### 4.4 Boussinesq form, A* and the choice of temperature
+
+| Item | Statement | Sources agreeing |
+|---|---|---|
+| Boussinesq buoyancy | g' = g dT / T_ref with beta = 1 / T_ref. Q = Cd A_eff sqrt(2 g' H) = Cd A* sqrt(g' H) | derived. O6 defines g' with the denser ambient fluid as reference, which for a warm interior is g (Ti - To) / Ti. O8 Eq. 10 uses g (T_up - T0) / T0 |
+| A* | A* = sqrt(2) A_eff = A1 A2 / sqrt((A1^2 + A2^2) / 2) exactly, so Cd A* sqrt(g' H) is identical to Cd A_eff sqrt(2 g' H) | algebra, verified numerically by the agent |
+| Hunt and Linden | their A* folds discharge and expansion coefficients together (Eq. 5 to 6, C_D about 0.6, 0.5 to 1 for the expansion coefficient). With C_e = C_d it equals sqrt(2) times the series A_eff with Cd; otherwise it is larger (8 percent at C_e = 0.5 and 21 percent at C_e = 1 for equal areas) | O6 p. 709. Linden's own A* (1999 review, 1990 paper): UNCONFIRMED |
+
+Error of the Boussinesq form against the exact inflow of 4.3, for equal areas, H = 3 m, To = 273.15 K (script by the research agent; I checked the 10 K row by hand):
+
+| dT (K) | Ti in the denominator | To in the denominator | Mean T in the denominator |
+|---|---|---|---|
+| 2 | +0.18 percent | +0.55 percent | +0.37 percent |
+| 5 | +0.46 percent | +1.37 percent | +0.91 percent |
+| 10 | +0.91 percent | +2.74 percent | +1.81 percent |
+| 20 | +1.81 percent | +5.48 percent | +3.60 percent |
+| 30 | +2.71 percent | +8.20 percent | +5.35 percent |
+
+The choice matters at about dT / (2 T): 1.8 percent at 10 K and 5.4 percent at 30 K. The exact solution has Q_out / Q_in = Ti / To, so the form with Ti tracks the outdoor-air inflow and the form with To tracks the indoor-air outflow. A Boussinesq solver compared with the exact forms needs a tolerance of at least about dT / (2 T).
+
+### 4.5 TypeScript
+
+```ts
+export const G = 9.81;
+
+/** Volume flow through one opening. dP in Pa, rho in kg/m3. Signed by the sign of dP. */
+export const orificeFlow = (cd: number, area: number, dP: number, rho: number) =>
+	Math.sign(dP) * cd * area * Math.sqrt((2 * Math.abs(dP)) / rho);
+/** Effective areas, each e_i = Cd_i * A_i. */
+export const seriesArea = (...e: number[]) => 1 / Math.sqrt(e.reduce((s, x) => s + 1 / (x * x), 0));
+export const parallelArea = (...e: number[]) => e.reduce((s, x) => s + x, 0);
+
+/** Neutral level as a fraction of H above the lower opening. a1 lower, a2 upper, temperatures in K. */
+export const neutralLevelFraction = (a1: number, a2: number, ti: number, to: number) =>
+	1 / (1 + (ti / to) * (a1 / a2) ** 2);
+/** Outdoor-air inflow volume through the lower opening, Ti above To, exact for ideal gases. */
+export const stackInflow = (cd: number, a1: number, a2: number, h: number, ti: number, to: number) =>
+	(cd * a1 * a2 * Math.sqrt((2 * G * h * (ti - to)) / ti)) / Math.sqrt(a2 ** 2 + (ti / to) * a1 ** 2);
+/** Boussinesq form. dT and tRef in K. */
+export const stackBoussinesq = (cd: number, a1: number, a2: number, h: number, dT: number, tRef: number) =>
+	cd * ((a1 * a2) / Math.hypot(a1, a2)) * Math.sqrt((2 * G * h * dT) / tRef);
+/** Linden-style effective area, sqrt(2) times the series effective area for equal Cd. */
+export const aStar = (a1: number, a2: number) => (Math.SQRT2 * a1 * a2) / Math.hypot(a1, a2);
+```
 
 ## 5. Well-mixed room decay of a particulate or tracer
 
-Status: UNCONFIRMED, in progress. The second pass will cite Nazaroff (2004), Thatcher and Layton (1995), AHAM AC-1 and the CADR definition from the standard's text.
+Tags for this section: C1 (Nazaroff 2004) and C2 (AHAM AC-1-2020) are original documents. A research agent read them on rendered pages or extracted text. I re-checked Nazaroff's Eq. 1 on the page image, and in the extracted AC-1 text I re-checked Eq. 7, sections 3.13 and 3.14, the 1008 ft3 chamber, the sampling schedule, the 0.03 ACH limit and the CADR range limits. Rows marked (agent-read) were not re-read by me. Search-engine summaries were not used.
 
-| Item | Form | Status |
+### 5.1 Mass balance and solution
+
+| Item | Statement | Sources agreeing |
 |---|---|---|
-| Single-zone decay | dC/dt = -(lambda_vent + lambda_cleaner + lambda_dep) C, with lambda_vent = Q / V, lambda_cleaner = CADR / V, lambda_dep = v_d A_surface / V | standard single-zone mass balance; sources UNCONFIRMED |
-| Air changes per hour | lambda_vent in 1/s = ACH / 3600 | unit arithmetic |
-| CADR from decay constants | CADR = V (k_total - k_natural) | UNCONFIRMED; AHAM AC-1 text not yet read |
-| Unit conversions | 1 cfm = 1.699010796 m3/h (1 ft = 0.3048 m exactly); 1 m3/h = 0.5885778 cfm | arithmetic verified |
-| Gravitational-settling variant | lambda_settle = v_s A_floor / V = v_s / H for a room of height H; v_s = rho_p d^2 g C_c / (18 mu) | derived and standard; UNCONFIRMED in a source |
+| General single-zone balance | d(C_i V)/dt = E + C_o [Q_S (1 - eta_S) + Q_N + Q_L P] - C_i [Q_F eta_F + beta V + (Q_S + Q_N + Q_L)]. Q in m3/h, E in ug/h, beta in 1/h, V in m3. P applies to the leakage flow only, natural ventilation is unattenuated, eta_F is the single-pass efficiency of the recirculating filter flow Q_F | C1 Eq. 1 [P] |
+| Steady state | C_i = (E + C_o [...]) / (Q_F eta_F + beta V + sum of Q) | C1 Eq. 2 (agent-read) |
+| One-pathway form and solution | dC/dt = P a C_out - (a + k + k_HAC + k_ac) C, C(t) = (P a C_out / lambda)(1 - e^(-lambda t)) + C_0 e^(-lambda t), lambda = a + k + k_HAC + k_ac. a is the air-exchange rate, k the deposition loss rate | C3 Eq. 1 to 4 [R]. C7 gives the same with a source term |
+| Chamber decomposition | total decay k_e = k_V + k_dep + k_AC, natural decay k_n = k_V + k_dep, C_t = C_i e^(-k t) | C2 Annex E Eq. 6 to 7 and section 8.2.1 Eq. 1 [P] |
+| Case for the solver: no source, clean supply air | dC/dt = -(lambda_vent + lambda_cleaner + lambda_dep) C, so C(t) = C_0 exp(-lambda_tot t). C falls to 36.8 percent of C_0 at t = 1 / lambda_tot | derived from the rows above |
+
+Terms:
+
+| Term | Definition | Sources agreeing |
+|---|---|---|
+| lambda_vent = Q / V | air-exchange rate, the sum of flows into the building divided by V | C1 p. 6 and Fig. 3 caption |
+| lambda_cleaner = Q_F eta_F / V = CADR / V | filter flow times single-pass efficiency, over V. AC-1 defines CADR = V k_AC | C1 Eq. 1, C2 Annex E |
+| lambda_dep = beta = (sum over surfaces of v_d A) / V | beta is the first-order deposition loss-rate coefficient. The relation to deposition velocity and area is in the Nazaroff and Cass model in the 1989 thesis (Eq. 5.4). The 2004 paper does not write it | C1 (beta), C5 (relation) |
+
+The combined form dC/dt = P a C_out - (a + k) C + S/V is not printed verbatim in any source read. It is C1 Eq. 1 divided by V [derived]. Coagulation is second order and is excluded from every form above. C1 says it matters at high concentration, and AC-1's natural decay includes agglomeration.
+
+### 5.2 CADR
+
+| Item | Statement | Sources agreeing |
+|---|---|---|
+| Definition | CADR = V (k_e - k_n). CADR in cubic feet per minute, V the test-chamber volume in cubic feet, k_e the total decay rate with the cleaner on and k_n the natural decay rate with it off, both in 1/min | C2 section 8.4 Eq. 7 [P]. C8 states it in words ("rate on minus natural decay, times 1008") |
+| In words | removal rate with the cleaner on, minus the natural decay rate, times the chamber volume. A system-level measure with no linear relationship to airflow itself | C2 section 3.14 [P] |
+| SI and per-hour form | CADR [m3/h] = V [m3] (k_e - k_n) [1/h] | derived |
+| Getting k | C(t_i) = C_i exp(-k t_i). k from a least-squares regression of ln C on t, k = -slope. Two-point form k = ln(C_1 / C_2) / (t_2 - t_1) | C2 section 8.2 Eq. 1 to 4 (agent-read; Eq. 2 prints the slope without the minus sign). C3 uses the same ln-regression for SF6. Two-point form derived |
+| Natural decay | reduction by agglomeration, surface deposition (including sedimentation) and air exchange. Chamber air exchange must be below 0.03 ACH and is left out of the calculation because it cancels in k_e - k_n | C2 sections 3.13 and 4.3 [P] |
+| Test schedule | natural-decay and total-decay runs made sequentially on the same day. Counts every 1 min, for 20 min (smoke, dust) or 10 min (pollen), at least 9 usable points for smoke and dust. Chamber 1008 ft3 (10.5 x 12 x 8 ft), which is 28.54 m3 | C2 [P] |
+| Test aerosols | smoke 0.10 to 1.0 um at 24,000 to 35,000 per cc, dust 0.5 to 3.0 um at 200 to 400 per cc, pollen 5 to 11 um at 4 to 9 per cc | C2 (smoke concentration [P]; sizes and the other concentrations agent-read) |
+| Valid CADR range | 10 to 600 cfm for smoke and dust, 25 to 450 cfm for pollen | C2 section 2 [P] |
+| Worked check | smoke data sheet: 1008 (0.22726 - 0.00251) = 226.55 cfm | C2 Annex F (agent-read; arithmetic re-done) |
+
+### 5.3 Unit conversions
+
+| Item | Value | Sources agreeing |
+|---|---|---|
+| 1 cfm in m3/h | 1.69901079552 (1 ft = 0.3048 m exactly). AC-1 and AHAM print 1.699 | arithmetic. C2 informative note, C8 |
+| 1 m3/h in cfm | 0.588577779 | arithmetic |
+| Air changes per hour | ACH = Q [m3/h] / V [m3] | definition |
+| Rate per second | lambda [1/s] = ACH / 3600 | unit arithmetic |
+| Clean-air ACH of a cleaner | CADR / V. With CADR in cfm and V in ft3, ACH = 60 CADR / V | C9 (ACH from smoke CADR times 60 over V). Derived |
+| AC-1 chamber | 1008 ft3 = 28.5434 m3. AC-1 prints 28.5 and 28.54, the FAQ prints 28.4 (product of rounded metric dimensions) | arithmetic. C2 Annex A and J, C8 |
+
+### 5.4 Deposition loss-rate coefficients as published
+
+Nazaroff 2004, Fig. 6 (a graph with no table; the curve was digitised by the research agent, so about plus or minus 10 percent). Minimum about 0.047 1/h near 0.14 um.
+
+| Particle diameter (um) | beta (1/h) |
+|---|---|
+| 0.1 | 0.050 |
+| 0.5 | 0.091 |
+| 1 | 0.21 |
+| 2.5 | 0.86 |
+| 5 | 2.6 |
+| 10 | about 6.5 to 7, read by eye |
+
+NISTIR 7068 Table 4, measured in an occupied townhouse of about 400 m3 (C3), mean plus or minus SD, central fan off, with fan-on means in the last column:
+
+| Size bin (um) | k_p, fan off (1/h) | k_p, fan on (1/h) |
+|---|---|---|
+| 0.3 to 0.5 | 0.30 +/- 0.09 | 0.77 |
+| 0.5 to 1 | 0.42 +/- 0.18 | 0.97 |
+| 1 to 2.5 | 0.78 +/- 0.37 | 1.5 |
+| 2.5 to 5 | 1.4 +/- 0.34 | 3.2 |
+| 5 to 10 | 2.7 +/- 0.52 | 4.8 |
+| above 10 | 5.2 +/- 0.71 | 7.1 |
+
+AC-1 natural-decay data sheets, which include agglomeration and a fan-mixed chamber: smoke (0.1 to 1 um) 0.00251 1/min = 0.151 1/h, dust (0.5 to 3 um) 0.01021 1/min = 0.613 1/h, pollen (5 to 11 um) 0.10849 1/min = 6.51 1/h. Annex J averages are 0.0034, 0.014 and 0.12 1/min (0.204, 0.84 and 7.2 1/h). Annex E gives k_dep = 0.0034 1/min (0.204 1/h) for smoke. (agent-read)
+
+At 0.3 to 0.5 um the sources span 0.05 to 0.09 1/h (Nazaroff, quiet room), 0.204 1/h (AC-1 smoke) and 0.30 1/h (NISTIR 7068, occupied house, which attributes part of the difference to occupancy and central-fan operation). The choice is a modelling decision. Deposition velocities: UNCONFIRMED, no v_d table was read. The equivalent velocity is v_d = beta V / A_surface [derived].
+
+### 5.5 Gravitational settling
+
+| Item | Statement | Sources agreeing |
+|---|---|---|
+| Stokes settling velocity | v_s = d^2 rho_p g C_c / (18 mu) | C5 Eq. 4.7, C6 Eq. 13 and 37 [R] |
+| Cunningham slip factor | C_c = 1 + Kn [1.257 + 0.400 exp(-1.10 / Kn)], Kn = 2 lambda_mfp / d. lambda_mfp = 0.065 um, mu = 1.81e-5 kg/(m s) at 293 K | C5 Eq. 4.4 (Davies form), C6 Eq. 14 to 15 |
+| Settling inside v_d | In the Nazaroff and Cass model v_d = v_CP + v_t. v_CP depends on orientation: vertical (2/pi) sqrt(D K_e), upward-facing v_g / [1 - exp(-(pi/2) v_g / sqrt(D K_e))], downward-facing v_g / [exp((pi/2) v_g / sqrt(D K_e)) - 1]. For large particles v_d tends to v_g on upward-facing surfaces and to 0 on downward-facing ones | C5 Table 5.1 (agent-read) |
+| Floor settling loss rate | lambda_settle = v_s A_floor / V = v_s / H when V = A_floor H. A lower bound, since other upward-facing surfaces also collect particles | derived from C5 Eq. 5.4 |
+| Double counting | beta (C1) and AC-1 natural decay already include settling, so v_s / H must not be added on top of a measured or tabulated beta | C1, C2 section 3.13 |
+
+Computed table (derived), rho_p = 1000 kg/m3, H = 2.4 m. The particle Reynolds number at 10 um is about 0.002, so Stokes flow applies. No source tabulates these values.
+
+| d (um) | C_c | v_s (m/s) | v_s / H (1/h) |
+|---|---|---|---|
+| 0.1 | 2.857 | 8.60e-7 | 0.0013 |
+| 0.3 | 1.558 | 4.22e-6 | 0.0063 |
+| 0.5 | 1.328 | 1.00e-5 | 0.0150 |
+| 1 | 1.1634 | 3.50e-5 | 0.0525 |
+| 2 | 1.0817 | 1.303e-4 | 0.195 |
+| 2.5 | 1.0654 | 2.005e-4 | 0.301 |
+| 5 | 1.0327 | 7.774e-4 | 1.166 |
+| 10 | 1.0163 | 3.060e-3 | 4.59 |
+
+### 5.6 TypeScript
+
+```ts
+/** AHAM AC-1 CADR and single-zone decay. Use one time unit throughout (per second, per minute or per hour). */
+export const FT3_IN_M3 = 0.3048 ** 3; // 0.028316846592 m3, exact
+export const CFM_TO_M3H = FT3_IN_M3 * 60; // 1.69901079552
+export const M3H_TO_CFM = 1 / CFM_TO_M3H; // 0.588577779
+export const AC1_CHAMBER_FT3 = 1008; // 28.5434 m3
+
+/** CADR = V (k_e - k_n). V in ft3 and k per minute give cfm. V in m3 and k per hour give m3/h. */
+export const cadr = (volume: number, kTotal: number, kNatural: number) => volume * (kTotal - kNatural);
+/** Decay constant from two samples of a decaying concentration. */
+export const decayConstant = (c1: number, c2: number, t1: number, t2: number) => Math.log(c1 / c2) / (t2 - t1);
+/** Total loss rate, no source and clean supply air. flows and v_d * A in volume per time, volume in the same volume unit. */
+export const lambdaTotal = (ventFlow: number, cadrFlow: number, vDeposition: number, surfaceArea: number, volume: number) =>
+	(ventFlow + cadrFlow + vDeposition * surfaceArea) / volume;
+export const concentration = (c0: number, lambda: number, t: number) => c0 * Math.exp(-lambda * t);
+export const achToPerSecond = (ach: number) => ach / 3600;
+
+/** Cunningham slip factor and Stokes settling velocity, SI units. */
+export const cunningham = (d: number, meanFreePath = 0.065e-6) => {
+	const kn = (2 * meanFreePath) / d;
+	return 1 + kn * (1.257 + 0.4 * Math.exp(-1.1 / kn));
+};
+export const settlingVelocity = (d: number, rhoParticle = 1000, mu = 1.81e-5, g = 9.81) =>
+	(d * d * rhoParticle * g * cunningham(d)) / (18 * mu);
+export const floorSettlingRate = (vs: number, roomHeight: number) => vs / roomHeight;
+```
+
+Not read: ASTM E741 (paywalled; AC-1 and C3 describe the same decay technique), Thatcher and Layton (1995), Thatcher et al. (2002), Lai and Nazaroff (2000), Offermann et al. (1985) and Shaughnessy and Sextro (2006) beyond abstracts or secondhand summaries, and Nazaroff's "Indoor bioaerosol dynamics" (the fetch tool refused that page).
 
 ## Gaps and uncertainty
 
 1. Original Ghia et al. (1982) paper: not read. Both tables rest on independent transcriptions that agree except at v(x = 0.9063), where -0.5155 (G4, G5) is preferred to -0.51500 (G3). Ghia's Table III secondary-vortex values: UNCONFIRMED.
 2. de Vahl Davis Table V was read on the scan, so it is first-hand. Hortmann, Le Quere, Mayne and Sharma numbers are read in later papers and pages, not in their originals. On the ERCOFTAC page (D7) the last Hortmann column is labelled "Numax" and the mean-Nu column header is an image; the page text says the table lists the mean and peak Nusselt numbers, and the mean column agrees with D4 (2.245, 4.522, 8.825) and the peak column with Mayne to 0.15 percent or better. D6 labels one Hortmann Nu_0 value 4.52188 at Ra = 1e5, against 4.52164 on D7; the 5th-digit difference is unresolved. Hortmann has no Ra = 1e3 values in the sources read, so Ra = 1e3 has no refined Nu_avg here; use 1.118.
-3. Round jet: B and S come from secondary tables. Wygnanski and Fiedler's B = 5.4 has a single source. Pope's text, Fischer et al., Awbi and the ASHRAE chapter were not read. No accepted potential-core length. The R&S "x/d above 6" limit is UNCONFIRMED. No B, x0 or S for a fan jet was found.
-4. Sections 4 and 5 are unfinished (second pass).
-5. Several hosts could not be reached (repository.hku.hk, ocw.snu.ac.kr, Adelaide's repository, torroja.dmt.upm.es, thermalscience.vinca.rs) and several fetches were refused (HTTP 403); the sources that depended on them were not used.
+3. Round jet: B, S and x0 come from secondary compilations. Wygnanski and Fiedler's B is 5.70 in J14 and 5.4 in J2 (unresolved against the paper). Pope's text, Fischer et al., Awbi and the ASHRAE chapter were not read. No accepted potential-core length. The R&S "x/d above 6" limit is UNCONFIRMED. No B, x0 or S for a fan jet was found.
+4. Orifice and stack: the ASHRAE Handbook chapter was not read in any edition, so its edition, equation numbers, Cd statements, unequal-area treatment and printed pressure-difference form are UNCONFIRMED. The ASHRAE Cd fit 0.40 + 0.0045 dT is known only from the EnergyPlus and DesignBuilder pages. Linden (1999) and Linden, Lane-Serff and Smeed (1990) were not read, so Linden's own A* is UNCONFIRMED. The neutral-level formula with the Ti/To factor is confirmed from O1 and O7 plus my derivation. CIBSE AM10 and Etheridge and Sandberg were not read. The parallel-area sum has one read source (O11) plus the trivial derivation. Windows have no single Cd: published values span about 0.2 to 1.0.
+5. Well-mixed decay: ASTM E741, Thatcher and Layton (1995), Thatcher et al. (2002), Lai and Nazaroff (2000), Offermann et al. (1985) and Shaughnessy and Sextro (2006) were not read beyond abstracts. Nazaroff (2004) has no loss-rate table, so the Fig. 6 values were digitised (about 10 percent). No deposition-velocity table was read. The Stokes settling values are computed, not tabulated in a source. The mass balance with a source term in the form P a C_out - (a + k) C + S/V is derived, not printed.
+6. Several hosts could not be reached (repository.hku.hk, ocw.snu.ac.kr, Adelaide's repository, torroja.dmt.upm.es, thermalscience.vinca.rs) and several fetches were refused (HTTP 403); the sources that depended on them were not used.
 
 ## Sources
 
@@ -560,6 +763,7 @@ Section 2.
 
 Section 3.
 - J1. Pope (2000), Turbulent Flows, ch. 5, via https://arxiv.org/pdf/0912.4847 (B = 5.8, eq. 5.6 as quoted) and https://stern.lab.uiowa.edu/sites/stern.lab.uiowa.edu/files/2025-11/Chapter-7-Free-Shear-Flows-Part-1-final.pdf (S = 0.094 derivation, momentum conservation). The book itself was not read.
+- J14. Kiran, Ayanian, Breuer, "The Structure of Merging Turbulent Jets Beneath a Small Quadrotor", Table 1 (B, S, abs(z0)/D, Re of experiments and simulations) and introduction (consensus band). https://arxiv.org/pdf/2608.30900
 - J2. Bhatia and De, "Numerical Study of Trailing and Leading Vortex Dynamics in a Forced Jet with Coflow", Table 1 of decay constants and eq. 13 to 14. https://arxiv.org/pdf/2101.08749
 - J3. Yang and Xu, "Wave-Particle Turbulence Simulation of Spatially Developing Round Jets: Turbulent Flow Modeling and Method Validation", Table 1 and eq. 18. https://arxiv.org/pdf/2507.14524
 - J4. Varadharajan et al., "Reynolds number effects on transition, turbulence intensity and axial-velocity decay rate of turbulent round jets" (LES), Table 1 and eq. 9. https://arxiv.org/pdf/1708.03140
@@ -573,4 +777,29 @@ Section 3.
 - J12. Yue and Malmstrom, sampling time for air jet velocity measurements (AIVC 12128). https://www.aivc.org/sites/default/files/airbase_12128.pdf
 - J13. Nielsen (1988), Simplified Models for Room Air Distribution, Aalborg University. https://vbn.aau.dk/ws/files/197502919/Simplified_Models_for_Room_Air_Distribution.pdf
 
-Sections 4 and 5: sources to be added in the second pass.
+Section 4.
+- O1. Klote, "A General Routine for Analysis of Stack Effect", NISTIR 4588 (1991), printed pages 4 to 7, Eqs. 6, 7, 8, 10. https://nvlpubs.nist.gov/nistpubs/Legacy/IR/nistir4588.pdf
+- O2. Liddament, AIVC "Guide to Ventilation" (1996), pages 225, 232, 236. https://www.aivc.org/sites/default/files/members_area/medias/pdf/Guides/GU03%20GUIDE%20TO%20ENERGY%20EFFICIENT%20VENTILATION.pdf
+- O3. Dols and Polidoro, CONTAM User Guide and Program Documentation v3.4, NIST TN 1887 Rev. 1 (2020), printed pages 61, 65, 263 to 264, 275 (Eqs. 20 and 69). https://nvlpubs.nist.gov/nistpubs/TechnicalNotes/NIST.TN.1887r1.pdf
+- O4. Jones, Cook, Fitzgerald, Iddon, "A review of ventilation opening area terminology", Energy and Buildings 118 (2016), accepted manuscript, Eqs. 1 to 11. https://www.repository.cam.ac.uk/handle/1810/254154
+- O5. Swami and Chandra, "Procedures for Calculating Natural Ventilation Airflow Rates in Buildings", ASHRAE RP-448 final report FSEC-CR-163-86 (1987), pages 1-16 and 2-22 (read by OCR). https://www.fsec.ucf.edu/en/publications/pdf/FSEC-CR-163-86.pdf
+- O6. Hunt and Linden, Building and Environment 34 (1999) 707-720, page 709, Eqs. 5 to 6. https://www.aivc.org/sites/default/files/airbase_12435.pdf
+- O7. Zueter, Dalaq, Daqaq, arXiv 2510.09639, Eqs. 2 to 7. https://arxiv.org/pdf/2510.09639
+- O8. Mayoraz and Flynn, arXiv 1809.05963, Eqs. 5, 10, 13. https://arxiv.org/pdf/1809.05963
+- O9. Heiselberg, Svidt, Nielsen, "Windows - Measurements of Air Flow Capacity", ROOMVENT 2000, pages 749-754 (AIVC airbase 13332). https://www.aivc.org/sites/default/files/airbase_13332.pdf
+- O10. Karava, Stathopoulos, Athienitis, "Natural ventilation openings - a discussion of discharge coefficients", Concordia University (year not printed). https://www.irbnet.de/daten/iconda/CIB1749.pdf
+- O11. Awbi, "Basic concepts for natural ventilation of buildings", CIBSE seminar, 19 May 2010, slides 6 and 13 to 16. https://www.cibse.org/media/mtrlmv25/01-hazim-awbi-university-of-reading-basic-concepts-for-natural-ventilation-of-buildings-1.pdf
+- O12. EnergyPlus Engineering Reference, Infiltration/Ventilation (fetch-tool summary only). https://bigladdersoftware.com/epx/docs/9-1/engineering-reference/infiltration-ventilation.html and https://bigladdersoftware.com/epx/docs/8-3/engineering-reference/infiltration-ventilation.html
+- O13. DesignBuilder help, calculated natural ventilation options (fetch-tool summary only). https://designbuilder.co.uk/helpv5.2/Content/Calculated_Natural_Ventilation_Options.htm
+
+Section 5.
+- C1. Nazaroff, "Indoor Particle Dynamics", Indoor Air 14 (Suppl. 7), 2004. https://escholarship.org/content/qt7sq4x34d/qt7sq4x34d.pdf
+- C2. ANSI/AHAM AC-1-2020, Method for Measuring Performance of Portable Household Electric Room Air Cleaners. https://law.resource.org/pub/us/cfr/ibr/inc/ansi/aham.ac-1.2020.pdf
+- C3. Howard-Reed, Wallace, Emmerich, "Deposition Rates of Fine and Coarse Particles in Residential Buildings", NISTIR 7068 (2003). https://nvlpubs.nist.gov/nistpubs/Legacy/IR/nistir7068.pdf
+- C4. Dols, "Ventilation Characterization of the CPSC Combustion Test Chamber", NISTIR 4415 (1990). https://nvlpubs.nist.gov/nistpubs/Legacy/IR/nistir4415.pdf
+- C5. Nazaroff, "Mathematical Modeling and Control of Pollutant Dynamics in Indoor Air", Caltech PhD thesis (1989); chapter 5 is the Nazaroff and Cass model. https://thesis.caltech.edu/576/5/nazaroff-ww_1989.pdf
+- C6. Sippola and Nazaroff, particle deposition from turbulent flow, LBNL-51432 (2002). https://www.osti.gov/servlets/purl/815478
+- C7. Jaisinghani, Ruth, Bugli, "The effectiveness of air cleaners using an environmental tobacco smoke material balance model" (AIVC 4199; venue and year not in the text read). https://www.aivc.org/sites/default/files/airbase_4199.pdf
+- C8. AHAM, Air Cleaner Performance FAQs (2020). https://ahamverifide.org/wp-content/uploads/2020/06/Air-Cleaner-Performance-FAQs.pdf
+- C9. AHAM, white paper "Portable Air Cleaners and Air Changes per Hour" (October 2021). https://ahamverifide.org/wp-content/uploads/2021/11/White-Paper-Portable-Air-Cleaners-and-AIr-Changes-per-Hour-FINAL-00106301.pdf
+- Abstract only, not used for numbers: Thatcher et al. (2002) https://indoor.lbl.gov/publications/effects-room-furnishings-and-air ; Thatcher and Layton (1995) https://energyanalysis.lbl.gov/publications/deposition-resuspension-and ; Lai and Nazaroff (2000) https://hero.epa.gov/reference/12270 ; Offermann et al. (1985) https://www.osti.gov/biblio/876192 ; Shaughnessy and Sextro (2006) https://eta-publications.lbl.gov/bibcite/reference/22497
