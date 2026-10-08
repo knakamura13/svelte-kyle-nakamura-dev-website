@@ -1,0 +1,352 @@
+import type { DeviceModel } from '../devices/types';
+import type { HomePlan } from '../homes/types';
+import { emissionRate } from '../emission';
+import type { AirflowReadout, HoverReading, ProbeReading, RoomReading } from '../readouts';
+import type { FlowBackend, Snapshot } from '../solver/backend';
+import { POINT_FIELDS, type Slice } from '../solver/types';
+import type { Clock, Pin, Setup, View } from '../state';
+import { RollingMean, SliceHistory } from './history';
+import { World, type BackendFactory } from './world';
+
+/** The part of the page's state the session reads. The experience implements it; tests can pass a plain object. */
+export interface SessionParams {
+	setup: Setup;
+	view: View;
+	clock: Clock;
+	probes: Pin[];
+	emission: { strength: number; active: boolean };
+	restarts: number;
+	startingSmoke: number;
+}
+
+export interface SessionOptions {
+	params: SessionParams;
+	plans: readonly HomePlan[];
+	models: readonly DeviceModel[];
+	make: BackendFactory;
+	/** Picks the cell size for a plan, m. Called whenever a world is built. */
+	cellSize: (plan: HomePlan) => number;
+	readout: AirflowReadout;
+	/** Asks the Stage for another frame. */
+	invalidate: () => void;
+	reducedMotion: () => boolean;
+}
+
+/** Longest real time one frame's steps may take before the session lets the simulation run slower than real time, s. */
+const FRAME_BUDGET = 0.012;
+/** Largest time step, s, and the cell-crossing count a step may have: semi-Lagrangian advection stays accurate to a few cells per step. */
+const MAX_STEP = 1 / 20;
+const MAX_CELLS_PER_STEP = 3;
+/** Real seconds between snapshot reads, and between per-room reads (which cost a pass over the grid). */
+const SNAPSHOT_INTERVAL = 1 / 20;
+const ROOM_INTERVAL = 0.5;
+/** Real seconds between writes of the numbers the Dock shows, so a reactive page is not rewritten every frame. */
+const READOUT_INTERVAL = 0.12;
+
+const TRACERS = 12_000;
+const SMOKE = 6_000;
+
+/**
+ * Owns the running simulation for the page: builds a world for the setup, keeps it in step with changes, steps it
+ * each drawn frame, reads back snapshots and turns them into the readouts the page shows. The scene draws from
+ * `latest` and asks for hover readings; nothing here touches three.js.
+ */
+export class SimulationSession {
+	/** What the scene draws: the newest slice and particles. `version` bumps when they change. */
+	latest: { slice: Slice | null; tracers: Float32Array | null; smoke: Float32Array | null; version: number } = { slice: null, tracers: null, smoke: null, version: 0 };
+	world: World | null = null;
+	/** Simulated seconds since the world was built. */
+	simTime = 0;
+
+	private building: Promise<void> | null = null;
+	private worldKey = '';
+	private appliedSignature = '';
+	private generation = 0;
+	private pending = false;
+	private sinceSnapshot = 1;
+	private sinceRooms = 1;
+	private sinceReadout = 1;
+	private stepCost = 0.002;
+	private rate = 0;
+	private lastEmission = '';
+	private emitPoint: { x: number; y: number; z: number } | null = null;
+	private readonly history = new SliceHistory();
+	private readonly probeHistory = new Map<string, RollingMean>();
+	private roomsDue = false;
+	private disposed = false;
+
+	constructor(private readonly options: SessionOptions) {
+		this.options.readout.status = 'loading';
+	}
+
+	private get params() {
+		return this.options.params;
+	}
+
+	private keyFor(params: SessionParams) {
+		return `${params.restarts}|${params.setup.plan}|${params.setup.furniture}|${params.setup.conditions.indoorTemp}`;
+	}
+
+	/** Builds a world for the current setup in the background; the old one keeps running until the new one is ready. */
+	private build() {
+		const key = this.keyFor(this.params);
+		const generation = ++this.generation;
+		const setup = JSON.parse(JSON.stringify(this.params.setup)) as Setup;
+		const smoke = this.params.startingSmoke;
+		const plan = this.options.plans.find((p) => p.id === setup.plan);
+		if (!plan) return;
+		this.options.readout.status = this.world ? this.options.readout.status : 'loading';
+		this.building = World.create(setup, {
+			plans: this.options.plans,
+			models: new Map(this.options.models.map((m) => [m.id, m])),
+			make: (config, initial) => this.options.make(config, { ...initial, particulates: smoke }),
+			h: this.options.cellSize(plan)
+		})
+			.then((world) => {
+				if (this.disposed || generation !== this.generation) {
+					world.dispose();
+					return;
+				}
+				const old = this.world;
+				this.world = world;
+				this.worldKey = key;
+				this.appliedSignature = JSON.stringify(setup);
+				this.simTime = 0;
+				this.history.clear();
+				this.probeHistory.clear();
+				this.lastEmission = '';
+				this.latest = { slice: null, tracers: null, smoke: null, version: this.latest.version + 1 };
+				const { readout } = this.options;
+				readout.physics = { ...readout.physics, backend: world.backend.kind, cellSize: world.raster.spec.h, cells: world.backend.fluidCells, time: 0, mass: null, reducedDetail: world.backend.kind === 'cpu' };
+				readout.status = this.params.clock.paused ? 'paused' : 'running';
+				world.backend.configureParticles({ tracers: TRACERS, smoke: SMOKE, scale: 1, seed: 1 });
+				old?.dispose();
+				this.pending = false;
+				this.options.invalidate();
+			})
+			.catch((error) => {
+				console.error('The simulation could not start.', error);
+				this.options.readout.status = 'error';
+				this.options.readout.note = 'The simulation could not start. The controls and numbers still work.';
+			})
+			.finally(() => {
+				this.building = null;
+				this.options.invalidate();
+			});
+	}
+
+	/** The point on the Slice where smoke is being released, or null. Set by the scene from the pointer. */
+	setEmitPoint(point: { x: number; y: number; z: number } | null) {
+		this.emitPoint = point;
+	}
+
+	/** Advances the simulation for one drawn frame of `dtReal` real seconds. Returns true while it needs more frames. */
+	update(dtReal: number): boolean {
+		const { params } = this;
+		if (!this.building && (!this.world || this.worldKey !== this.keyFor(params))) this.build();
+		const world = this.world;
+		if (!world) return true;
+		const { readout } = this.options;
+
+		// Changes the solver can take while it runs.
+		const signature = JSON.stringify(params.setup);
+		if (signature !== this.appliedSignature && world.canApply(params.setup)) {
+			world.apply(JSON.parse(signature) as Setup, this.simTime);
+			this.appliedSignature = signature;
+		}
+		this.syncEmission(world);
+
+		const paused = params.clock.paused;
+		readout.status = paused ? 'paused' : 'running';
+		if (!paused) this.advance(world, Math.min(dtReal, 0.1) * params.clock.speed, Math.min(dtReal, 0.1));
+		this.requestSnapshot(world, dtReal);
+		// A paused simulation still wants frames while its picture is catching up.
+		return !paused || this.pending || this.building !== null;
+	}
+
+	private syncEmission(world: World) {
+		const { emission } = this.params;
+		const point = emission.active ? this.emitPoint : null;
+		const rate = point ? emissionRate(emission.strength) / 60 : 0;
+		const key = point ? `${point.x.toFixed(2)},${point.y.toFixed(2)},${point.z.toFixed(2)},${rate.toFixed(5)}` : '';
+		if (key === this.lastEmission) return;
+		this.lastEmission = key;
+		world.emit(point, rate);
+	}
+
+	/** Steps the backend for `budget` simulated seconds, as many steps as the time allows, and records how fast it went. */
+	private advance(world: World, budget: number, real: number) {
+		const { backend } = world;
+		const { h } = world.raster.spec;
+		const maxSpeed = Math.max(this.options.readout.physics.maxSpeed, 0.5);
+		const stable = Math.min(MAX_STEP, (MAX_CELLS_PER_STEP * h) / maxSpeed);
+		const wanted = Math.max(1, Math.ceil(budget / stable));
+		const affordable = Math.max(1, Math.floor(FRAME_BUDGET / Math.max(this.stepCost, 1e-4)));
+		const steps = Math.min(wanted, affordable);
+		const dt = Math.min(stable, budget / steps);
+		const started = performance.now();
+		for (let n = 0; n < steps; n++) {
+			world.updateOscillation(this.simTime);
+			backend.step(dt);
+			this.simTime += dt;
+		}
+		const spent = (performance.now() - started) / 1000;
+		this.stepCost = 0.8 * this.stepCost + 0.2 * (spent / steps);
+		backend.stepParticles(Math.min(real, 0.05));
+		this.rate = real > 0 ? (steps * dt) / real : 0;
+	}
+
+	private requestSnapshot(world: World, dtReal: number) {
+		this.sinceSnapshot += dtReal;
+		this.sinceRooms += dtReal;
+		if (this.pending || this.sinceSnapshot < SNAPSHOT_INTERVAL) return;
+		this.sinceSnapshot = 0;
+		const wantRooms = this.sinceRooms >= ROOM_INTERVAL;
+		if (wantRooms) this.sinceRooms = 0;
+		const generation = this.generation;
+		const { params } = this;
+		const probes = params.probes.map((p) => ({ ...p }));
+		const points = new Float32Array(probes.flatMap((p) => [p.x, p.y, p.z]));
+		this.pending = true;
+		const snapshot = world.backend.snapshot({ sliceY: params.view.sliceHeight, particles: true, rooms: wantRooms });
+		const sampled = probes.length ? world.backend.samplePoints(points) : Promise.resolve(new Float32Array(0));
+		void Promise.all([snapshot, sampled])
+			.then(([shot, values]) => {
+				if (this.disposed || generation !== this.generation || world !== this.world) return;
+				this.take(world, shot, probes, values);
+			})
+			.catch((error) => console.error('Reading the simulation failed.', error))
+			.finally(() => {
+				this.pending = false;
+			});
+	}
+
+	/** Turns a snapshot into what the scene draws and what the page shows. */
+	private take(world: World, shot: Snapshot, probes: Pin[], values: Float32Array) {
+		const { readout } = this.options;
+		const reference = world.current.conditions.indoorTemp;
+		if (shot.slice) {
+			this.latest = { slice: shot.slice, tracers: shot.tracers ?? this.latest.tracers, smoke: shot.smoke ?? this.latest.smoke, version: this.latest.version + 1 };
+			this.history.push(this.simTime, shot.slice);
+		} else if (shot.tracers) this.latest = { ...this.latest, tracers: shot.tracers, smoke: shot.smoke ?? null, version: this.latest.version + 1 };
+
+		// Probes: their readings now and their ten-second means.
+		const stride = POINT_FIELDS.length;
+		const readings: ProbeReading[] = probes.map((probe, n) => {
+			const base = n * stride;
+			const u = values[base];
+			const v = values[base + 1];
+			const w = values[base + 2];
+			const speed = Math.hypot(u, v, w);
+			let mean = this.probeHistory.get(probe.id);
+			if (!mean) this.probeHistory.set(probe.id, (mean = new RollingMean()));
+			mean.push(this.simTime, speed);
+			return {
+				id: probe.id,
+				label: `Probe ${probe.id.slice(1)}`,
+				x: probe.x,
+				y: probe.y,
+				z: probe.z,
+				u,
+				v,
+				w,
+				speed,
+				averageSpeed: mean.mean,
+				temperature: reference + values[base + 3],
+				particulates: values[base + 4],
+				inAir: this.inAirAt(world, probe)
+			};
+		});
+		for (const id of [...this.probeHistory.keys()]) if (!probes.some((p) => p.id === id)) this.probeHistory.delete(id);
+
+		this.sinceReadout += SNAPSHOT_INTERVAL;
+		if (this.sinceReadout < READOUT_INTERVAL && !shot.rooms) return;
+		this.sinceReadout = 0;
+		const d = shot.diagnostics;
+		readout.probes = readings;
+		readout.physics = {
+			...readout.physics,
+			time: d.time,
+			maxSpeed: d.maxSpeed,
+			divergence: d.divergence,
+			mass: d.mass,
+			rate: this.params.clock.paused ? 0 : this.rate
+		};
+		const flows: Record<string, number> = {};
+		for (const device of world.current.devices) {
+			const index = world.fanIndexOf(device.id);
+			if (index !== undefined && shot.fanFlow[index] !== undefined) flows[device.id] = shot.fanFlow[index];
+		}
+		readout.deviceFlow = flows;
+		if (shot.rooms) {
+			const names = world.raster.plan.rooms;
+			readout.rooms = shot.rooms.map(
+				(room, n): RoomReading => ({
+					id: names[n].id,
+					name: names[n].name,
+					volume: room.volume,
+					speed: room.speed,
+					temperature: reference + room.theta,
+					particulates: room.particulates,
+					inflow: room.inflow,
+					changesPerHour: room.changesPerHour
+				})
+			);
+		}
+	}
+
+	/** Whether a point is in air (not inside furniture or outside the home), by the world's geometry. */
+	private inAirAt(world: World, point: { x: number; y: number; z: number }) {
+		const { nx, ny, nz, h } = world.raster.spec;
+		const i = Math.floor(point.x / h);
+		const j = Math.floor(point.y / h);
+		const k = Math.floor(point.z / h);
+		if (i < 0 || j < 0 || k < 0 || i >= nx || j >= ny || k >= nz) return false;
+		return world.raster.geometry.fluid[i + (nx + 1) * j + (nx + 1) * (ny + 1) * k] === 1;
+	}
+
+	/** What the air is doing at a point on the Slice, for the hover readout: from the newest slice, with its ten-second mean. Null before the first slice. */
+	hover(x: number, z: number): HoverReading | null {
+		const slice = this.latest.slice;
+		const world = this.world;
+		if (!slice || !world) return null;
+		const reference = world.current.conditions.indoorTemp;
+		const gx = x / slice.h - 0.5;
+		const gz = z / slice.h - 0.5;
+		const i0 = Math.max(0, Math.min(slice.nx - 1, Math.floor(gx)));
+		const k0 = Math.max(0, Math.min(slice.nz - 1, Math.floor(gz)));
+		const i1 = Math.min(slice.nx - 1, i0 + 1);
+		const k1 = Math.min(slice.nz - 1, k0 + 1);
+		const fx = Math.max(0, Math.min(1, gx - i0));
+		const fz = Math.max(0, Math.min(1, gz - k0));
+		const at = (array: Float32Array) => {
+			const a = array[i0 + slice.nx * k0] * (1 - fx) + array[i1 + slice.nx * k0] * fx;
+			const b = array[i0 + slice.nx * k1] * (1 - fx) + array[i1 + slice.nx * k1] * fx;
+			return a * (1 - fz) + b * fz;
+		};
+		const inAir = slice.fluid[Math.max(0, Math.min(slice.nx - 1, Math.floor(x / slice.h))) + slice.nx * Math.max(0, Math.min(slice.nz - 1, Math.floor(z / slice.h)))] === 1;
+		const u = at(slice.u);
+		const v = at(slice.v);
+		const w = at(slice.w);
+		return {
+			x,
+			y: slice.y,
+			z,
+			u,
+			v,
+			w,
+			speed: Math.hypot(u, v, w),
+			averageSpeed: this.history.averageAt(x, z),
+			temperature: reference + at(slice.theta),
+			particulates: at(slice.particulates),
+			inAir
+		};
+	}
+
+	dispose() {
+		this.disposed = true;
+		this.generation++;
+		this.world?.dispose();
+		this.world = null;
+	}
+}
