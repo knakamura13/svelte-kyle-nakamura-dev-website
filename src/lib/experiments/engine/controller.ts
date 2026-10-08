@@ -27,6 +27,8 @@ interface Slot {
 	inst?: SceneInstance;
 	rig?: OrbitRig;
 	layer?: LabelLayer;
+	/** The pointer the scene claimed with its input hook, until that pointer lifts. */
+	claimed: number | null;
 	undo: (() => void)[];
 }
 
@@ -73,6 +75,7 @@ export class StageController {
 			pinnedUntil: 0,
 			width: 0,
 			height: 0,
+			claimed: null,
 			undo: []
 		};
 		this.slots.set(view, slot);
@@ -171,7 +174,7 @@ export class StageController {
 			if (!create) throw new Error(`No scene is registered as "${slot.options.scene}".`);
 			slot.layer = new LabelLayer(slot.view.querySelector<HTMLElement>('.stage-labels') ?? slot.view);
 			slot.inst = create(
-				{ labels: slot.layer, reducedMotion: () => this.reduced.matches, compact: () => slot.view.clientWidth < 480 },
+				{ labels: slot.layer, reducedMotion: () => this.reduced.matches, compact: () => slot.view.clientWidth < 480, invalidate: () => this.invalidate() },
 				slot.options.params as never,
 				slot.options.readout as never
 			);
@@ -204,6 +207,9 @@ export class StageController {
 		if (!inst || !rig || !this.renderer) return;
 		this.renderer.render(inst.scene, inst.camera);
 		layer?.update(inst.camera, slot.width, slot.height);
+		// A scene that takes drags for itself needs touch to reach it; otherwise a vertical swipe scrolls the page.
+		const touch = inst.input?.touchAction?.() ?? '';
+		if (this.renderer.domElement.style.touchAction !== touch) this.renderer.domElement.style.touchAction = touch;
 		const { dataset } = slot.view;
 		const yaw = String(rig.yawDegrees);
 		const pitch = String(rig.pitchDegrees);
@@ -324,23 +330,54 @@ export class StageController {
 		if (!document.hidden) this.invalidate();
 	};
 
+	/** The pointer's position in normalized device coordinates of the canvas: x and y from -1 to 1, y up. */
+	private ndc(event: PointerEvent) {
+		const box = (event.currentTarget as HTMLElement).getBoundingClientRect();
+		return { x: ((event.clientX - box.left) / box.width) * 2 - 1, y: -(((event.clientY - box.top) / box.height) * 2 - 1) };
+	}
+
 	private onPointerDown = (event: PointerEvent) => {
 		const slot = this.active;
 		if (!slot?.rig || (event.pointerType === 'mouse' && event.button !== 0)) return;
+		const input = slot.inst?.input;
+		if (input?.pointer('down', event, this.ndc(event))) {
+			slot.claimed = event.pointerId;
+			(event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
+			this.invalidate();
+			return;
+		}
 		slot.rig.pointerDown(event);
 		(event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
 		slot.view.dataset.dragging = 'true';
 	};
 
 	private onPointerMove = (event: PointerEvent) => {
-		if (this.active?.rig?.pointerMove(event)) this.invalidate();
+		const slot = this.active;
+		const input = slot?.inst?.input;
+		if (input) {
+			input.pointer('move', event, this.ndc(event));
+			this.invalidate();
+			if (slot!.claimed === event.pointerId) return;
+		}
+		if (slot?.rig?.pointerMove(event)) this.invalidate();
 	};
 
 	private onPointerEnd = (event: PointerEvent) => {
 		const slot = this.active;
 		if (!slot?.rig) return;
+		if (slot.claimed === event.pointerId) {
+			slot.claimed = null;
+			slot.inst?.input?.pointer('up', event, this.ndc(event));
+			this.invalidate();
+			return;
+		}
 		slot.rig.pointerUp(event);
 		if (!slot.rig.dragging) delete slot.view.dataset.dragging;
+	};
+
+	private onPointerLeave = (event: PointerEvent) => {
+		const slot = this.active;
+		if (slot?.claimed === null) slot.inst?.input?.pointer('leave', event, this.ndc(event));
 	};
 
 	private onDoubleClick = () => {

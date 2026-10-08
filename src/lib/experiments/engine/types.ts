@@ -9,6 +9,24 @@ export interface SceneHost {
 	reducedMotion: () => boolean;
 	/** True while the Stage is narrow (a phone), so a scene can label less and frame tighter. */
 	compact: () => boolean;
+	/** Asks for one more frame, for a scene whose picture changed without a param changing (a hover marker, a readout that just arrived). */
+	invalidate: () => void;
+}
+
+export type PointerPhase = 'down' | 'move' | 'up' | 'leave';
+
+/** A scene that wants the pointer and the keys for itself (hover readouts, pinning, dragging things) implements this. */
+export interface SceneInput {
+	/**
+	 * Every pointer event over the Stage, with its position in normalized device coordinates (x and y from -1 to 1,
+	 * y up). Return true from a 'down' to claim the gesture: until its 'up' the orbit rig does not see that pointer and
+	 * every 'move' of it comes here. 'move' also arrives, unclaimed, as hover; 'leave' when the pointer leaves the Stage.
+	 */
+	pointer(phase: PointerPhase, event: PointerEvent, ndc: { x: number; y: number }): boolean;
+	/** Keys while the Stage has focus. Return true to use one; the rig then ignores it. */
+	key?(event: KeyboardEvent): boolean;
+	/** The touch-action the canvas should have right now: 'pan-y' lets a vertical swipe scroll the page, 'none' keeps a drag for the scene. */
+	touchAction?(): 'pan-y' | 'none';
 }
 
 /** Where the camera starts and how far it may be pushed. */
@@ -39,6 +57,8 @@ export interface SceneInstance {
 	fit?(): { width: number; height: number };
 	/** The point the camera orbits right now, for scenes that follow something. */
 	focus?(): [number, number, number];
+	/** Takes over the pointer and keys where the scene needs them; absent, the orbit rig has them all. */
+	input?: SceneInput;
 	dispose(): void;
 }
 
