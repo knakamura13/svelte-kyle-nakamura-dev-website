@@ -91,6 +91,7 @@ export class CpuSolver {
 	private readonly cv: Float32Array;
 	private readonly cw: Float32Array;
 	private readonly diffusivity: Float32Array;
+	private readonly heatDiffusivity: Float32Array;
 	private readonly source: Float32Array;
 	private readonly sink: Float32Array;
 	private readonly tally = emptyTally();
@@ -125,6 +126,7 @@ export class CpuSolver {
 		this.cv = array();
 		this.cw = array();
 		this.diffusivity = array();
+		this.heatDiffusivity = array();
 		this.source = array();
 		this.sink = array();
 		this.pressure = new PressureSolver(this.grid, this.pressureSettings);
@@ -261,11 +263,10 @@ export class CpuSolver {
 		const diffusive = (6 * Math.max(fluid.alpha, fluid.particleDiffusivity, this.nuMax() / Math.min(fluid.prT, fluid.scT)) * dt) / (grid.h * grid.h);
 		this.substeps = this.scalarSubstepsOverride ?? Math.max(1, Math.ceil(Math.max(cfl / SCALAR_CFL, diffusive / DIFFUSION_LIMIT)));
 		const dtau = dt / this.substeps;
-		diffusivities(grid, geometry, this.nut, heat, this.diffusivity);
-		const heatDiffusivity = this.diffusivity.slice();
+		diffusivities(grid, geometry, this.nut, heat, this.heatDiffusivity);
 		diffusivities(grid, geometry, this.nut, smoke, this.diffusivity);
 		for (let s = 0; s < this.substeps; s++) {
-			stepScalar(grid, geometry, this.vel, heatDiffusivity, heat, this.theta, this.thetaNext, dtau);
+			stepScalar(grid, geometry, this.vel, this.heatDiffusivity, heat, this.theta, this.thetaNext, dtau);
 			[this.theta, this.thetaNext] = [this.thetaNext, this.theta];
 			stepScalar(grid, geometry, this.vel, this.diffusivity, smoke, this.c, this.cNext, dtau, this.tally);
 			[this.c, this.cNext] = [this.cNext, this.c];

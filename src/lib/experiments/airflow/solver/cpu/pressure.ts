@@ -69,8 +69,9 @@ export class PressureSolver {
 	/** Per box side: the flow speed into the room an opening settled on last (the linearisation point), and its slope, both per face of that side. */
 	private readonly boundaryQ: Float32Array[];
 	private readonly boundaryG: Float32Array[];
-	/** Relative residual of the last solve. */
-	residual = 0;
+	/** Whether `residual` has been read since the last solve, so the norms are only computed when someone asks. */
+	private measured = true;
+	private lastResidual = 0;
 	/** Whether any exterior opening connects the air to the outside; without one the pressure level is arbitrary. */
 	private outlet = false;
 
@@ -99,6 +100,23 @@ export class PressureSolver {
 
 	get fine() {
 		return this.levels[0];
+	}
+
+	/** Relative residual of the last solve: the norm of rhs − A·p over the norm of rhs. Computed when read, from the state the last solve left. */
+	get residual() {
+		if (!this.measured) {
+			const fine = this.levels[0];
+			const norm = (a: Float32Array) => {
+				let s = 0;
+				for (let i = 0; i < a.length; i++) s += a[i] * a[i];
+				return Math.sqrt(s);
+			};
+			this.residualOf(fine);
+			const reference = norm(fine.rhs);
+			this.lastResidual = reference > 0 ? norm(fine.res) / reference : 0;
+			this.measured = true;
+		}
+		return this.lastResidual;
 	}
 
 	/** Pressure, Pa, in the grid's layout. Kept between steps as the next solve's starting guess. */
@@ -337,7 +355,7 @@ export class PressureSolver {
 		this.smooth(level, this.settings.post);
 	}
 
-	/** Runs the V-cycles (or, with `tolerance`, as many as it takes up to `maxCycles`). Returns the relative residual. */
+	/** Runs the V-cycles, or with `tolerance` stops early once the relative residual is under it. */
 	solve(cycles = this.settings.cycles, tolerance = 0) {
 		const fine = this.levels[0];
 		const norm = (a: Float32Array) => {
@@ -345,7 +363,7 @@ export class PressureSolver {
 			for (let i = 0; i < a.length; i++) s += a[i] * a[i];
 			return Math.sqrt(s);
 		};
-		const reference = norm(fine.rhs);
+		const reference = tolerance > 0 ? norm(fine.rhs) : 0;
 		for (let n = 0; n < cycles; n++) {
 			this.vcycle(0);
 			if (tolerance > 0) {
@@ -354,9 +372,7 @@ export class PressureSolver {
 			}
 		}
 		if (!this.outlet) this.removeMean(fine);
-		this.residualOf(fine);
-		this.residual = reference > 0 ? norm(fine.res) / reference : 0;
-		return this.residual;
+		this.measured = false;
 	}
 
 	/** Shifts the pressure so its mean over the air is zero. Gradients, and so the flow, do not change. */
