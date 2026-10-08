@@ -28,6 +28,13 @@ export interface FluidProperties {
 	/** Turbulent Prandtl and Schmidt numbers: eddy viscosity divided by these gives the eddy diffusivities. */
 	prT: number;
 	scT: number;
+	/**
+	 * Background mixing of temperature and particulates, m²/s, added to their diffusivity everywhere. It stands for the
+	 * weak room-scale convection real rooms always have (people, appliances, sunlit surfaces, small temperature differences)
+	 * and this model has no sources of: without it, smoke released in still air would never spread from its cell. About
+	 * 0.005 mixes a closed room of a few metres in tens of minutes, as measured. Laminar benchmarks set it to zero.
+	 */
+	mixing: number;
 	/** Particulate: molecular diffusivity, still-air settling speed and surface deposition speed, all m/s or m²/s. */
 	particleDiffusivity: number;
 	settling: number;
@@ -47,6 +54,7 @@ export const AIR: FluidProperties = {
 	maxLength: 0.5,
 	prT: 0.85,
 	scT: 0.7,
+	mixing: 0.005,
 	particleDiffusivity: 0,
 	settling: 0,
 	deposition: 0,

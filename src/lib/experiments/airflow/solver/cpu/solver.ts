@@ -245,6 +245,7 @@ export class CpuSolver {
 		const heat: ScalarSpec = {
 			molecular: fluid.alpha,
 			turbulent: fluid.prT,
+			mixing: fluid.mixing,
 			inflow: exterior.theta,
 			settling: 0,
 			deposition: 0,
@@ -253,6 +254,7 @@ export class CpuSolver {
 		const smoke: ScalarSpec = {
 			molecular: fluid.particleDiffusivity,
 			turbulent: fluid.scT,
+			mixing: fluid.mixing,
 			inflow: exterior.particulates,
 			settling: fluid.settling,
 			deposition: fluid.deposition,
@@ -260,7 +262,7 @@ export class CpuSolver {
 			sink: this.sink
 		};
 		const cfl = maxCfl(grid, geometry, this.vel, dt, fluid.settling);
-		const diffusive = (6 * Math.max(fluid.alpha, fluid.particleDiffusivity, this.nuMax() / Math.min(fluid.prT, fluid.scT)) * dt) / (grid.h * grid.h);
+		const diffusive = (6 * (Math.max(fluid.alpha, fluid.particleDiffusivity, this.nuMax() / Math.min(fluid.prT, fluid.scT)) + fluid.mixing) * dt) / (grid.h * grid.h);
 		this.substeps = this.scalarSubstepsOverride ?? Math.max(1, Math.ceil(Math.max(cfl / SCALAR_CFL, diffusive / DIFFUSION_LIMIT)));
 		const dtau = dt / this.substeps;
 		diffusivities(grid, geometry, this.nut, heat, this.heatDiffusivity);

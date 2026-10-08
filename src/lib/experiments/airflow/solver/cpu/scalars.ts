@@ -14,9 +14,10 @@ export interface Tally {
 export const emptyTally = (): Tally => ({ emitted: 0, inflow: 0, outflow: 0, removed: 0, deposited: 0 });
 
 export interface ScalarSpec {
-	/** Diffusivity is `molecular` plus the eddy viscosity divided by `turbulent` (a Prandtl or Schmidt number). */
+	/** Diffusivity is `molecular` plus the eddy viscosity divided by `turbulent` (a Prandtl or Schmidt number) plus `mixing`. */
 	molecular: number;
 	turbulent: number;
+	mixing: number;
 	/** Value air carries in through an exterior opening. */
 	inflow: number;
 	/** Downward drift speed and surface deposition speed, m/s. Zero for temperature. */
@@ -60,7 +61,7 @@ export function diffusivities(grid: Grid, geometry: Geometry, nut: Float32Array,
 			const row = sx * j + sxy * k;
 			for (let i = 0; i < nx; i++) {
 				const c = i + row;
-				diffusivity[c] = geometry.fluid[c] ? spec.molecular + nut[c] / spec.turbulent : 0;
+				diffusivity[c] = geometry.fluid[c] ? spec.molecular + nut[c] / spec.turbulent + spec.mixing : 0;
 			}
 		}
 }

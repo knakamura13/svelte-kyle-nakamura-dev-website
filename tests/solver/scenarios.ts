@@ -34,7 +34,7 @@ export function lidDrivenCavity(n: number) {
 	const h = 1 / n;
 	const solver = new CpuSolver({
 		grid: { nx: n, ny: n, nz: 1, h },
-		fluid: { ...AIR, rho: 1, nu: 1e-3, beta: 0 },
+		fluid: { ...AIR, rho: 1, nu: 1e-3, beta: 0, mixing: 0 },
 		geometry: boxGeometry({ nx: n, ny: n, nz: 1, h }),
 		sides: [WALL, WALL, WALL, { slip: 'no-slip', velocity: [1, 0, 0] }, SLIP, SLIP],
 		turbulence: 'none',
@@ -72,7 +72,7 @@ export function heatedCavity(rayleigh: number, n: number, prandtl = 0.71) {
 	const nu = prandtl * alpha;
 	const solver = new CpuSolver({
 		grid: { nx: n, ny: n, nz: 1, h },
-		fluid: { ...AIR, rho: 1, nu, alpha, beta: 1, g: 1 },
+		fluid: { ...AIR, rho: 1, nu, alpha, beta: 1, g: 1, mixing: 0 },
 		geometry: boxGeometry({ nx: n, ny: n, nz: 1, h }),
 		sides: [{ slip: 'no-slip', theta: 0.5 }, { slip: 'no-slip', theta: -0.5 }, WALL, WALL, SLIP, SLIP],
 		turbulence: 'none',
