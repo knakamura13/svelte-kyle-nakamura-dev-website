@@ -44,3 +44,9 @@ export interface SceneInstance {
 
 /** Builds a scene that reads `params` (written by the Dock) and writes `readout` (read by the Dock). */
 export type SceneFactory<P, R> = (host: SceneHost, params: P, readout: R) => SceneInstance;
+
+/**
+ * Every scene an Experiment can host, by the key its chapters ask for. Each factory has its own params
+ * and readout, which the controller only passes through, so they are `never` here.
+ */
+export type SceneRegistry = Record<string, SceneFactory<never, never>>;

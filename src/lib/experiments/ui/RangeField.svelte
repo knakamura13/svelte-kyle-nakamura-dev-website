@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { useExperience } from '../experience.svelte';
+	import { useExperience } from '../engine/experience.svelte';
 
 	let {
 		id,

@@ -1,6 +1,10 @@
 import { Vector3, type Camera } from 'three';
 
-export type LabelTone = 'rest' | 'mover' | 'light' | 'ghost' | 'muon' | 'plain';
+/**
+ * Which color a label's dot takes: the value of its `data-tone`, which each Experiment's stylesheet maps
+ * to a `--tone` color. A tone with no rule, such as the default `'plain'`, gets a neutral dot.
+ */
+export type LabelTone = string;
 
 export interface LabelOptions {
 	name: string;

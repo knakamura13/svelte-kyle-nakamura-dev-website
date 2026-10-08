@@ -2,9 +2,9 @@
 	import type { Snippet } from 'svelte';
 	import { reveal } from '$lib/motion/reveal';
 	import type { SceneId } from '../scenes';
-	import { useExperience } from '../experience.svelte';
+	import { useExperience } from '$lib/experiments/engine/experience.svelte';
 	import type { Tint } from '../palette';
-	import { pinWhenFits, stage } from './stage';
+	import { pinWhenFits, stage } from '$lib/experiments/ui/stage';
 
 	let {
 		id,

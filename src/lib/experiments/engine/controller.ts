@@ -1,12 +1,12 @@
 import { WebGLRenderer } from 'three';
-import { sceneFactories, type SceneId } from '../scenes';
 import { disposeKit } from './kit';
 import { LabelLayer } from './labels';
 import { OrbitRig } from './rig';
-import type { SceneInstance } from './types';
+import type { SceneInstance, SceneRegistry } from './types';
 
 export interface SlotOptions {
-	scene: SceneId;
+	/** The key of the scene's factory in the registry the controller was built with. */
+	scene: string;
 	params: object;
 	readout: object;
 }
@@ -36,7 +36,8 @@ const PIN_MS = 5000;
 /**
  * Runs every 3D scene on the page with one WebGL context. A phone can't spare a context per chapter, so
  * the canvas moves into whichever Stage is most on screen; the others keep a snapshot of their last
- * frame. A frame is only drawn when something moved, so a paused page costs nothing.
+ * frame. A frame is only drawn when something moved, so a paused page costs nothing. It knows no scene by
+ * name: the Experiment hands it the factories its Stages may ask for.
  */
 export class StageController {
 	private renderer: WebGLRenderer | null = null;
@@ -51,7 +52,7 @@ export class StageController {
 	private readonly near: IntersectionObserver;
 	private readonly resizes: ResizeObserver;
 
-	constructor() {
+	constructor(private readonly factories: SceneRegistry) {
 		this.seen = new IntersectionObserver(this.onSeen, {
 			threshold: Array.from({ length: 11 }, (_, i) => i / 10)
 		});
@@ -166,8 +167,10 @@ export class StageController {
 		if (slot.inst) return true;
 		if (slot.broken) return false;
 		try {
+			const create: SceneRegistry[string] | undefined = this.factories[slot.options.scene];
+			if (!create) throw new Error(`No scene is registered as "${slot.options.scene}".`);
 			slot.layer = new LabelLayer(slot.view.querySelector<HTMLElement>('.stage-labels') ?? slot.view);
-			slot.inst = sceneFactories[slot.options.scene](
+			slot.inst = create(
 				{ labels: slot.layer, reducedMotion: () => this.reduced.matches, compact: () => slot.view.clientWidth < 480 },
 				slot.options.params as never,
 				slot.options.readout as never

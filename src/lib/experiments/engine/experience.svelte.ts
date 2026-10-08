@@ -1,10 +1,18 @@
 import { getContext, setContext } from 'svelte';
-import type { SlotOptions, StageController } from './engine/controller';
+import type { SlotOptions, StageController } from './controller';
 
-const key = Symbol('relativity');
+const key = Symbol('experiment');
 
 export const prefersReducedMotion = () =>
 	typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/**
+ * Fetches an Experiment's 3D engine: the controller module and that Experiment's scenes, as dynamic
+ * imports, so three.js stays out of the page's initial JavaScript. It resolves to a function that builds
+ * the controller rather than to a controller, so the Experience can still decline to build one for a
+ * visitor who has already left (a controller listens to the document until it is destroyed).
+ */
+export type EngineLoader = () => Promise<() => StageController>;
 
 /**
  * State shared by every chapter on the page: the motion preference, the one 3D engine (fetched only
@@ -19,6 +27,9 @@ export class Experience {
 	/** Counts teardowns, so a download that finishes after one can tell it is no longer wanted. */
 	private generation = 0;
 	private announceTimer: ReturnType<typeof setTimeout> | undefined;
+
+	/** `load` is not called until the first Stage nears the viewport. */
+	constructor(private readonly load: EngineLoader) {}
 
 	/** Browser only. Returns the cleanup. */
 	start() {
@@ -36,13 +47,13 @@ export class Experience {
 		};
 	}
 
-	private load() {
+	private engine() {
 		const generation = this.generation;
-		this.loading ??= import('./engine/controller')
-			.then(({ StageController }) => {
+		this.loading ??= this.load()
+			.then((build) => {
 				// The visitor may have left while the engine was still downloading. Nothing would ever stop it then.
 				if (generation !== this.generation) return null;
-				return (this.controller = new StageController());
+				return (this.controller = build());
 			})
 			.catch((error) => {
 				console.error('The 3D scenes could not load.', error);
@@ -60,7 +71,7 @@ export class Experience {
 				if (!entry.isIntersecting) return;
 				observer.disconnect();
 				view.dataset.state = 'loading';
-				void this.load().then((controller) => {
+				void this.engine().then((controller) => {
 					if (cancelled) return;
 					if (controller) unregister = controller.register(view, options);
 					else view.dataset.state = 'error';
@@ -88,5 +99,5 @@ export class Experience {
 	}
 }
 
-export const provideExperience = () => setContext(key, new Experience());
+export const provideExperience = (load: EngineLoader) => setContext(key, new Experience(load));
 export const useExperience = () => getContext<Experience>(key);
