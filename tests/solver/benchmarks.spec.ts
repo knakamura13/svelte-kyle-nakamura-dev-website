@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { DE_VAHL_DAVIS, GHIA_RE1000_U, GHIA_RE1000_V } from './references';
+import { BOTELLA_PEYRET_RE1000_U, BOTELLA_PEYRET_RE1000_V, DE_VAHL_DAVIS, GHIA_RE1000_U, GHIA_RE1000_V } from './references';
 import {
 	advance,
 	cavityCenterlines,
@@ -25,11 +25,11 @@ import {
  */
 const DIVERGENCE = 1e-3;
 
-/** Largest and rms difference, in lid speeds, between a solution and Ghia's tabulated centreline values. */
-function ghiaError(solver: ReturnType<typeof lidDrivenCavity>) {
+/** Largest and rms difference, in lid speeds, between a solution and a table of centreline values. */
+function centrelineError(solver: ReturnType<typeof lidDrivenCavity>, tableU = GHIA_RE1000_U, tableV = GHIA_RE1000_V) {
 	const interior = <T extends [number, number]>(table: T[]) => table.filter(([x]) => x > 0 && x < 1);
-	const us = interior(GHIA_RE1000_U);
-	const vs = interior(GHIA_RE1000_V);
+	const us = interior(tableU);
+	const vs = interior(tableV);
 	const lines = cavityCenterlines(
 		solver,
 		us.map(([y]) => y),
@@ -45,9 +45,12 @@ test.describe('lid-driven cavity at Re 1000 (Ghia, Ghia and Shin 1982)', () => {
 		advance(coarse, 25, 0.5 / 64);
 		const fine = lidDrivenCavity(128);
 		advance(fine, 25, 1.0 / 128);
-		const e64 = ghiaError(coarse);
-		const e128 = ghiaError(fine);
-		console.log(`cavity Re 1000: 64² max ${e64.max.toFixed(4)} rms ${e64.rms.toFixed(4)}; 128² max ${e128.max.toFixed(4)} rms ${e128.rms.toFixed(4)} (lid speeds)`);
+		const e64 = centrelineError(coarse);
+		const e128 = centrelineError(fine);
+		// Ghia's table is itself a second-order 129² solution: against the spectral one it is off by up to 0.0185 of the lid speed.
+		const exact = centrelineError(fine, BOTELLA_PEYRET_RE1000_U, BOTELLA_PEYRET_RE1000_V);
+		console.log(`cavity Re 1000: 64² max ${e64.max.toFixed(4)} rms ${e64.rms.toFixed(4)}; 128² max ${e128.max.toFixed(4)} rms ${e128.rms.toFixed(4)} against Ghia, max ${exact.max.toFixed(4)} rms ${exact.rms.toFixed(4)} against the spectral solution (lid speeds)`);
+		expect(exact.max).toBeLessThan(0.035);
 		// 128 × 128: within 3 % of the lid speed anywhere on either centreline, 2 % rms.
 		expect(e128.max).toBeLessThan(0.03);
 		expect(e128.rms).toBeLessThan(0.02);
