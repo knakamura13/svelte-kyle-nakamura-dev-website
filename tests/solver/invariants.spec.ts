@@ -57,6 +57,54 @@ test.describe('conservation', () => {
 	});
 });
 
+test.describe('orientation', () => {
+	/** The same cube room with its two openings on the north and south walls instead of the west and east ones. */
+	function turnedRoom(h: number, windward: number, leeward: number) {
+		const n = Math.round(3 / h);
+		const solver = new CpuSolver({ grid: { nx: n, ny: n, nz: n, h }, fluid: { ...AIR, beta: 0, cd: 0.62 }, geometry: boxGeometry({ nx: n, ny: n, nz: n, h }) });
+		const g = solver.grid;
+		const span = Math.round(0.6 / h);
+		const row = Math.round(0.9 / h);
+		const column = Math.round((n - span) / 2);
+		let into = 0;
+		const faces: number[] = [];
+		for (let dj = 0; dj < span; dj++)
+			for (let di = 0; di < span; di++) {
+				const i = column + di;
+				const j = row + dj;
+				solver.geometry.aw[i + g.sx * j] = 1;
+				solver.geometry.aw[i + g.sx * j + g.sxy * n] = 1;
+				solver.exterior.sides[4][3 * (i + n * j)] = windward;
+				solver.exterior.sides[5][3 * (i + n * j)] = leeward;
+				faces.push(i + g.sx * j);
+			}
+		solver.fill(0);
+		return { solver, flow: () => faces.reduce((sum, f) => sum + solver.vel.w[f] * h * h, into) };
+	}
+
+	test('openings on the north wall behave like the same openings on the west wall, and eddy viscosity is finite', () => {
+		const east = windRoom(0.15, 3, -3);
+		const north = turnedRoom(0.15, 3, -3);
+		advance(east.solver, 10, 0.1);
+		advance(north.solver, 10, 0.1);
+		const intoEast = openingFlows(east.solver, east.faces).into;
+		expect(Math.abs(north.flow() - intoEast) / intoEast).toBeLessThan(2e-3);
+		const g = north.solver.grid;
+		let worstNorth = 0;
+		let worstEast = 0;
+		let finite = true;
+		for (let k = 0; k < g.nz; k++) for (let j = 0; j < g.ny; j++) for (let i = 0; i < g.nx; i++) {
+			const a = north.solver.nut[g.index(i, j, k)];
+			const b = east.solver.nut[g.index(i, j, k)];
+			finite &&= Number.isFinite(a) && Number.isFinite(b);
+			worstNorth = Math.max(worstNorth, a);
+			worstEast = Math.max(worstEast, b);
+		}
+		expect(finite).toBe(true);
+		expect(Math.abs(worstNorth - worstEast) / worstEast).toBeLessThan(5e-3);
+	});
+});
+
 test.describe('window fan', () => {
 	/**
 	 * A room with an open window and a window fan: the flow settles where the fan's curve meets the open window's

@@ -70,12 +70,14 @@ export function eddyViscosity(
 					nut[c] = 0;
 					continue;
 				}
-				const xm = au[c] > 0;
-				const xp = au[c + 1] > 0;
-				const ym = av[c] > 0;
-				const yp = av[c + sx] > 0;
-				const zm = aw[c] > 0;
-				const zp = aw[c + sxy] > 0;
+				// Air continues on a side only if the face is open and there is a cell beyond it: an opening on the box itself
+				// leads outdoors, which is not simulated, so there the difference is one-sided.
+				const xm = i > 0 && au[c] > 0;
+				const xp = i < nx - 1 && au[c + 1] > 0;
+				const ym = j > 0 && av[c] > 0;
+				const yp = j < ny - 1 && av[c + sx] > 0;
+				const zm = k > 0 && aw[c] > 0;
+				const zp = k < nz - 1 && aw[c + sxy] > 0;
 				const sxx = (u[c + 1] - u[c]) * invh;
 				const syy = (v[c + sx] - v[c]) * invh;
 				const szz = (w[c + sxy] - w[c]) * invh;
