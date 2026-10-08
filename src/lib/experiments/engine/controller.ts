@@ -371,6 +371,8 @@ export class StageController {
 			this.invalidate();
 			return;
 		}
+		// An unclaimed gesture ends too, and the scene may want to know (a tap pins a probe, a hold released smoke).
+		slot.inst?.input?.pointer('up', event, this.ndc(event));
 		slot.rig.pointerUp(event);
 		if (!slot.rig.dragging) delete slot.view.dataset.dragging;
 	};

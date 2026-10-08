@@ -19,8 +19,9 @@ export type PointerPhase = 'down' | 'move' | 'up' | 'leave';
 export interface SceneInput {
 	/**
 	 * Every pointer event over the Stage, with its position in normalized device coordinates (x and y from -1 to 1,
-	 * y up). Return true from a 'down' to claim the gesture: until its 'up' the orbit rig does not see that pointer and
-	 * every 'move' of it comes here. 'move' also arrives, unclaimed, as hover; 'leave' when the pointer leaves the Stage.
+	 * y up). Return true from a 'down' to claim the gesture: until its 'up' the orbit rig does not see that pointer.
+	 * An unclaimed gesture is still reported ('down', every 'move' and its 'up') so a scene can tell a tap or a hold
+	 * from a drag while the rig orbits; hover is 'move' with no button; 'leave' arrives when the pointer leaves the Stage.
 	 */
 	pointer(phase: PointerPhase, event: PointerEvent, ndc: { x: number; y: number }): boolean;
 	/** Keys while the Stage has focus. Return true to use one; the rig then ignores it. */
