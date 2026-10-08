@@ -13,7 +13,9 @@
 		"preview": "vite preview",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-		"test:e2e": "playwright test"
+		"test:e2e": "playwright test",
+		"test:solver": "playwright test -c playwright.solver.config.ts",
+		"test": "yarn test:solver && yarn test:e2e"
 	},
 	"devDependencies": {
 		"@axe-core/playwright": "^4.13.0",

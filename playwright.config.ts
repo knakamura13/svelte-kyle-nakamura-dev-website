@@ -6,6 +6,8 @@ const origin = `http://127.0.0.1:${port}`;
 
 export default defineConfig({
 	testDir: 'tests',
+	// The solver benchmarks run in Node with their own config (playwright.solver.config.ts).
+	testIgnore: 'solver/**',
 	fullyParallel: true,
 	forbidOnly: !!process.env.CI,
 	retries: process.env.CI ? 1 : 0,
