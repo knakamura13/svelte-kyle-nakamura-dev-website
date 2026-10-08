@@ -99,5 +99,7 @@ export class Experience {
 	}
 }
 
-export const provideExperience = (load: EngineLoader) => setContext(key, new Experience(load));
+/** Provides an Experience that an Experiment built itself, as a subclass with more state, so the shared controls find it with `useExperience`. */
+export const setExperience = <T extends Experience>(experience: T) => setContext(key, experience);
+export const provideExperience = (load: EngineLoader) => setExperience(new Experience(load));
 export const useExperience = () => getContext<Experience>(key);
