@@ -18,8 +18,8 @@
 			</li>
 			<li>
 				<strong>Fans are discs that push, and they push less when the room pushes back.</strong> Each model’s push is set so that, in open air, the flow
-				through its blades equals its rated flow. Against the free-jet benchmark a simulated fan delivers 102 % of its rating and its jet slows as 1 over
-				the distance, as real jets do.
+				through its blades equals its rated flow. Against the free-jet benchmark a simulated fan delivers its rating to within 2 % and its jet slows as 1 over
+				the distance, with the decay constant measurements of real jets give (5.4 to 6.1).
 			</li>
 			<li>
 				<strong>Outdoors is not simulated; an open window meets the weather.</strong> Each opening takes the wind’s pressure on its wall, which depends on

@@ -43,7 +43,7 @@ export const AIR: FluidProperties = {
 	alpha: 2.14e-5,
 	beta: 1 / 293.15,
 	g: 9.80665,
-	shearCoefficient: 0.013,
+	shearCoefficient: 0.015,
 	maxLength: 0.5,
 	prT: 0.85,
 	scT: 0.7,
