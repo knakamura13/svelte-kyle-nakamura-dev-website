@@ -18,7 +18,7 @@ export type UnitSystem = 'imperial' | 'metric';
 export interface Conditions {
 	/** Compass bearing the wind blows FROM, degrees: 0 north, 90 east, 180 south, 270 west. */
 	windFrom: number;
-	/** Wind speed at the eaves, m/s. 0 is calm. */
+	/** Wind speed as a weather report gives it (10 m up, open ground), m/s. The wind that reaches the home is `WIND_AT_EAVES` of it. 0 is calm. */
 	windSpeed: number;
 	/** Outdoor air temperature, °C. */
 	outdoorTemp: number;
