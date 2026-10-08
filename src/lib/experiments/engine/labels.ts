@@ -124,6 +124,11 @@ export class LabelLayer {
 		return label;
 	}
 
+	/** Takes one label off the Stage for good. */
+	remove(label: Label) {
+		if (this.labels.delete(label)) label.el.remove();
+	}
+
 	/** Moves every label to where its point currently projects. Call after rendering. */
 	update(camera: Camera, width: number, height: number) {
 		for (const label of this.labels) {

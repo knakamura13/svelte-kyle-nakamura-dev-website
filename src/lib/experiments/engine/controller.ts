@@ -29,6 +29,8 @@ interface Slot {
 	layer?: LabelLayer;
 	/** The pointer the scene claimed with its input hook, until that pointer lifts. */
 	claimed: number | null;
+	/** The framing object last applied from `inst.framing`. */
+	framing?: object;
 	undo: (() => void)[];
 }
 
@@ -289,6 +291,12 @@ export class StageController {
 		const dt = this.last ? Math.min(0.05, Math.max(0, (now - this.last) / 1000)) : 1 / 60;
 		this.last = now;
 		const moving = slot.inst.update(dt);
+		const framing = slot.inst.framing?.();
+		if (framing && framing !== slot.framing) {
+			slot.framing = framing;
+			slot.rig.setSetup(framing);
+			this.dirty = true;
+		}
 		if (slot.inst.fit) slot.rig.setFit(slot.inst.fit());
 		if (slot.inst.focus) slot.rig.setTarget(...slot.inst.focus());
 		const orbiting = slot.rig.update(dt, moving);

@@ -24,7 +24,7 @@ export interface SceneInput {
 	 * from a drag while the rig orbits; hover is 'move' with no button; 'leave' arrives when the pointer leaves the Stage.
 	 */
 	pointer(phase: PointerPhase, event: PointerEvent, ndc: { x: number; y: number }): boolean;
-	/** Keys while the Stage has focus. Return true to use one; the rig then ignores it. */
+	/** Keys while the Stage has focus, key presses and releases alike (`event.type`). Return true to use a press; the rig then ignores it. */
 	key?(event: KeyboardEvent): boolean;
 	/** The touch-action the canvas should have right now: 'pan-y' lets a vertical swipe scroll the page, 'none' keeps a drag for the scene. */
 	touchAction?(): 'pan-y' | 'none';
@@ -60,6 +60,12 @@ export interface SceneInstance {
 	focus?(): [number, number, number];
 	/** Takes over the pointer and keys where the scene needs them; absent, the orbit rig has them all. */
 	input?: SceneInput;
+	/**
+	 * The camera framing to hold, for a scene that re-frames itself (another plan, a top-down view). The Stage
+	 * snaps the camera to a framing when the object returned is not the one it last applied, so return the same
+	 * object until the framing changes.
+	 */
+	framing?(): RigSetup;
 	dispose(): void;
 }
 

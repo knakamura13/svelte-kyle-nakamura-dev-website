@@ -27,7 +27,7 @@ export class OrbitRig {
 	private driftClock = 0;
 	private touched = false;
 	private readonly target: Vector3;
-	private readonly tanHalfFov: number;
+	private tanHalfFov: number;
 	private readonly pointers = new Map<number, { x: number; y: number }>();
 	private pinchSpread = 0;
 	private pinchZoom = 1;
@@ -35,7 +35,7 @@ export class OrbitRig {
 	/** `motionAllowed` is asked every frame: idle drift and easing follow the visitor's preference. */
 	constructor(
 		private readonly camera: PerspectiveCamera,
-		private readonly setup: RigSetup,
+		private setup: RigSetup,
 		private readonly motionAllowed: () => boolean
 	) {
 		this.yaw = this.goalYaw = setup.yaw;
@@ -44,6 +44,21 @@ export class OrbitRig {
 		this.target = new Vector3(...setup.target);
 		this.tanHalfFov = Math.tan(degToRad(setup.fov) / 2);
 		camera.fov = setup.fov;
+	}
+
+	/** Re-frames the camera: new target, fit and limits, and the camera eases to the new setup's yaw, pitch and zoom. */
+	setSetup(setup: RigSetup) {
+		this.setup = setup;
+		this.fit = { ...setup.fit };
+		this.target.set(...setup.target);
+		this.tanHalfFov = Math.tan(degToRad(setup.fov) / 2);
+		this.camera.fov = setup.fov;
+		this.camera.updateProjectionMatrix();
+		this.measure();
+		this.goalYaw = setup.yaw;
+		this.goalPitch = setup.pitch;
+		this.goalZoom = 1;
+		this.touched = true;
 	}
 
 	get yawDegrees() {
