@@ -80,15 +80,17 @@ export class PressureSolver {
 	) {
 		let level = makeLevel(grid.nx, grid.ny, grid.nz);
 		this.levels.push(level);
+		// Every axis with more than one cell is halved, rounding up: an odd count leaves the last coarse cell
+		// covering a single fine cell. Any grid size therefore coarsens all the way down.
 		while (level.nx * level.ny * level.nz > 256) {
-			const fx = level.nx % 2 === 0 && level.nx >= 2 ? 2 : 1;
-			const fy = level.ny % 2 === 0 && level.ny >= 2 ? 2 : 1;
-			const fz = level.nz % 2 === 0 && level.nz >= 2 ? 2 : 1;
+			const fx = level.nx >= 2 ? 2 : 1;
+			const fy = level.ny >= 2 ? 2 : 1;
+			const fz = level.nz >= 2 ? 2 : 1;
 			if (fx * fy * fz === 1) break;
 			level.fx = fx;
 			level.fy = fy;
 			level.fz = fz;
-			level = makeLevel(level.nx / fx, level.ny / fy, level.nz / fz);
+			level = makeLevel(Math.ceil(level.nx / fx), Math.ceil(level.ny / fy), Math.ceil(level.nz / fz));
 			this.levels.push(level);
 		}
 		this.boundaryQ = [0, 1, 2, 3, 4, 5].map((s) => new Float32Array(grid.sideSize(s as SideIndex)));
@@ -211,12 +213,18 @@ export class PressureSolver {
 			}
 	}
 
-	/** The operator one level up: faces across a coarse interface are summed, interior ones halved for the doubled distance, and opening conductances (which do not depend on distance) are not. */
+	/**
+	 * The operator one level up: faces across a coarse interface are summed, interior ones divided by the
+	 * coarsening factor for the larger distance, and opening conductances (which do not depend on distance) are
+	 * not. A coarse cell or face past the end of an odd-sized fine level sums only the fine cells and faces that
+	 * exist; a coarse face on the far side of the box maps to the fine box face.
+	 */
 	private coarsen(fine: Level, coarse: Level) {
 		const { fx, fy, fz } = fine;
-		const sum = (src: Float32Array, i: number, j: number, k: number, ni: number, nj: number, nk: number) => {
+		const sum = (src: Float32Array, i: number, j: number, k: number, ni: number, nj: number, nk: number, limitX: number, limitY: number, limitZ: number) => {
 			let total = 0;
-			for (let c = 0; c < nk; c++) for (let b = 0; b < nj; b++) for (let a = 0; a < ni; a++) total += src[i + a + fine.sx * (j + b) + fine.sxy * (k + c)];
+			for (let c = k; c < Math.min(k + nk, limitZ); c++)
+				for (let b = j; b < Math.min(j + nj, limitY); b++) for (let a = i; a < Math.min(i + ni, limitX); a++) total += src[a + fine.sx * b + fine.sxy * c];
 			return total;
 		};
 		const { sx, sxy } = coarse;
@@ -224,19 +232,22 @@ export class PressureSolver {
 			for (let j = 0; j < coarse.ny; j++)
 				for (let i = 0; i <= coarse.nx; i++) {
 					const interior = i > 0 && i < coarse.nx;
-					coarse.cx[i + sx * j + sxy * k] = sum(fine.cx, i * fx, j * fy, k * fz, 1, fy, fz) / (interior ? fx : 1);
+					const face = Math.min(i * fx, fine.nx);
+					coarse.cx[i + sx * j + sxy * k] = sum(fine.cx, face, j * fy, k * fz, 1, fy, fz, fine.nx + 1, fine.ny, fine.nz) / (interior ? fx : 1);
 				}
 		for (let k = 0; k < coarse.nz; k++)
 			for (let j = 0; j <= coarse.ny; j++)
 				for (let i = 0; i < coarse.nx; i++) {
 					const interior = j > 0 && j < coarse.ny;
-					coarse.cy[i + sx * j + sxy * k] = sum(fine.cy, i * fx, j * fy, k * fz, fx, 1, fz) / (interior ? fy : 1);
+					const face = Math.min(j * fy, fine.ny);
+					coarse.cy[i + sx * j + sxy * k] = sum(fine.cy, i * fx, face, k * fz, fx, 1, fz, fine.nx, fine.ny + 1, fine.nz) / (interior ? fy : 1);
 				}
 		for (let k = 0; k <= coarse.nz; k++)
 			for (let j = 0; j < coarse.ny; j++)
 				for (let i = 0; i < coarse.nx; i++) {
 					const interior = k > 0 && k < coarse.nz;
-					coarse.cz[i + sx * j + sxy * k] = sum(fine.cz, i * fx, j * fy, k * fz, fx, fy, 1) / (interior ? fz : 1);
+					const face = Math.min(k * fz, fine.nz);
+					coarse.cz[i + sx * j + sxy * k] = sum(fine.cz, i * fx, j * fy, face, fx, fy, 1, fine.nx, fine.ny, fine.nz + 1) / (interior ? fz : 1);
 				}
 		coarse.dg.fill(0);
 		this.diagonal(coarse);
