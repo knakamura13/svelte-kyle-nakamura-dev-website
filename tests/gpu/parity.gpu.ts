@@ -92,6 +92,8 @@ test('steps of a room with windows, a window fan, a fan, a source and a purifier
 	expect(c.theta.rel).toBeLessThan(1e-4);
 	expect(c.particulates.rel).toBeLessThan(1e-4);
 	expect(c.nut.rel).toBeLessThan(1e-4);
+	// The particulate mass log the Physics panel's mass balance is built from.
+	for (const [name, comparison] of Object.entries(c)) if (name.startsWith('tally')) expect((comparison as Comparison).rel, name).toBeLessThan(1e-4);
 });
 
 test('the point sampler and the slice match cpu/readouts.ts on the same state', async () => {

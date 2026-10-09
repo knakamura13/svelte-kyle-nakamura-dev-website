@@ -337,7 +337,8 @@ async function devicesParity(steps: number, off: string[] = []) {
 		exterior.particulates = off.includes('outdoors') ? 0 : 10;
 		const config: SolverConfig = {
 			grid: { nx, ny, nz, h },
-			fluid: { ...AIR, cd: 0.62 },
+			// Settling and deposition on, so the particulate tally's deposited lane and the settling flux are exercised.
+			fluid: { ...AIR, cd: 0.62, settling: 2e-3, deposition: 1e-3 },
 			geometry,
 			sides: [WALL, WALL, WALL, WALL, WALL, WALL],
 			turbulence: 'shear-length',
@@ -383,8 +384,21 @@ async function devicesParity(steps: number, off: string[] = []) {
 	const [theta, c] = unpackPair(await readBack(device, solver.scal, 8 * solver.grid.size));
 	const nut = await readBack(device, solver.nut, 4 * solver.grid.size);
 	const p = await readBack(device, solver.levels[0].p, 4 * solver.grid.size);
+	const log = await readBack(device, (solver as any).log, 32 * steps);
 	const outlet = solver.outlet;
 	solver.dispose();
+	// The particulate mass log, summed over the steps' slots in double as the backend would: (inflow, outflow,
+	// emitted, removed) and (deposited, 0, 0, 0) per slot, in units the CPU's diagnostics multiply by rho.
+	const totals = [0, 0, 0, 0, 0];
+	for (let s = 0; s < steps; s++) {
+		for (let n = 0; n < 4; n++) totals[n] += log[8 * s + n];
+		totals[4] += log[8 * s + 4];
+	}
+	const rho = cpu.fluid.rho;
+	const mass = cpu.diagnostics().mass;
+	const tally = Object.fromEntries(
+		(['inflow', 'outflow', 'emitted', 'removed', 'deposited'] as const).map((name, n) => [`tally ${name}`, compare({ [name]: [Float32Array.of(totals[n] * rho), Float32Array.of(mass[name])] })])
+	);
 	const grid = cpu.grid;
 	const inside = (n: number) => {
 		const k = Math.floor(n / grid.sxy);
@@ -397,7 +411,8 @@ async function devicesParity(steps: number, off: string[] = []) {
 		pressure: compare({ p: [p, cpu.pressure.pressure as Float32Array] }, inside),
 		theta: compare({ theta: [theta, cpu.theta] }, inside),
 		particulates: compare({ c: [c, cpu.c] }, inside),
-		nut: compare({ nut: [nut, cpu.nut] }, inside)
+		nut: compare({ nut: [nut, cpu.nut] }, inside),
+		...tally
 	};
 }
 
