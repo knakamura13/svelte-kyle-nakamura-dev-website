@@ -102,6 +102,12 @@ test('the point sampler and the slice match cpu/readouts.ts on the same state', 
 	expect(c.slice.rel).toBeLessThan(TOLERANCE);
 });
 
+test('face updates (geometryScatter) leave the packed geometry the host expects', async () => {
+	const c = await call<Comparison>(page, 'faceUpdateParity', 11);
+	report('face updates', c);
+	expect(c.maxAbs).toBe(0);
+});
+
 test('step time', async () => {
 	for (const [nx, ny, nz] of [
 		[64, 32, 48],

@@ -3,7 +3,7 @@
  * input, in the page, and reports how far apart the results are.
  */
 import { GpuContext } from '$lib/experiments/airflow/solver/gpu/context';
-import { GpuSolver, packPair, packVelocity, unpackPair, unpackVelocity } from '$lib/experiments/airflow/solver/gpu/solver';
+import { GpuSolver, packGeometry, packPair, packVelocity, unpackPair, unpackVelocity } from '$lib/experiments/airflow/solver/gpu/solver';
 import { CpuSolver, emptyExterior } from '$lib/experiments/airflow/solver/cpu/solver';
 import { PressureSolver } from '$lib/experiments/airflow/solver/cpu/pressure';
 import { eddyViscosity } from '$lib/experiments/airflow/solver/cpu/turbulence';
@@ -447,6 +447,26 @@ async function readoutParity(seed: number) {
 	};
 }
 
+/** Face updates (a door swings): the geometry scatter must leave `geo` equal to a fresh pack of the changed geometry. */
+async function faceUpdateParity(seed: number) {
+	const config = boxConfig(12, 10, 8, 0.1, 1.5e-5);
+	const grid = new Grid(config.grid);
+	const solver = await GpuSolver.create(await context(), config);
+	const next = random(seed);
+	const updates = ([0, 1, 2] as const).map((axis) => {
+		// Overlapping index ranges, so some indices change on two or three axes in one update.
+		const indices = Uint32Array.from({ length: 40 }, (_, n) => grid.index(1 + (n % 8), 1 + ((n >> 3) % 6), 2 + axis));
+		return { axis, indices, values: Float32Array.from(indices, () => Math.round(4 * next()) / 4) };
+	});
+	solver.updateFaces(updates);
+	const expected = { ...config.geometry, au: config.geometry.au.slice(), av: config.geometry.av.slice(), aw: config.geometry.aw.slice() };
+	const arrays = [expected.au, expected.av, expected.aw];
+	for (const update of updates) update.indices.forEach((index, n) => (arrays[update.axis][index] = update.values[n]));
+	const gpu = await readBack(solver.device, solver.geo, 16 * grid.size);
+	solver.dispose();
+	return compare({ geo: [gpu, packGeometry(grid, expected)] });
+}
+
 /** Wall-clock time per whole step on a grid, averaged over `steps` after a warm-up. */
 async function stepTime(nx: number, ny: number, nz: number, steps: number) {
 	const config = boxConfig(nx, ny, nz, 0.1, 1.5e-5);
@@ -472,5 +492,5 @@ async function stepTime(nx: number, ny: number, nz: number, steps: number) {
 	return { cells: nx * ny * nz, ms };
 }
 
-(window as any).parity = { diffuseParity, advectParity, turbulenceParity, pressureParity, cavityParity, heatedParity, devicesParity, readoutParity, stepTime };
+(window as any).parity = { diffuseParity, advectParity, turbulenceParity, pressureParity, cavityParity, heatedParity, devicesParity, readoutParity, faceUpdateParity, stepTime };
 (window as any).harnessReady = true;
