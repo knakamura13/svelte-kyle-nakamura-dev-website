@@ -31,6 +31,8 @@ export interface State {
 	swing?: number;
 	/** World metres the close-up fits. */
 	span?: number;
+	/** Looks at this world point (x, y, z) instead of the plan's middle, `span` metres across. */
+	target?: [number, number, number];
 }
 
 declare global {
@@ -78,6 +80,13 @@ function framing(state: State): RigSetup {
 		const sign = state.side === 'out' ? 1 : -1;
 		setup.yaw = Math.atan2(sign * out[0], sign * out[1]) + ((state.swing ?? 25) * Math.PI) / 180;
 		setup.pitch = ((state.pitch ?? 40) * Math.PI) / 180;
+		const span = state.span ?? 3.2;
+		setup.fit = { width: span, height: span };
+		setup.pitchRange = [0.05, 1.5];
+		setup.zoomRange = [0.3, 3];
+	}
+	if (state.target && !state.focus) {
+		setup.target = state.target;
 		const span = state.span ?? 3.2;
 		setup.fit = { width: span, height: span };
 		setup.pitchRange = [0.05, 1.5];

@@ -25,6 +25,9 @@ const outDir = resolve(positional.shift() ?? join(tmpdir(), 'airflow-dollhouse-q
 const sets = positional.length ? positional : ['all'];
 const sizes = (flags.find((f) => f.startsWith('--sizes='))?.slice(8) ?? '1280x800,390x800').split(',').map((s) => s.split('x').map(Number));
 const swiftshader = flags.includes('--swiftshader');
+const dpr = Number(flags.find((f) => f.startsWith('--dpr='))?.slice(6) ?? 1);
+// --clip=x,y,w,h crops each screenshot to that rectangle, in CSS pixels.
+const clip = flags.find((f) => f.startsWith('--clip='))?.slice(7).split(',').map(Number);
 
 mkdirSync(outDir, { recursive: true });
 execFileSync(join(root, 'node_modules/.bin/esbuild'), [join(here, 'entry.ts'), '--bundle', '--format=esm', '--alias:$lib=./src/lib', `--outfile=${join(outDir, 'dollhouse.js')}`, '--log-level=warning'], { cwd: root, stdio: 'inherit' });
@@ -73,13 +76,13 @@ const SHOTS = {
 };
 const order = ['overview', 'north', 'topdown', 'bare', 'openings'];
 const wanted = sets.includes('all') ? order : sets;
-const shots = wanted.flatMap((set) => (set.startsWith('state:') ? [{ name: 'custom', state: JSON.parse(set.slice(6)) }] : (SHOTS[set]?.() ?? (console.error(`Unknown set ${set}`), []))));
+const shots = wanted.flatMap((set, n) => (set.startsWith('state:') ? [{ name: `custom${n}`, state: JSON.parse(set.slice(6)) }] : (SHOTS[set]?.() ?? (console.error(`Unknown set ${set}`), []))));
 
 const browser = await chromium.launch(swiftshader ? { args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] } : {});
 const log = [];
 let failed = false;
 for (const [width, height] of sizes) {
-	const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 1 });
+	const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: dpr });
 	const page = await context.newPage();
 	page.on('console', (message) => log.push(`[${width}x${height} console.${message.type()}] ${message.text()}`));
 	page.on('pageerror', (error) => log.push(`[${width}x${height} pageerror] ${error.message}`));
@@ -92,7 +95,7 @@ for (const [width, height] of sizes) {
 		try {
 			await page.evaluate((s) => window.__setState(s), state);
 			const file = join(outDir, `${name}-${width}x${height}.png`);
-			await page.screenshot({ path: file });
+			await page.screenshot({ path: file, ...(clip ? { clip: { x: clip[0], y: clip[1], width: clip[2], height: clip[3] } } : {}) });
 			console.log(`shot ${file}`);
 		} catch (error) {
 			log.push(`[${width}x${height} shot ${name}] ${error.message}`);
