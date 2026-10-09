@@ -1,5 +1,5 @@
 import { CEILING, type PlanId } from './homes/types';
-import { DEFAULT_CONDITIONS, LIMITS, MAX_DEVICES, type Conditions, type DeviceState, type Setup } from './state';
+import { LIMITS, MAX_DEVICES, type Conditions, type DeviceState, type Setup } from './state';
 
 /**
  * The shareable link: a Setup as `1.` and base64url bytes, no padding. It carries the Setup and nothing else (no pins,
@@ -18,7 +18,7 @@ import { DEFAULT_CONDITIONS, LIMITS, MAX_DEVICES, type Conditions, type DeviceSt
  *               stored once and ids with a common start share it.
  *   plan        string index
  *   flags       bit 0: furniture built in
- *   conditions  mask of the fields that differ from DEFAULT_CONDITIONS, then those fields in order
+ *   conditions  mask of the fields that differ from V1_CONDITIONS (below), then those fields in order
  *   devices     count, then each: model (string index), mask, the masked numbers in DEVICE_FIELDS order, and the
  *               opening (string index) when its bit is set
  *   openings    count, then each: opening id (string index), percent open
@@ -53,17 +53,26 @@ interface Field {
 	fallback: number;
 	/** A bearing: wraps into [0, 360) instead of clamping. */
 	wrap?: boolean;
+	/** Zigzag-coded on the wire, because the steps can be negative. Stated here and not worked out from `min`, so a change to LIMITS cannot change how a field is read. */
+	signed?: boolean;
 }
 
 const bearing = (fallback: number): Field => ({ scale: 1, min: 0, max: 360, fallback, wrap: true });
-const bounded = ({ min, max }: { min: number; max: number }, scale: number, fallback: number): Field => ({ scale, min, max, fallback });
+const bounded = ({ min, max }: { min: number; max: number }, scale: number, fallback: number, signed = false): Field => ({ scale, min, max, fallback, signed });
+
+/**
+ * What a link means by a condition it leaves out. Frozen with version 1, and deliberately not `DEFAULT_CONDITIONS`: the
+ * page can change its own defaults later without changing the meaning of a link already shared. Changing any value here,
+ * a `scale`, a `fallback` or a `signed` below, or the order of the fields, needs a new version tag.
+ */
+const V1_CONDITIONS: Readonly<Conditions> = { windFrom: 270, windSpeed: 0, outdoorTemp: 10, indoorTemp: 21, outdoorPm25: 0 };
 
 const CONDITION_FIELDS: readonly (readonly [keyof Conditions, Field])[] = [
-	['windFrom', bearing(DEFAULT_CONDITIONS.windFrom)],
-	['windSpeed', bounded(LIMITS.windSpeed, 10, DEFAULT_CONDITIONS.windSpeed)],
-	['outdoorTemp', bounded(LIMITS.outdoorTemp, 2, DEFAULT_CONDITIONS.outdoorTemp)],
-	['indoorTemp', bounded(LIMITS.indoorTemp, 2, DEFAULT_CONDITIONS.indoorTemp)],
-	['outdoorPm25', bounded(LIMITS.outdoorPm25, 1, DEFAULT_CONDITIONS.outdoorPm25)]
+	['windFrom', bearing(V1_CONDITIONS.windFrom)],
+	['windSpeed', bounded(LIMITS.windSpeed, 10, V1_CONDITIONS.windSpeed)],
+	['outdoorTemp', bounded(LIMITS.outdoorTemp, 2, V1_CONDITIONS.outdoorTemp, true)],
+	['indoorTemp', bounded(LIMITS.indoorTemp, 2, V1_CONDITIONS.indoorTemp)],
+	['outdoorPm25', bounded(LIMITS.outdoorPm25, 1, V1_CONDITIONS.outdoorPm25)]
 ];
 
 type DeviceNumber = 'x' | 'z' | 'yaw' | 'power' | 'tilt' | 'y' | 'height' | 'sweep' | 'period';
@@ -74,7 +83,7 @@ const DEVICE_FIELDS: readonly (readonly [DeviceNumber, Field])[] = [
 	['z', bounded({ min: 0, max: MAX_POSITION }, 100, 0)],
 	['yaw', bearing(0)],
 	['power', bounded({ min: 0, max: 1 }, 100, 1)],
-	['tilt', bounded(LIMITS.tilt, 1, 0)],
+	['tilt', bounded(LIMITS.tilt, 1, 0, true)],
 	['y', bounded({ min: 0, max: CEILING }, 100, 0)],
 	['height', bounded({ min: 0, max: CEILING }, 100, 0)],
 	['sweep', bounded(LIMITS.oscillationSweep, 1, 90)],
@@ -256,7 +265,7 @@ class Writer {
 	}
 
 	steps(field: Field, steps: number) {
-		this.uint(field.min < 0 ? (steps < 0 ? -2 * steps - 1 : 2 * steps) : steps);
+		this.uint(field.signed ? (steps < 0 ? -2 * steps - 1 : 2 * steps) : steps);
 	}
 }
 
@@ -294,7 +303,7 @@ class Reader {
 	/** Whole steps of a field, wrapped or clamped into its range whatever the link says. */
 	steps(field: Field): number {
 		const n = this.uint();
-		const steps = field.min >= 0 ? n : n % 2 ? -(n + 1) / 2 : n / 2;
+		const steps = !field.signed ? n : n % 2 ? -(n + 1) / 2 : n / 2;
 		return fit(field, steps);
 	}
 

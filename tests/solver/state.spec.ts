@@ -533,7 +533,26 @@ test.describe('link: the shareable setup', () => {
 			furniture: true,
 			devices: [{ id: 'd1', model: 'box-fan-lasko-b20200', x: 0, z: 0, y: 0, yaw: 0, tilt: 0, power: 1, height: 0, oscillation: { on: false, sweep: 90, period: 8 } }],
 			openings: {},
-			conditions: DEFAULT_CONDITIONS
+			// The link's own defaults, which are not DEFAULT_CONDITIONS: see V1_CONDITIONS in link.ts.
+			conditions: { windFrom: 270, windSpeed: 0, outdoorTemp: 10, indoorTemp: 21, outdoorPm25: 0 }
+		});
+	});
+
+	test('links made by version 1 keep decoding to the same setup, whatever the page changes later', () => {
+		// Written by the first version of the codec, with a negative outdoor temperature (the zigzag-coded field). If this fails
+		// the wire format changed: give the new format a new version tag and keep decoding these, do not edit the strings.
+		const typical = '1.BgANYmF0aHJvb20tZG9vcgENZWRyb29tLTEtZG9vcgETb3gtZmFuLWxhc2tvLWIyMDIwMAAKZnJvbnQtZG9vcgAdcHVyaWZpZXItbWVkaXVtLWNvd2F5LWFwLTE1MTIAC3R3by1iZWRyb29tBQEHWigdAgIP1ALXAVpCBAOMBpcEAwAyARkDZA';
+		const blank = '1.AQAGc3R1ZGlvAAEAAAA';
+		expect(decodeSetup(blank, REAL_CATALOG)).toEqual({ plan: 'studio', furniture: true, devices: [], openings: {}, conditions: { windFrom: 270, windSpeed: 0, outdoorTemp: 10, indoorTemp: 21, outdoorPm25: 0 } });
+		expect(decodeSetup(typical, REAL_CATALOG)).toEqual({
+			plan: 'two-bedroom',
+			furniture: true,
+			devices: [
+				{ id: 'd1', model: 'box-fan-lasko-b20200', x: 3.4, z: 2.15, y: 0, yaw: 90, tilt: 0, power: 0.66, height: 0, oscillation: { on: false, sweep: 90, period: 8 } },
+				{ id: 'd2', model: 'purifier-medium-coway-ap-1512', x: 7.8, z: 5.35, y: 0, yaw: 0, tilt: 0, power: 1, height: 0, oscillation: { on: false, sweep: 90, period: 8 } }
+			],
+			openings: { 'bathroom-door': 0.5, 'bedroom-1-door': 0.25, 'front-door': 1 },
+			conditions: { windFrom: 90, windSpeed: 4, outdoorTemp: -7.5, indoorTemp: 21, outdoorPm25: 0 }
 		});
 	});
 
