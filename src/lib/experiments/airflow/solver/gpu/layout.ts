@@ -110,7 +110,7 @@ export const CONSTS = new UniformLayout('Consts', [
 	f('deposition'),
 	f('extTheta'),
 	f('extC'),
-	f('pad1'),
+	f('mixing'),
 	{ name: 'side', type: 'vec4<f32>', count: 6 },
 	{ name: 'wall', type: 'vec4<f32>', count: 6 },
 	{ name: 'sideBase', type: 'vec4<i32>', count: 2 }

@@ -566,7 +566,8 @@ export class GpuSolver {
 			.set('settling', fluid.settling)
 			.set('deposition', fluid.deposition)
 			.set('extTheta', this.exterior.theta)
-			.set('extC', this.exterior.particulates);
+			.set('extC', this.exterior.particulates)
+			.set('mixing', fluid.mixing);
 		this.sides.forEach((side, s) => {
 			const velocity = side.velocity ?? [0, 0, 0];
 			w.vec('side', s, [side.slip === 'free-slip' ? 1 : 0, velocity[0], velocity[1], velocity[2]]);
@@ -600,7 +601,7 @@ export class GpuSolver {
 		if (this.scalarSubstepsOverride !== undefined) return this.scalarSubstepsOverride;
 		const { fluid, grid } = this;
 		const cfl = (safety * cflSpeed * dt) / grid.h;
-		const diffusive = (6 * Math.max(fluid.alpha, fluid.particleDiffusivity, this.nuMax / Math.min(fluid.prT, fluid.scT)) * dt) / (grid.h * grid.h);
+		const diffusive = (6 * (Math.max(fluid.alpha, fluid.particleDiffusivity, this.nuMax / Math.min(fluid.prT, fluid.scT)) + fluid.mixing) * dt) / (grid.h * grid.h);
 		return Math.min(16, Math.max(1, Math.ceil(Math.max(cfl / SCALAR_CFL, diffusive / DIFFUSION_LIMIT))));
 	}
 

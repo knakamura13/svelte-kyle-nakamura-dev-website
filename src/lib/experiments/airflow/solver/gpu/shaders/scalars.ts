@@ -31,7 +31,7 @@ fn diffusivity(c: i32) -> vec2<f32> {
 		return vec2<f32>(0.0);
 	}
 	let n = nut[c];
-	return vec2<f32>(C.alpha + n / C.prT, C.particleD + n / C.scT);
+	return vec2<f32>(C.alpha + n / C.prT + C.mixing, C.particleD + n / C.scT + C.mixing);
 }
 // The upwind value plus half a van Leer-limited slope, as in cpu/scalars.ts \`advective\`.
 fn limited(up: f32, other: f32, beyond: f32, hasBeyond: bool) -> f32 {
