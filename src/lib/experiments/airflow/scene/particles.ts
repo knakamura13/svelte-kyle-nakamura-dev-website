@@ -242,7 +242,8 @@ const srgb = (hex: number) => [((hex >> 16) & 255) / 255, ((hex >> 8) & 255) / 2
 
 /**
  * Soft puffs where there is smoke: warm white where it is thin, light gray where it is dense, and their opacity follows
- * the concentration on a log scale, from invisible 2.5 decades below `dense` to nearly opaque at it.
+ * the concentration on a log scale, from invisible 2.5 decades below `dense` to 60 % opaque at it (puffs overlap, so a
+ * dense plume still builds up, but the slice and its arrows read through the edges).
  */
 export class SmokePoints {
 	readonly points: Points<BufferGeometry, ShaderMaterial>;
@@ -260,7 +261,7 @@ export class SmokePoints {
 			uDenseLog: { value: 0 },
 			uThin: { value: srgb(0xf4efe6) },
 			uDense: { value: srgb(0xb3ada4) },
-			uOpacity: { value: 0.9 },
+			uOpacity: { value: 0.6 },
 			uSize: { value: 0.22 },
 			uHalfHeight: { value: 400 },
 			uPixels: { value: new Vector2(2, 64) }

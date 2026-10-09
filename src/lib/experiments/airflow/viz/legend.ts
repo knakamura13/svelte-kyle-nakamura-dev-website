@@ -28,6 +28,11 @@ export interface LegendUnits {
 export interface LegendOptions extends ScaleOptions {
 	format: LegendFormat;
 	units?: Partial<LegendUnits>;
+	/**
+	 * The most ticks to return, for a bar that is narrow or labels that are long (default 6; particulates default to
+	 * every decade, which is five or fewer). Ticks are thinned evenly, keeping the ends.
+	 */
+	maxTicks?: number;
 }
 
 export interface LegendTick {
@@ -108,10 +113,20 @@ export function roundValues(lo: number, hi: number, most = 6): number[] {
 const within = (at: number) => at > -1e-9 && at < 1 + 1e-9;
 const clampAt = (at: number) => Math.min(1, Math.max(0, at));
 
+/** The most round ticks a bar carries unless the caller asks for fewer. */
+const DEFAULT_TICKS = 6;
+const tickLimit = (options: LegendOptions) => Math.max(2, Math.floor(options.maxTicks ?? DEFAULT_TICKS));
+
+/** At most `most` of `items`, evenly spaced by index, always keeping the first and the last. */
+function thin<T>(items: T[], most: number): T[] {
+	if (items.length <= most) return items;
+	return Array.from({ length: most }, (_, n) => items[Math.round((n * (items.length - 1)) / (most - 1))]);
+}
+
 function speedTicks(options: LegendOptions): LegendTick[] {
 	const perMps = options.units?.speed ?? 1;
 	const [, top] = scaleRange('speed', options);
-	return roundValues(0, top * perMps).map((shown) => {
+	return roundValues(0, top * perMps, tickLimit(options)).map((shown) => {
 		const value = shown / perMps;
 		return { value, label: options.format.speed(value), at: clampAt(value / top) };
 	});
@@ -154,15 +169,19 @@ export function legendFor(layer: LayerId, options: LegendOptions): Legend {
 			const value = Number(`1e${k}`);
 			ticks.push({ value, label: options.format.particulates(value), at: clampAt((k - bottom) / decades) });
 		}
-		return { ...base, ticks };
+		return { ...base, ticks: options.maxTicks === undefined ? ticks : thin(ticks, tickLimit(options)) };
 	}
 
 	const { scale, offset } = { scale: 1, offset: 0, ...options.units?.temperature };
 	const [lo, hi] = scaleRange('temperature', options);
-	const ticks = roundValues(lo * scale + offset, hi * scale + offset)
+	const most = tickLimit(options);
+	// The baseline is labelled on its own, so a round tick that would sit on top of its label is dropped: in °F the
+	// 21 °C baseline is 69.8, a fifth of a degree from the round 70.
+	const clearance = 0.5 / most - 1e-9;
+	const ticks = roundValues(lo * scale + offset, hi * scale + offset, most)
 		.map((shown) => (shown - offset) / scale)
 		.map((value) => ({ value, label: options.format.temperature(value), at: (value - lo) / (hi - lo) }))
-		.filter((tick) => within(tick.at))
+		.filter((tick) => within(tick.at) && Math.abs(tick.at - 0.5) >= clearance)
 		.map((tick) => ({ ...tick, at: clampAt(tick.at) }));
 	return { ...base, ticks, midpoint: { value: options.baseline, label: options.format.temperature(options.baseline), at: 0.5 } };
 }

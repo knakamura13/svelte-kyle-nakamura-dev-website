@@ -3,8 +3,8 @@ import type { Slice } from '../solver/types';
 import { DIRECTION_EXPONENT, scaleFraction, type ScaleOptions } from '../viz/palettes';
 import { RENDER_ORDER, emptySample, sampleAt } from './sliceLayer';
 
-/** Lattice spacing, m, and the most arrows drawn; a larger plan spreads them out instead. */
-const SPACING = 0.35;
+/** Default lattice spacing, m, and the most arrows drawn; a larger plan spreads them out instead. */
+export const ARROW_SPACING = 0.35;
 const MAX_ARROWS = 3000;
 /** Arrow length as a share of the spacing, for the faintest flow shown and at the top of the scale. */
 const SHORTEST = 0.34;
@@ -52,9 +52,13 @@ export class DirectionArrows {
 	private slice: Slice | null = null;
 	private sensitivity = NaN;
 
-	/** Covers the plan's footprint: x from 0 to `width`, z from 0 to `depth`, metres. */
-	constructor(width: number, depth: number) {
-		this.spacing = Math.max(SPACING, Math.sqrt((width * depth) / MAX_ARROWS));
+	/**
+	 * Covers the plan's footprint: x from 0 to `width`, z from 0 to `depth`, metres. `spacing` is the distance between
+	 * arrows in metres: the default suits a Stage a few hundred pixels across per ten metres of plan; a compact Stage
+	 * should ask for about twice that so each arrow stays a readable size.
+	 */
+	constructor(width: number, depth: number, spacing = ARROW_SPACING) {
+		this.spacing = Math.max(spacing, Math.sqrt((width * depth) / MAX_ARROWS));
 		const columns = Math.max(1, Math.floor(width / this.spacing));
 		const rows = Math.max(1, Math.floor(depth / this.spacing));
 		const x0 = (width - (columns - 1) * this.spacing) / 2;
