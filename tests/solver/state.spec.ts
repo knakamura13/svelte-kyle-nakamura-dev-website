@@ -1,9 +1,11 @@
 import { expect, test } from '@playwright/test';
 import { isDeepStrictEqual } from 'node:util';
-import { LINK_VERSION, MAX_LINK_LENGTH, MAX_POSITION, decodeSetup, encodeSetup, normalizeSetup, setupFromHash, setupToHash, type LinkCatalog } from '../../src/lib/experiments/airflow/link';
+import { plans } from '../../src/lib/experiments/airflow/homes/plans';
+import type { PlanId } from '../../src/lib/experiments/airflow/homes/types';
+import { LINK_VERSION, MAX_LINK_LENGTH, MAX_POSITION, decodeSetup, encodeSetup, linkCatalog, normalizeSetup, setupFromHash, setupToHash, type LinkCatalog } from '../../src/lib/experiments/airflow/link';
 import { COMPASS_POINTS, bearingToVector, compassName, describeDirection, vectorToBearing } from '../../src/lib/experiments/airflow/readout';
 import { AIR } from '../../src/lib/experiments/airflow/solver/types';
-import { DEFAULT_CLOCK, DEFAULT_CONDITIONS, DEFAULT_VIEW, LIMITS, MAX_DEVICES, blankSetup, type DeviceState, type Setup } from '../../src/lib/experiments/airflow/state';
+import { DEFAULT_CLOCK, DEFAULT_CONDITIONS, DEFAULT_VIEW, LIMITS, MAX_DEVICES, blankSetup, type Conditions, type DeviceState, type Setup } from '../../src/lib/experiments/airflow/state';
 import {
 	PARTICULATE_FLOOR,
 	QUANTITIES,
@@ -298,6 +300,12 @@ const CATALOG: LinkCatalog = {
 	],
 	models: ['box-fan-lasko-b20200', 'box-fan-honeywell-hw-305', 'pedestal-fan-vornado-683', 'pedestal-fan-lasko-2535', 'window-fan-bionaire-bw2300', 'window-fan-holmes-hawf2041', 'purifier-small-levoit-core-300', 'purifier-medium-coway-ap-1512', 'purifier-large-blueair-211i']
 };
+
+/** The same shape from the real plans' ids, with the stand-in models: what the page will build with `linkCatalog`. */
+const REAL_CATALOG = linkCatalog(
+	plans,
+	CATALOG.models.map((id) => ({ id }))
+);
 
 function randomSetup(next: () => number, wild = false): Setup {
 	const pick = <T>(items: readonly T[]) => items[Math.floor(next() * items.length)];
@@ -715,5 +723,138 @@ test.describe('link: the shareable setup', () => {
 		expect(hash).toBe(`#s=${encodeSetup(setup)}`);
 		for (const text of [hash, hash.slice(1), `#view=top&${hash.slice(1)}`, `#view=top&${hash.slice(1)}&units=imperial`]) expect(setupFromHash(text, CATALOG), text).toEqual(normalizeSetup(setup));
 		for (const text of ['', '#', '#s=', '#x=1', `#ss=${encodeSetup(setup)}`, `#xs=${encodeSetup(setup)}`, undefined]) expect(setupFromHash(text as string, CATALOG), String(text)).toBeNull();
+	});
+
+	test('a typical setup, two devices and three openings changed, is a short link', () => {
+		const [first, second, third] = plans.find((p) => p.id === 'two-bedroom')!.openings.map((o) => o.id);
+		const setup: Setup = {
+			plan: 'two-bedroom',
+			furniture: true,
+			devices: [
+				{ id: 'd1', model: 'box-fan-lasko-b20200', x: 3.4, z: 2.15, y: 0, yaw: 90, tilt: 0, power: 0.66, height: 0, oscillation: { on: false, sweep: 90, period: 8 } },
+				{ id: 'd2', model: 'purifier-medium-coway-ap-1512', x: 7.8, z: 5.35, y: 0, yaw: 0, tilt: 0, power: 1, height: 0, oscillation: { on: false, sweep: 90, period: 8 } }
+			],
+			openings: { [first]: 1, [second]: 0.5, [third]: 0.25 },
+			conditions: { ...DEFAULT_CONDITIONS, windFrom: 90, windSpeed: 4, outdoorTemp: 28 }
+		};
+		const link = encodeSetup(setup);
+		console.log(`typical setup (2 devices, 3 openings changed, new weather): ${link.length} characters`);
+		// The brief allows about 1.5 kB; this is a tenth of that.
+		expect(link.length).toBeLessThan(300);
+		expect(decodeSetup(link, REAL_CATALOG)).toEqual(normalizeSetup(setup));
+	});
+
+	test('every real plan, with every opening changed and six devices, survives the link in under 1,500 characters', () => {
+		const found: string[] = [];
+		const lengths: string[] = [];
+		for (const plan of plans) {
+			const ids = plan.openings.map((o) => o.id);
+			const setup: Setup = {
+				plan: plan.id,
+				furniture: plan.id !== 'studio',
+				devices: CATALOG.models.slice(0, MAX_DEVICES).map(
+					(model, i): DeviceState => ({
+						id: `x${i}`,
+						model,
+						x: 0.5 + (i * (plan.width - 1)) / MAX_DEVICES,
+						z: 0.5 + (i * (plan.depth - 1)) / MAX_DEVICES,
+						y: i === 2 ? 0.74 : 0,
+						yaw: (i * 55) % 360,
+						tilt: i * 9 - 10,
+						power: 0.2 + i / 10,
+						height: i % 2 ? 1.2 : 0,
+						oscillation: { on: i % 2 === 0, sweep: 60 + i * 10, period: 6 + i },
+						opening: i % 2 ? ids[i % ids.length] : undefined,
+						intake: i % 3 === 0 ? true : undefined
+					})
+				),
+				openings: Object.fromEntries(ids.map((id, i) => [id, (i % 5) / 4])),
+				conditions: { windFrom: 200, windSpeed: 6.5, outdoorTemp: -4, indoorTemp: 23.5, outdoorPm25: 150 }
+			};
+			const link = encodeSetup(setup);
+			lengths.push(`${plan.id} ${link.length}`);
+			if (link.length >= 1500) found.push(`${plan.id}: ${link.length} characters`);
+			const decoded = decodeSetup(link, REAL_CATALOG);
+			if (!isDeepStrictEqual(decoded, normalizeSetup(setup))) found.push(`${plan.id}: does not decode to normalizeSetup of it`);
+			if (Object.keys(decoded?.openings ?? {}).length !== ids.length) found.push(`${plan.id}: ${Object.keys(decoded?.openings ?? {}).length} of ${ids.length} openings came back`);
+			found.push(...invalidities(decoded, REAL_CATALOG).map((what) => `${plan.id}: ${what}`));
+		}
+		console.log(`real plans, every opening changed and six devices: ${lengths.join(', ')} characters`);
+		expect(found).toEqual([]);
+	});
+
+	test(`at most ${MAX_DEVICES} devices: more are dropped from the end, by the encoder and by the decoder`, () => {
+		const device = (i: number): DeviceState => ({ ...maximalSetup().devices[0], id: `x${i}`, model: CATALOG.models[i % CATALOG.models.length], x: 1 + i, opening: undefined });
+		const upTo = (count: number): Setup => ({ ...blankSetup('house'), devices: Array.from({ length: count }, (_, i) => device(i)) });
+		const full = upTo(MAX_DEVICES);
+		const decoded = decodeSetup(encodeSetup(full), CATALOG);
+		expect(decoded).toEqual(normalizeSetup(full));
+		expect(decoded?.devices.map((d) => [d.id, d.x])).toEqual(Array.from({ length: MAX_DEVICES }, (_, i) => [`d${i + 1}`, 1 + i]));
+		// The encoder stops at the limit, so a seventh device (or a tenth) changes nothing.
+		expect(encodeSetup(upTo(MAX_DEVICES + 1))).toBe(encodeSetup(full));
+		expect(normalizeSetup(upTo(MAX_DEVICES + 4)).devices).toHaveLength(MAX_DEVICES);
+		// None, one and one fewer than the most all work. (The decoder's cap is the 'unknown models and openings' test above.)
+		for (const count of [0, 1, MAX_DEVICES - 1]) expect(decodeSetup(encodeSetup(upTo(count)), CATALOG)?.devices, `${count} devices`).toHaveLength(count);
+	});
+
+	test('an unknown plan id gives null, and an unknown model id drops its device and nothing else', () => {
+		const base = maximalSetup();
+		const found: string[] = [];
+		for (const plan of ['penthouse', '', 'HOUSE', ' house', 'house ', '__proto__', 'constructor', 'studio2', 'one-bedroom\u0000'])
+			if (decodeSetup(encodeSetup({ ...base, plan: plan as PlanId }), CATALOG) !== null) found.push(`the plan ${JSON.stringify(plan)} decoded`);
+		const known = CATALOG.models[1];
+		for (const model of ['mystery-fan', '', '__proto__', known.toUpperCase(), `${known}-2`, known.slice(0, -1), `${known}\u0000`]) {
+			const setup: Setup = { ...blankSetup('studio'), devices: [{ ...base.devices[0], model, opening: undefined }, { ...base.devices[1], model: known, opening: undefined }] };
+			const models = decodeSetup(encodeSetup(setup), CATALOG)?.devices.map((d) => `${d.id}:${d.model}`);
+			if (JSON.stringify(models) !== JSON.stringify([`d1:${known}`])) found.push(`the model ${JSON.stringify(model)} gave ${JSON.stringify(models)}`);
+		}
+		// An opening of another plan is dropped from the device and from the openings, and a device keeps the rest of what it says.
+		const elsewhere: Setup = { ...blankSetup('house'), devices: [{ ...base.devices[0], opening: 'bath-window' }], openings: { 'bath-window': 1, 'front-door': 0.5 } };
+		const there = decodeSetup(encodeSetup(elsewhere), CATALOG);
+		if (there?.devices[0].opening !== undefined || JSON.stringify(there?.openings) !== JSON.stringify({ 'front-door': 0.5 })) found.push(`an opening of another plan survived: ${JSON.stringify(there)}`);
+		expect(found).toEqual([]);
+	});
+
+	test('an id such as __proto__ is an ordinary key, not a prototype', () => {
+		const catalog: LinkCatalog = { plans: [{ id: 'studio', openings: ['__proto__', 'constructor', 'toString'] }], models: [] };
+		// JSON.parse makes "__proto__" an own property, which an object literal would not.
+		const openings = JSON.parse('{"__proto__": 0.5, "constructor": 1, "toString": 0.25}') as Record<string, number>;
+		const decoded = decodeSetup(encodeSetup({ ...blankSetup('studio'), openings }), catalog);
+		expect(Object.keys(decoded?.openings ?? {}).sort()).toEqual(['__proto__', 'constructor', 'toString']);
+		expect(Object.getPrototypeOf(decoded?.openings)).toBe(Object.prototype);
+		expect(Object.getOwnPropertyDescriptor(decoded?.openings ?? {}, '__proto__')?.value).toBe(0.5);
+		expect(Object.keys(Object.prototype)).toEqual([]);
+	});
+
+	/** What the link carries, by field. A field added to Setup, DeviceState or Conditions stops this file type-checking until it is listed here. */
+	const CARRIED = {
+		setup: { plan: true, furniture: true, devices: true, openings: true, conditions: true },
+		// A device's id is renumbered d1, d2, ... on decoding, because the id only identifies a device on the page.
+		device: { id: false, model: true, x: true, z: true, y: true, yaw: true, tilt: true, power: true, height: true, oscillation: true, opening: true, intake: true },
+		oscillation: { on: true, sweep: true, period: true },
+		conditions: { windFrom: true, windSpeed: true, outdoorTemp: true, indoorTemp: true, outdoorPm25: true }
+	} satisfies { setup: Record<keyof Setup, boolean>; device: Record<keyof DeviceState, boolean>; oscillation: Record<keyof DeviceState['oscillation'], boolean>; conditions: Record<keyof Conditions, boolean> };
+
+	test('every field of a Setup is carried: the maximal setup sets them all, and each comes back', () => {
+		const setup = maximalSetup();
+		const keys = (object: object) => Object.keys(object).sort();
+		// The maximal setup sets every field there is, so a field added to the types without being listed above or set there fails here.
+		expect(keys(setup)).toEqual(keys(CARRIED.setup));
+		expect(keys(setup.devices[0])).toEqual(keys(CARRIED.device));
+		expect(keys(setup.devices[0].oscillation)).toEqual(keys(CARRIED.oscillation));
+		expect(keys(setup.conditions)).toEqual(keys(CARRIED.conditions));
+		const decoded = decodeSetup(encodeSetup(setup), CATALOG)!;
+		const normal = normalizeSetup(setup);
+		const lost: string[] = [];
+		const compare = (what: string, a: Record<string, unknown>, b: Record<string, unknown>, fields: Record<string, boolean>) => {
+			for (const [key, carried] of Object.entries(fields)) if (carried && !isDeepStrictEqual(a[key], b[key])) lost.push(`${what}.${key}`);
+		};
+		compare('setup', decoded, normal, CARRIED.setup);
+		compare('conditions', decoded.conditions, normal.conditions, CARRIED.conditions);
+		decoded.devices.forEach((device, i) => {
+			compare(`devices[${i}]`, device, normal.devices[i], CARRIED.device);
+			compare(`devices[${i}].oscillation`, device.oscillation, normal.devices[i].oscillation, CARRIED.oscillation);
+		});
+		expect(lost).toEqual([]);
 	});
 });

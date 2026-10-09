@@ -33,6 +33,11 @@ export interface LinkCatalog {
 	models: string[];
 }
 
+/** The catalog for the page's plans and device models: just their ids. */
+export function linkCatalog(plans: readonly { id: PlanId; openings: readonly { id: string }[] }[], models: readonly { id: string }[]): LinkCatalog {
+	return { plans: plans.map((plan) => ({ id: plan.id, openings: plan.openings.map((opening) => opening.id) })), models: models.map((model) => model.id) };
+}
+
 export const LINK_VERSION = '1.';
 /** The longest text `decodeSetup` reads. A setup with six devices and every opening of a large house is under half of it. */
 export const MAX_LINK_LENGTH = 4000;
