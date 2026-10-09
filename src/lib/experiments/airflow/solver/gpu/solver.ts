@@ -32,6 +32,8 @@ export const PROFILE_GROUPS = ['turbulence', 'forces', 'advection', 'diffusion',
 export type ProfileGroup = (typeof PROFILE_GROUPS)[number];
 /** Profiled steps kept for averaging. */
 export const PROFILE_STEPS = 32;
+/** Bytes of the profile buffer per profiled step: its timestamps, padded because resolveQuerySet's destination offset must be a multiple of 256. */
+export const PROFILE_SLOT_BYTES = Math.ceil((16 * PROFILE_GROUPS.length) / 256) * 256;
 
 export interface Level {
 	nx: number;
@@ -431,7 +433,7 @@ export class GpuSolver {
 
 		if (options.profile && context.timestamps) {
 			this.querySet = device.createQuerySet({ type: 'timestamp', count: 2 * PROFILE_GROUPS.length * PROFILE_STEPS });
-			this.profileBuffer = device.createBuffer({ label: 'profile', size: 16 * PROFILE_GROUPS.length * PROFILE_STEPS, usage: BufferUsage.QUERY_RESOLVE | BufferUsage.COPY_SRC });
+			this.profileBuffer = device.createBuffer({ label: 'profile', size: PROFILE_SLOT_BYTES * PROFILE_STEPS, usage: BufferUsage.QUERY_RESOLVE | BufferUsage.COPY_SRC });
 			this.owned.push(this.profileBuffer);
 		}
 
@@ -789,7 +791,7 @@ export class GpuSolver {
 			pass.end();
 		});
 		const first = 2 * profileSlot * PROFILE_GROUPS.length;
-		encoder.resolveQuerySet(this.querySet, first, 2 * PROFILE_GROUPS.length, this.profileBuffer!, 8 * first);
+		encoder.resolveQuerySet(this.querySet, first, 2 * PROFILE_GROUPS.length, this.profileBuffer!, PROFILE_SLOT_BYTES * profileSlot);
 	}
 
 	// ---- What changes while the solver runs. ----
