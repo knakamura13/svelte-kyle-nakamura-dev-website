@@ -83,6 +83,17 @@ test('steps of the heated cavity (buoyancy, scalars, particulates) match CpuSolv
 	}
 });
 
+test('steps of a room with windows, a window fan, a fan, a source and a purifier match CpuSolver', async () => {
+	const c = await call<{ outlet: boolean } & Record<'velocity' | 'pressure' | 'theta' | 'particulates' | 'nut', Comparison>>(page, 'devicesParity', 10);
+	expect(c.outlet).toBe(true);
+	for (const [name, comparison] of Object.entries(c)) if (name !== 'outlet') report(`room ${name}`, comparison as Comparison);
+	expect(c.velocity.rel).toBeLessThan(1e-4);
+	expect(c.pressure.rel).toBeLessThan(1e-4);
+	expect(c.theta.rel).toBeLessThan(1e-4);
+	expect(c.particulates.rel).toBeLessThan(1e-4);
+	expect(c.nut.rel).toBeLessThan(1e-4);
+});
+
 test('step time', async () => {
 	for (const [nx, ny, nz] of [
 		[64, 32, 48],
