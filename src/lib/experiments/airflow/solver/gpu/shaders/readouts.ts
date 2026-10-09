@@ -180,7 +180,7 @@ export const rooms: KernelSource = {
 	bindings: [uniform('C', 'Consts'), uniform('N', 'Counts'), read('vel', VEC4), read('geo', VEC4), read('scal', VEC2), write('partials', F32)],
 	code: `${DECODE}
 const STRIDE: i32 = ${ROOMS_PER_PASS * 5};
-var<workgroup> shared: array<array<f32, ${ROOMS_PER_PASS * 5}>, 64>;
+var<workgroup> roomAcc: array<array<f32, ${ROOMS_PER_PASS * 5}>, 64>;
 fn roomOf(c: i32) -> i32 {
 	return i32(abs(geo[c].w)) - 1;
 }
@@ -252,13 +252,13 @@ fn main(@builtin(local_invocation_index) lid: u32, @builtin(workgroup_id) wid: v
 		acc[o + 4] = acc[o + 4] + inflow;
 	}
 	for (var n = 0; n < STRIDE; n = n + 1) {
-		shared[lid][n] = acc[n];
+		roomAcc[lid][n] = acc[n];
 	}
 	workgroupBarrier();
 	if (i32(lid) < STRIDE) {
 		var total = 0.0;
 		for (var t = 0; t < 64; t = t + 1) {
-			total = total + shared[t][lid];
+			total = total + roomAcc[t][lid];
 		}
 		partials[group * STRIDE + i32(lid)] = total;
 	}
