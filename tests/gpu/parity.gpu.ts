@@ -114,6 +114,12 @@ test('the diagnostics pass (measure, measureFinish) matches cpu/solver.ts measur
 	for (const comparison of Object.values(c)) expect(comparison.rel).toBeLessThan(TOLERANCE);
 });
 
+test('the room statistics kernel matches cpu/readouts.ts roomStats', async () => {
+	const c = await call<Record<string, Comparison>>(page, 'roomsParity', 13);
+	for (const [name, comparison] of Object.entries(c)) report(`rooms ${name}`, comparison);
+	for (const comparison of Object.values(c)) expect(comparison.rel).toBeLessThan(TOLERANCE);
+});
+
 test('step time', async () => {
 	for (const [nx, ny, nz] of [
 		[64, 32, 48],

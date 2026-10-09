@@ -7,7 +7,7 @@ import { GpuSolver, packGeometry, packPair, packVelocity, unpackPair, unpackVelo
 import { CpuSolver, emptyExterior } from '$lib/experiments/airflow/solver/cpu/solver';
 import { PressureSolver } from '$lib/experiments/airflow/solver/cpu/pressure';
 import { eddyViscosity } from '$lib/experiments/airflow/solver/cpu/turbulence';
-import { extractSlice, samplePoints } from '$lib/experiments/airflow/solver/cpu/readouts';
+import { extractSlice, roomStats, samplePoints } from '$lib/experiments/airflow/solver/cpu/readouts';
 import { maxCfl } from '$lib/experiments/airflow/solver/cpu/scalars';
 import { diffuseVelocity } from '$lib/experiments/airflow/solver/cpu/diffuse';
 import { advectVelocity, type Velocity } from '$lib/experiments/airflow/solver/cpu/advect';
@@ -511,6 +511,42 @@ async function measureParity(seed: number) {
 	};
 }
 
+/**
+ * The per-room statistics kernel on two rooms side by side (and a row of air in no room), its per-workgroup sums
+ * finished here as the backend would, against cpu/readouts.ts `roomStats` on the same state.
+ */
+async function roomsParity(seed: number) {
+	const [nx, ny, nz, h] = [12, 10, 8, 0.1];
+	const config = boxConfig(nx, ny, nz, h, 1.5e-5);
+	const grid = new Grid(config.grid);
+	for (let k = 0; k < nz; k++)
+		for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) config.geometry.room[grid.index(i, j, k)] = j === 0 ? 0 : i < 6 ? 1 : 2;
+	config.geometry.rooms = 2;
+	const vel = randomVelocity(grid, config, seed);
+	const next = random(seed + 100);
+	const theta = Float32Array.from({ length: grid.size }, (_, n) => (config.geometry.fluid[n] ? 4 * next() - 2 : 0));
+	const c = Float32Array.from({ length: grid.size }, (_, n) => (config.geometry.fluid[n] ? 100 * next() : 0));
+	const expected = roomStats(grid, config.geometry, vel, theta, c);
+	const solver = await GpuSolver.create(await context(), config);
+	solver.device.queue.writeBuffer(solver.vel, 0, packVelocity(vel.u, vel.v, vel.w));
+	solver.device.queue.writeBuffer(solver.scal, 0, packPair(theta, c));
+	const groups = (solver as any).roomGroups as number;
+	const partialsBuffer = solver.storage('roomPartialsTest', 4 * groups * 40);
+	const uniform = solver.device.createBuffer({ size: 16, usage: 0x40 | 0x8 });
+	await runPass(solver, (pass) => solver.rooms(pass, 0, 2, uniform, partialsBuffer));
+	const partials = await readBack(solver.device, partialsBuffer, 4 * groups * 40);
+	solver.dispose();
+	const sums = [0, 1].map((slot) => [0, 1, 2, 3, 4].map((field) => {
+		let total = 0;
+		for (let g = 0; g < groups; g++) total += partials[40 * g + 5 * slot + field];
+		return total;
+	}));
+	const cell = h * h * h;
+	const gpu = sums.map(([cells, speed, th, cc, inflow]) => ({ volume: cells * cell, speed: speed / cells, theta: th / cells, particulates: cc / cells, inflow: inflow * h * h }));
+	const lanes = ['volume', 'speed', 'theta', 'particulates', 'inflow'] as const;
+	return Object.fromEntries(lanes.map((lane) => [lane, compare({ [lane]: [Float32Array.from(gpu, (r) => r[lane]), Float32Array.from(expected, (r) => r[lane])] })]));
+}
+
 /** Wall-clock time per whole step on a grid, averaged over `steps` after a warm-up. */
 async function stepTime(nx: number, ny: number, nz: number, steps: number) {
 	const config = boxConfig(nx, ny, nz, 0.1, 1.5e-5);
@@ -536,5 +572,5 @@ async function stepTime(nx: number, ny: number, nz: number, steps: number) {
 	return { cells: nx * ny * nz, ms };
 }
 
-(window as any).parity = { diffuseParity, advectParity, turbulenceParity, pressureParity, cavityParity, heatedParity, devicesParity, readoutParity, faceUpdateParity, measureParity, stepTime };
+(window as any).parity = { diffuseParity, advectParity, turbulenceParity, pressureParity, cavityParity, heatedParity, devicesParity, readoutParity, faceUpdateParity, measureParity, roomsParity, stepTime };
 (window as any).harnessReady = true;
