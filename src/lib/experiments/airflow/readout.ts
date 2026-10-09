@@ -37,6 +37,23 @@ export function compassName(degrees: number): CompassPoint {
 	return COMPASS_POINTS[Math.round(wrap(degrees) / 22.5) % 16];
 }
 
+export interface Bearing {
+	/** Whole degrees, 0 to 359. */
+	degrees: number;
+	compass: CompassPoint;
+	/** "W 270°". */
+	text: string;
+	/** "west, 270 degrees". */
+	spoken: string;
+}
+
+/** A compass bearing in words, for the wind-direction control: wrapped into [0, 360) and rounded to a whole degree; not a number reads as north. */
+export function describeBearing(degrees: number): Bearing {
+	const whole = Number.isFinite(degrees) ? Math.round(wrap(degrees)) % 360 : 0;
+	const compass = compassName(whole);
+	return { degrees: whole, compass, text: `${compass} ${whole}°`, spoken: `${COMPASS_WORDS[compass]}, ${whole} ${whole === 1 ? 'degree' : 'degrees'}` };
+}
+
 /** The horizontal unit vector for a bearing, as its east (+x) and south (+z) components. */
 export function bearingToVector(degrees: number): { east: number; south: number } {
 	const d = wrap(degrees);

@@ -3,7 +3,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { plans } from '../../src/lib/experiments/airflow/homes/plans';
 import type { PlanId } from '../../src/lib/experiments/airflow/homes/types';
 import { LINK_VERSION, MAX_LINK_LENGTH, MAX_POSITION, decodeSetup, encodeSetup, linkCatalog, normalizeSetup, setupFromHash, setupToHash, type LinkCatalog } from '../../src/lib/experiments/airflow/link';
-import { COMPASS_POINTS, bearingToVector, compassName, describeDirection, vectorToBearing } from '../../src/lib/experiments/airflow/readout';
+import { COMPASS_POINTS, bearingToVector, compassName, describeBearing, describeDirection, vectorToBearing } from '../../src/lib/experiments/airflow/readout';
 import { AIR } from '../../src/lib/experiments/airflow/solver/types';
 import { DEFAULT_CLOCK, DEFAULT_CONDITIONS, DEFAULT_VIEW, LIMITS, MAX_DEVICES, blankSetup, type Conditions, type DeviceState, type Setup } from '../../src/lib/experiments/airflow/state';
 import {
@@ -14,6 +14,7 @@ import {
 	displayRange,
 	formatAirChanges,
 	formatArea,
+	formatDuration,
 	formatFlow,
 	formatLength,
 	formatParticulates,
@@ -118,6 +119,12 @@ test.describe('units: formatting', () => {
 		expect(formatAirChanges(4.24).spoken).toBe('4.2 air changes per hour');
 		expect([0.5, 0.123, 1].map((f) => formatPercent(f).text)).toEqual(['50_%', '12_%', '100_%'].map(n));
 		expect(formatPercent(0.1234, { digits: 1 }).spoken).toBe('12.3 percent');
+	});
+
+	test('simulated time reads as a clock, counting whole seconds and never below zero', () => {
+		expect([0, 7.9, 59.99, 60, 723, 3723, 36000].map((s) => formatDuration(s).text)).toEqual(['0:00', '0:07', '0:59', '1:00', '12:03', '1:02:03', '10:00:00']);
+		expect([-5, 0, 1, 60, 61, 723, 3723].map((s) => formatDuration(s).spoken)).toEqual(['0 seconds', '0 seconds', '1 second', '1 minute', '1 minute 1 second', '12 minutes 3 seconds', '1 hour 2 minutes 3 seconds']);
+		expect(formatDuration(NaN)).toMatchObject({ text: '—', spoken: 'no reading' });
 	});
 
 	test('a value that is not a number reads as a dash, not NaN', () => {
@@ -234,6 +241,15 @@ test.describe('readout: which way the air is going', () => {
 			if (!close(vectorToBearing(3 * east, 3 * south), bearing, 9)) found.push(`${bearing}: three times the vector gives ${vectorToBearing(3 * east, 3 * south)}`);
 		}
 		expect(found.slice(0, 10)).toEqual([]);
+	});
+
+	test('a bearing reads as a compass point and whole degrees, wrapped into 0 to 359', () => {
+		expect(describeBearing(270)).toEqual({ degrees: 270, compass: 'W', text: 'W 270°', spoken: 'west, 270 degrees' });
+		expect(describeBearing(359.6)).toEqual({ degrees: 0, compass: 'N', text: 'N 0°', spoken: 'north, 0 degrees' });
+		expect(describeBearing(-90).text).toBe('W 270°');
+		expect(describeBearing(1).spoken).toBe('north, 1 degree');
+		expect(describeBearing(22).text).toBe('NNE 22°');
+		expect([NaN, Infinity].map((x) => describeBearing(x).text)).toEqual(['N 0°', 'N 0°']);
 	});
 
 	test('the wording: a compass point or a cardinal word, then rising, sinking or level', () => {

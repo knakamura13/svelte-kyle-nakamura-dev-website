@@ -190,6 +190,18 @@ export function formatPercent(fraction: number, { digits = 0 }: FormatOptions = 
 	return measured(fraction * 100, digits, PERCENT);
 }
 
+/** Simulated time as a clock, "0:07", "12:03" or "1:02:03", counting whole seconds and never below zero. Its units are in `value`, so `unit` is empty. Spoken: "12 minutes 3 seconds". */
+export function formatDuration(seconds: number): Formatted {
+	if (!Number.isFinite(seconds)) return reading(NO_READING, unitName('s', 'second'));
+	const whole = Math.max(0, Math.floor(seconds));
+	const [hours, minutes, rest] = [Math.floor(whole / 3600), Math.floor((whole % 3600) / 60), whole % 60];
+	const two = (n: number) => String(n).padStart(2, '0');
+	const value = hours > 0 ? `${hours}:${two(minutes)}:${two(rest)}` : `${minutes}:${two(rest)}`;
+	const parts: [number, string][] = [[hours, 'hour'], [minutes, 'minute'], [rest, 'second']];
+	const words = parts.filter(([n]) => n > 0).map(([n, name]) => `${n} ${name}${n === 1 ? '' : 's'}`);
+	return { value, unit: '', text: value, spoken: words.length > 0 ? words.join(' ') : '0 seconds' };
+}
+
 /** Air density at 20 °C and 1 atm, kg/m³: what turns ppm by mass into µg/m³. */
 export const AIR_DENSITY = AIR.rho;
 
