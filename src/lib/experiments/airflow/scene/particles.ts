@@ -260,7 +260,7 @@ export class SmokePoints {
 			uDenseLog: { value: 0 },
 			uThin: { value: srgb(0xf4efe6) },
 			uDense: { value: srgb(0xb3ada4) },
-			uOpacity: { value: 0.9 },
+			uOpacity: { value: 0.6 },
 			uSize: { value: 0.22 },
 			uHalfHeight: { value: 400 },
 			uPixels: { value: new Vector2(2, 64) }
