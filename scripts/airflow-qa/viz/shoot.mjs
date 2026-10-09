@@ -81,6 +81,7 @@ add('desktop-speed-tracers-only', DESKTOP, { layer: 'speed', slice: false, smoke
 add('desktop-smoke-only', DESKTOP, { layer: 'speed', slice: false, tracers: false });
 add('desktop-topdown-labels', DESKTOP, { layer: 'speed', topDown: true, labels: 'all', tracers: false, smoke: false });
 add('desktop-topdown-metric', DESKTOP, { layer: 'speed', topDown: true, units: 'metric' });
+for (const [tint, layer] of [['peach', 'particulates'], ['butter', 'particulates'], ['sage', 'temperature'], ['peach', 'speed'], ['lilac', 'direction']]) add(`tint-${tint}-${layer}`, DESKTOP, { layer, tint, topDown: true });
 add('dark-speed', DESKTOP, { layer: 'speed', theme: 'dark' });
 add('dark-direction', DESKTOP, { layer: 'direction', theme: 'dark' });
 add('dark-particulates', DESKTOP, { layer: 'particulates', theme: 'dark' });
@@ -111,7 +112,7 @@ try {
 	for (const shot of shots) {
 		if (only.length && !only.some((name) => shot.name === name || shot.name.includes(name))) continue;
 		await page.setViewportSize({ width: shot.viewport[0], height: shot.viewport[1] });
-		const base = { layer: 'speed', sensitivity: 1, sliceHeight: 1.1, tracers: true, smoke: true, topDown: false, theme: 'light', units: 'imperial', baseline: 0, labels: 'compass', slice: true, pixelRatio: 1, azimuth: 28 };
+		const base = { layer: 'speed', sensitivity: 1, sliceHeight: 1.1, tracers: true, smoke: true, topDown: false, theme: 'light', tint: 'mist', units: 'imperial', baseline: 0, labels: 'compass', slice: true, pixelRatio: 1, azimuth: 28 };
 		const report = await page.evaluate((s) => window.__setState(s), { ...base, ...shot.state });
 		const file = join(out, `${shot.name}.png`);
 		await page.screenshot({ path: file });

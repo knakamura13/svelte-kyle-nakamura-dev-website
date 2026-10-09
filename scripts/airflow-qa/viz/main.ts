@@ -85,6 +85,8 @@ export interface ViewState {
 	smoke: boolean;
 	topDown: boolean;
 	theme: 'light' | 'dark';
+	/** The Stage tint in the light theme (the site's soft tints). */
+	tint: keyof typeof TINTS;
 	units: 'imperial' | 'metric';
 	baseline: number;
 	labels: 'compass' | 'all' | 'none';
@@ -104,6 +106,7 @@ const state: ViewState = {
 	smoke: true,
 	topDown: false,
 	theme: 'light',
+	tint: 'mist',
 	units: 'imperial',
 	baseline: 0,
 	labels: 'compass',
@@ -120,15 +123,17 @@ const statusEl = document.getElementById('status')!;
 
 const renderer = new WebGLRenderer({ canvas, antialias: true, powerPreference: 'default' });
 const scene = new Scene();
-const camera = new PerspectiveCamera(32, 1, 0.1, 200);
-const stageTints = { light: 0xdde7ee, dark: 0x1d2824 };
-scene.background = new Color(stageTints.light);
+const camera = new PerspectiveCamera(32, 1, 0.1, 500);
+const TINTS = { sage: 0xe1e9d9, sand: 0xf4e9d8, cream: 0xf0e3cf, peach: 0xf1dfcd, butter: 0xf5e1bb, mist: 0xdde7ee, lilac: 0xe6ddf0 };
+const DARK_STAGE = 0x1d2824;
+scene.background = new Color(TINTS.mist);
 
 let world: World | null = null;
 let plan: HomePlan | null = null;
 let setup: Setup | null = null;
 let slice: SliceLayer | null = null;
 let arrows: DirectionArrows | null = null;
+let arrowSpacing = 0.35;
 let tracerPoints: TracerPoints | null = null;
 let smokePoints: SmokePoints | null = null;
 let outline: Group | null = null;
@@ -285,7 +290,8 @@ function formats(): { format: LegendFormat; units: LegendUnits } {
 }
 
 function renderLegend(legend: Legend) {
-	const tick = (t: { label: string; at: number }, extra = '') => `<div class="tick ${extra}" style="left:${(t.at * 100).toFixed(2)}%">${t.label}</div>`;
+	// A label with a second unit ("0.01 ppm · 12 µg/m³") takes two lines, so five of them fit a phone's width.
+	const tick = (t: { label: string; at: number }, extra = '') => `<div class="tick ${extra}" style="left:${(t.at * 100).toFixed(2)}%">${t.label.replace(' · ', '<br>')}</div>`;
 	const ticks = legend.ticks.map((t, i) => tick(t, i === 0 ? 'first' : i === legend.ticks.length - 1 ? 'last' : '')).join('');
 	const mid = legend.midpoint ? tick(legend.midpoint, 'mid') : '';
 	let wheel = '';
@@ -326,28 +332,45 @@ function placeLabels() {
 	if (state.labels === 'all') for (const a of furnitureAnchors) put(a.name, a.at);
 }
 
-function frame(aspect: number) {
+/** Moves the camera back along `direction` until the plan's box (and its compass labels) fits the stage, 4 % margin. */
+function frame() {
 	if (!plan) return;
 	const { width: W, depth: D } = plan;
-	const target = new Vector3(W / 2, 0.8, D / 2);
-	const vfov = (camera.fov * Math.PI) / 180;
-	const hfov = 2 * Math.atan(Math.tan(vfov / 2) * aspect);
+	const target = new Vector3(W / 2, state.topDown ? 0 : 0.8, D / 2);
+	const direction = new Vector3();
 	if (state.topDown) {
-		// North up, east right, whatever the aspect: fit width and depth with a margin.
-		const need = Math.max(W / (2 * Math.tan(hfov / 2)), D / (2 * Math.tan(vfov / 2)));
+		// North up, east right, whatever the aspect.
+		direction.set(0, 1, 0.0001).normalize();
 		camera.up.set(0, 0, -1);
-		camera.position.set(W / 2, need * 1.12 + 0.8, D / 2 + 0.001);
-		camera.lookAt(W / 2, 0, D / 2);
 	} else {
-		const radius = 0.5 * Math.hypot(W, D, 3);
-		const distance = (radius / Math.sin(Math.min(vfov, hfov) / 2)) * 0.86;
 		const azimuth = (state.azimuth * Math.PI) / 180;
 		const elevation = (38 * Math.PI) / 180;
+		direction.set(-Math.sin(azimuth) * Math.cos(elevation), Math.sin(elevation), Math.cos(azimuth) * Math.cos(elevation));
 		camera.up.set(0, 1, 0);
-		camera.position.set(target.x - Math.sin(azimuth) * Math.cos(elevation) * distance, target.y + Math.sin(elevation) * distance, target.z + Math.cos(azimuth) * Math.cos(elevation) * distance);
-		camera.lookAt(target);
 	}
 	camera.updateProjectionMatrix();
+	const margin = 0.8;
+	const corners: Vector3[] = [];
+	for (const x of [-margin, W + margin]) for (const z of [-margin, D + margin]) for (const y of [0, plan.ceiling]) corners.push(new Vector3(x, y, z));
+	const inside = new Vector3();
+	let near = 2;
+	let far = 120;
+	for (let n = 0; n < 40; n++) {
+		const distance = (near + far) / 2;
+		camera.position.copy(target).addScaledVector(direction, distance);
+		camera.lookAt(target);
+		camera.updateMatrixWorld(true);
+		const fits = corners.every((corner) => {
+			inside.copy(corner).project(camera);
+			return Math.abs(inside.x) <= 0.96 && Math.abs(inside.y) <= 0.96;
+		});
+		if (fits) far = distance;
+		else near = distance;
+	}
+	camera.position.copy(target).addScaledVector(direction, far);
+	camera.lookAt(target);
+	camera.updateProjectionMatrix();
+	camera.updateMatrixWorld(true);
 }
 
 function summarize(snapshot: Slice) {
@@ -372,13 +395,24 @@ export async function setViewState(next: Partial<ViewState>) {
 	if (!world || !plan || !slice || !arrows || !tracerPoints || !smokePoints) throw new Error('init first');
 	Object.assign(state, next);
 	document.documentElement.dataset.theme = state.theme;
-	scene.background = new Color(stageTints[state.theme]);
+	const tint = state.theme === 'dark' ? DARK_STAGE : TINTS[state.tint];
+	scene.background = new Color(tint);
+	stage.style.background = `#${tint.toString(16).padStart(6, '0')}`;
 	renderer.setPixelRatio(state.pixelRatio);
 	const width = stage.clientWidth;
 	const height = stage.clientHeight;
 	renderer.setSize(width, height, false);
 	camera.aspect = width / height;
 
+	// A compact Stage asks for arrows twice as far apart, so each stays readable.
+	const wantSpacing = stage.clientWidth < 480 ? 0.7 : 0.35;
+	if (wantSpacing !== arrowSpacing) {
+		scene.remove(arrows.mesh);
+		arrows.dispose();
+		arrowSpacing = wantSpacing;
+		arrows = new DirectionArrows(plan.width, plan.depth, arrowSpacing);
+		scene.add(arrows.mesh);
+	}
 	const snapshot = await world.backend.snapshot({ sliceY: state.sliceHeight, particles: true });
 	const sliceData = snapshot.slice!;
 	const options = { sensitivity: state.sensitivity, baseline: state.baseline };
@@ -394,9 +428,10 @@ export async function setViewState(next: Partial<ViewState>) {
 	smokePoints.update(snapshot.smoke!, { dense });
 
 	const { format, units } = formats();
-	const legend = legendFor(state.layer, { ...options, format, units });
+	const narrow = stage.clientWidth < 480;
+	const legend = legendFor(state.layer, { ...options, format, units, maxTicks: narrow ? 3 : undefined });
 	renderLegend(legend);
-	frame(camera.aspect);
+	frame();
 	renderer.render(scene, camera);
 	placeLabels();
 	const gl = renderer.getContext();
