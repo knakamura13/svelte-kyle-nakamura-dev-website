@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { FAN_MODELS } from '../../src/lib/experiments/airflow/devices/catalog';
 import { isFree, newDevice } from '../../src/lib/experiments/airflow/devices/placement';
 import { CFM, type DeviceModel } from '../../src/lib/experiments/airflow/devices/types';
 import { plans } from '../../src/lib/experiments/airflow/homes/plans';
@@ -13,21 +14,9 @@ import { blankSetup, LIMITS, type DeviceState, type Setup } from '../../src/lib/
  * each plan is run with random setups.
  */
 
-/** Stand-in models with plausible ratings, so the run does not wait for the catalog. */
+/** The catalog's fans, and a stand-in purifier because the catalog has none yet. */
 const deviceModels: DeviceModel[] = [
-	{ id: 'box', name: 'Box fan', kind: 'box-fan', body: { width: 0.5, depth: 0.15, height: 0.55 }, source: 'test', diameter: 0.45, flow: { low: 800 * CFM, medium: 1200 * CFM, high: 1600 * CFM } },
-	{
-		id: 'pedestal',
-		name: 'Pedestal fan',
-		kind: 'pedestal-fan',
-		body: { width: 0.45, depth: 0.45, height: 1.2 },
-		source: 'test',
-		diameter: 0.4,
-		flow: { low: 600 * CFM, medium: 900 * CFM, high: 1200 * CFM },
-		heightRange: [0.7, 1.2],
-		maxSweep: 90
-	},
-	{ id: 'window', name: 'Window fan', kind: 'window-fan', body: { width: 0.6, depth: 0.15, height: 0.3 }, source: 'test', diameter: 0.25, flow: { low: 300 * CFM, medium: 400 * CFM, high: 500 * CFM }, shutoff: 30 },
+	...FAN_MODELS,
 	{
 		id: 'purifier',
 		name: 'Purifier',
