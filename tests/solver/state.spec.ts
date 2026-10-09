@@ -33,10 +33,10 @@ import {
 } from '../../src/lib/experiments/airflow/units';
 
 /*
- * A note on speed. Playwright's `expect` costs about a millisecond a call, and more the more calls a test has already
- * made: a loop of 61,000 of them took 72 seconds, and the loop that decodes random links makes 217,000 and had not
- * finished after three and a half minutes. The test body is synchronous, so the per-test timeout cannot interrupt it,
- * and the test looked like a hang.
+ * A note on speed. Playwright's `expect` costs 0.2 to 1.2 ms a call in measurements here, and the cost per call rose with
+ * the number of calls a test had made: 3,000 of them took 0.65 s, 61,000 took 72 s, and the loop that decodes random
+ * links makes 217,000 and had not finished after more than three minutes. The test body is synchronous, so the per-test
+ * timeout cannot interrupt it, and the test looked like a hang.
  * Every loop below therefore does plain checks, collects what it finds wrong as sentences, and makes one `expect` at the
  * end that shows the first few.
  */
