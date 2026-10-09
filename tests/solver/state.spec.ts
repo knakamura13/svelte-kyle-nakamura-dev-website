@@ -17,11 +17,13 @@ import {
 	formatDuration,
 	formatFlow,
 	formatLength,
+	formatMass,
 	formatParticulates,
 	formatPercent,
 	formatSpeed,
 	formatTemperature,
 	formatTemperatureDelta,
+	formatTimeScale,
 	formatVolume,
 	ppmFromUgPerM3,
 	sliderRange,
@@ -125,6 +127,14 @@ test.describe('units: formatting', () => {
 		expect([0, 7.9, 59.99, 60, 723, 3723, 36000].map((s) => formatDuration(s).text)).toEqual(['0:00', '0:07', '0:59', '1:00', '12:03', '1:02:03', '10:00:00']);
 		expect([-5, 0, 1, 60, 61, 723, 3723].map((s) => formatDuration(s).spoken)).toEqual(['0 seconds', '0 seconds', '1 second', '1 minute', '1 minute 1 second', '12 minutes 3 seconds', '1 hour 2 minutes 3 seconds']);
 		expect(formatDuration(NaN)).toMatchObject({ text: '—', spoken: 'no reading' });
+	});
+
+	test('the Physics panel: the solver rate as a multiple, and particulate mass in milligrams', () => {
+		expect([0.35, 1, 5, 12.4, 20].map((rate) => formatTimeScale(rate).text)).toEqual(['0.35×', '1.0×', '5.0×', '12×', '20×']);
+		expect(formatTimeScale(5)).toEqual({ value: '5.0', unit: '×', text: '5.0×', spoken: '5.0 times real time' });
+		expect([0, 1e-12, 0.0042, 0.42, 5, 12.4, 1234, -0.42].map((mg) => formatMass(mg).text)).toEqual(['0_mg', '0_mg', '0.0042_mg', '0.42_mg', '5.0_mg', '12_mg', '1,200_mg', '−0.42_mg'].map(n));
+		expect(formatMass(0.42).spoken).toBe('0.42 milligrams');
+		for (const reading of [formatTimeScale(NaN), formatMass(Infinity)]) expect(reading).toMatchObject({ text: '—', spoken: 'no reading' });
 	});
 
 	test('a value that is not a number reads as a dash, not NaN', () => {

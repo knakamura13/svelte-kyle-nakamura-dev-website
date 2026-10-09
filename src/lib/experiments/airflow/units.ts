@@ -202,6 +202,23 @@ export function formatDuration(seconds: number): Formatted {
 	return { value, unit: '', text: value, spoken: words.length > 0 ? words.join(' ') : '0 seconds' };
 }
 
+/** How many times faster than real time the simulation runs, from simulated seconds per real second, with a speed's digits: "0.35×", "1.0×", "12×". The × has no space before it, and `unit` is "×". */
+export function formatTimeScale(rate: number): Formatted {
+	if (!Number.isFinite(rate)) return { value: NO_READING, unit: '×', text: NO_READING, spoken: 'no reading' };
+	const value = fixed(rate, digitsFor(rate, BY_SIZE));
+	return { value, unit: '×', text: `${value}×`, spoken: `${value} times real time` };
+}
+
+const MILLIGRAMS = unitName('mg', 'milligram');
+
+/** Particulate mass, from mg (the unit of the solver's mass balance), to two significant digits: "0.0042 mg", "12 mg", "1,200 mg". The same in both unit systems. */
+export function formatMass(milligrams: number): Formatted {
+	if (!Number.isFinite(milligrams)) return reading(NO_READING, MILLIGRAMS);
+	const size = Math.abs(milligrams);
+	// A balance's rounding error can leave a few 1e-17 where there is nothing.
+	return reading(size < 1e-9 ? '0' : (milligrams < 0 ? MINUS : '') + twoSignificant.format(size), MILLIGRAMS);
+}
+
 /** Air density at 20 °C and 1 atm, kg/m³: what turns ppm by mass into µg/m³. */
 export const AIR_DENSITY = AIR.rho;
 
