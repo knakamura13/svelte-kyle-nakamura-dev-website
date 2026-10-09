@@ -83,27 +83,45 @@ interface CutUniform {
 
 const CUT_COMMON = /* glsl */ `#include <common>
 uniform float uCut;
-attribute vec2 cutRange;`;
+attribute vec2 cutRange;
+varying float vClamped;`;
 
 /**
  * Walls are cut down for the overview and the plan by moving every vertex above the cut down to it, so a cut wall
  * keeps a real top face. A piece whose `cutRange` (lo, hi) does not hold the cut is dropped whole (a lintel above
- * the cut would otherwise squash into a sheet across its doorway); a piece shows while lo < cut ≤ hi.
+ * the cut would otherwise squash into a sheet across its doorway); a piece shows while lo < cut ≤ hi. An upward face the
+ * cut brought down is flagged, so the fragment shader can draw it as the cut surface it now is.
  */
 const CUT_PROJECT = /* glsl */ `vec4 mvPosition = modelMatrix * vec4( transformed, 1.0 );
+vClamped = ( objectNormal.y > 0.5 && mvPosition.y > uCut + 0.0005 ) ? 1.0 : 0.0;
 mvPosition.y = min( mvPosition.y, uCut );
 mvPosition = viewMatrix * mvPosition;
 gl_Position = projectionMatrix * mvPosition;
 if ( cutRange.x >= uCut || uCut > cutRange.y ) gl_Position = vec4( 0.0, 0.0, 2.0, 1.0 );`;
 
-/** Clay that follows a cut height. Every geometry drawn with it needs a `cutRange` attribute. */
-function cutClay(value: ColorRepresentation, cut: CutUniform, extra: Parameters<typeof clay>[1] = {}) {
+/** Every surface the cut leaves on top, a jamb or a door leaf as much as a wall, is the same cap color. */
+const CUT_FRAGMENT_COMMON = /* glsl */ `#include <common>
+uniform vec3 uCap;
+varying float vClamped;`;
+const CUT_FRAGMENT_COLOR = /* glsl */ `#include <color_fragment>
+if ( vClamped > 0.5 ) diffuseColor.rgb = uCap;`;
+const CAP = color(COLORS.cap);
+
+/**
+ * Clay that follows a cut height. Every geometry drawn with it needs a `cutRange` attribute. `capped` paints the faces the
+ * cut leaves on top in the cap color (glass is left as it is).
+ */
+function cutClay(value: ColorRepresentation, cut: CutUniform, extra: Parameters<typeof clay>[1] = {}, capped = true) {
 	const material = clay(value, extra);
 	material.onBeforeCompile = (shader) => {
 		shader.uniforms.uCut = cut;
 		shader.vertexShader = shader.vertexShader.replace('#include <common>', CUT_COMMON).replace('#include <project_vertex>', CUT_PROJECT);
+		if (!capped) return;
+		shader.uniforms.uCap = { value: CAP };
+		shader.fragmentShader = shader.fragmentShader.replace('#include <common>', CUT_FRAGMENT_COMMON).replace('#include <color_fragment>', CUT_FRAGMENT_COLOR);
 	};
-	material.customProgramCacheKey = () => 'dollhouse-cut';
+	// The two variants are different programs.
+	material.customProgramCacheKey = () => (capped ? 'dollhouse-cut-capped' : 'dollhouse-cut');
 	return material;
 }
 
@@ -488,7 +506,7 @@ export class Dollhouse {
 	}
 
 	private glass(cut: CutUniform) {
-		return cutClay(COLORS.glass, cut, { transparent: true, opacity: GLASS_OPACITY, depthWrite: false, roughness: 0.6 });
+		return cutClay(COLORS.glass, cut, { transparent: true, opacity: GLASS_OPACITY, depthWrite: false, roughness: 0.6 }, false);
 	}
 
 	/** An outside wall's view, or (with no run) the one all the inside walls share. */
