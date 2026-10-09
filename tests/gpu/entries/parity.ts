@@ -385,6 +385,7 @@ async function devicesParity(steps: number, off: string[] = []) {
 	const nut = await readBack(device, solver.nut, 4 * solver.grid.size);
 	const p = await readBack(device, solver.levels[0].p, 4 * solver.grid.size);
 	const log = await readBack(device, (solver as any).log, 32 * steps);
+	const fanState = await readBack(device, (solver as any).fanState.buffer, 16);
 	const outlet = solver.outlet;
 	solver.dispose();
 	// The particulate mass log, summed over the steps' slots in double as the backend would: (inflow, outflow,
@@ -412,6 +413,8 @@ async function devicesParity(steps: number, off: string[] = []) {
 		theta: compare({ theta: [theta, cpu.theta] }, inside),
 		particulates: compare({ c: [c, cpu.c] }, inside),
 		nut: compare({ nut: [nut, cpu.nut] }, inside),
+		// The flow through the fan disk measured at the start of the last step (cpu/forces.ts fanAcceleration).
+		fanFlow: compare({ fanFlow: [Float32Array.of(fanState[0]), Float32Array.from(cpu.fanFlow)] }),
 		...tally
 	};
 }
