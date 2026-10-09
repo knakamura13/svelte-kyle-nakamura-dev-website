@@ -61,6 +61,8 @@ const FADE_ON = 0.2;
 const FADE_OFF = 0.15;
 /** Interior walls drop to this height while the camera is higher than CUT_ON above the horizon (back above CUT_OFF). */
 const CUTAWAY = 1.1;
+/** In the plan view furniture is cut to this height, so a wardrobe does not lean out over the walls in perspective. */
+const PLAN_FURNITURE = 0.45;
 const CUT_ON = (35 * Math.PI) / 180;
 const CUT_OFF = (32 * Math.PI) / 180;
 /** Rate of every eased change, per second. */
@@ -378,6 +380,7 @@ export class Dollhouse {
 
 	private readonly exteriorCut: CutUniform;
 	private readonly interiorCut: CutUniform;
+	private readonly furnitureCut: CutUniform;
 	private readonly clearCut: number;
 	private readonly walls: WallView[] = [];
 	private readonly outside: WallView[] = [];
@@ -402,6 +405,7 @@ export class Dollhouse {
 		this.clearCut = ceiling + 0.01;
 		this.exteriorCut = { value: this.clearCut };
 		this.interiorCut = { value: this.clearCut };
+		this.furnitureCut = { value: this.clearCut };
 		this.shadowTexture = softRectTexture();
 
 		const wall = color(COLORS.wall);
@@ -633,11 +637,15 @@ export class Dollhouse {
 			const colors = new Float32Array(count * 3);
 			for (let i = 0; i < count; i++) colors.set([tone.r, tone.g, tone.b], i * 3);
 			geometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
+			// Furniture is cut like the walls (to PLAN_FURNITURE in the plan view), so it shows at every cut height.
+			const ranges = new Float32Array(count * 2);
+			for (let i = 0; i < count; i++) ranges.set(ALWAYS, i * 2);
+			geometry.setAttribute('cutRange', new Float32BufferAttribute(ranges, 2));
 			return geometry;
 		});
 		const merged = mergeGeometries(pieces)!;
 		for (const piece of pieces) piece.dispose();
-		const mesh = new Mesh(merged, clay(0xffffff, { vertexColors: true }));
+		const mesh = new Mesh(merged, cutClay(0xffffff, this.furnitureCut, { vertexColors: true }, false));
 		this.group.add(mesh);
 		return mesh;
 	}
@@ -711,6 +719,7 @@ export class Dollhouse {
 
 		if (this.ease(this.interiorCut, this.topDown ? PLAN_WALL : this.cutaway ? CUTAWAY : this.clearCut, k)) easing = true;
 		if (this.ease(this.exteriorCut, this.topDown ? PLAN_WALL : this.clearCut, k)) easing = true;
+		if (this.ease(this.furnitureCut, this.topDown ? PLAN_FURNITURE : this.clearCut, k)) easing = true;
 
 		for (const view of this.outside) {
 			this.toEye.subVectors(this.eye, view.middle).normalize();
@@ -807,7 +816,7 @@ export function dollhouseRig(plan: HomePlan, topDown: boolean): RigSetup {
 	const fov = 30;
 	const target: [number, number, number] = [plan.width / 2, 0.8, plan.depth / 2];
 	const pad = EXTERIOR_WALL + LEDGE;
-	const top = topDown ? PLAN_WALL : plan.ceiling;
+	const top = topDown ? Math.max(PLAN_WALL, PLAN_FURNITURE) : plan.ceiling;
 	const points: [number, number, number][] = [];
 	for (const x of [-pad, plan.width + pad]) for (const y of [PLINTH_BOTTOM, top]) for (const z of [-pad, plan.depth + pad]) points.push([x, y, z]);
 	const t = Math.tan((fov * Math.PI) / 360);
