@@ -54,7 +54,7 @@ The solver is a library with one boundary, `FlowBackend` (`solver/backend.ts`): 
 | Two openings in series under a pressure difference | Q = Cd·A·√(2ΔP/ρ)/√2 | 96 to 99 % of the formula; in equals out to 1e-3 |
 | Stack effect, openings at two heights | ASHRAE Fundamentals | 96 % (uniform room); 94 % five seconds in with cold inflow |
 | Well-mixed room with ventilation, purifier and deposition | dC/dt = −(Q/V + CADR/V + v_d·A/V)·C | decay constant 100.0 % of predicted; mass balance closes to 1e-5 |
-| Free round jet from a fan | 1/distance decay, K = 5.4 to 6.1 (Wygnanski and Fiedler 1969; Hussein, Capp and George 1994; Panchapakesan and Lumley 1993) | delivered flow about 100 % of rated, exponent −1.0, K about 5.9 |
+| Free round jet from a fan | 1/distance decay, K = 5.7 to 6.1 (Wygnanski and Fiedler 1969; Hussein, Capp and George 1994; Panchapakesan and Lumley 1993) | delivered flow about 100 % of rated, exponent −1.0, K about 5.9 |
 
 Tolerances and what limits them are next to each assertion.
 

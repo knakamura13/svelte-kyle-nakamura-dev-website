@@ -182,8 +182,9 @@ test.describe('free round jet from a fan', () => {
 		const mx = lx.reduce((a, b) => a + b, 0) / lx.length;
 		const my = ly.reduce((a, b) => a + b, 0) / ly.length;
 		const exponent = lx.reduce((a, x, i) => a + (x - mx) * (ly[i] - my), 0) / lx.reduce((a, x) => a + (x - mx) ** 2, 0);
-		// Decay constant K = u_c·s/(U·d), U the mean speed through the disk. Measured turbulent round jets give 5.4 to 6.1, most often
-		// quoted 5.8 (Wygnanski and Fiedler 1969: 5.4; Hussein, Capp and George 1994: 5.8; Panchapakesan and Lumley 1993: 6.06).
+		// Decay constant K = u_c·s/(U·d), U the mean speed through the disk. Measured turbulent round jets give 5.7 to 6.1, most often
+		// quoted 5.8 (Wygnanski and Fiedler 1969: 5.70, though one compilation prints 5.4; Hussein, Capp and George 1994: 5.8;
+		// Panchapakesan and Lumley 1993: 6.06). See docs/research/airflow/benchmarks.md.
 		const k = points.map(([s, u]) => (u * s) / (jet.diskSpeed * d));
 		const meanK = k.reduce((a, b) => a + b, 0) / k.length;
 		const delivered = jet.solver.fanFlow[0] / jet.rated;
@@ -193,7 +194,7 @@ test.describe('free round jet from a fan', () => {
 		expect(exponent).toBeGreaterThan(-1.2);
 		expect(exponent).toBeLessThan(-0.85);
 		// The closure's one coefficient was set against this benchmark; a band of 5 % beyond the published extremes keeps it honest.
-		expect(meanK).toBeGreaterThan(5.1);
+		expect(meanK).toBeGreaterThan(5.4);
 		expect(meanK).toBeLessThan(6.4);
 		expect(jet.solver.diagnostics().divergence).toBeLessThan(DIVERGENCE);
 	});

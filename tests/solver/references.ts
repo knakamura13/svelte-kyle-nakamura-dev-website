@@ -100,7 +100,10 @@ export const BOTELLA_PEYRET_RE1000_V: [x: number, v: number][] = [
  */
 export interface DeVahlDavis {
 	rayleigh: number;
-	/** Average Nusselt number on the hot wall. */
+	/**
+	 * Average Nusselt number over the whole cavity (Table V, Nu_avg). In the exact solution it equals the hot-wall average,
+	 * which Table V prints slightly differently (1.117, 2.238, 4.509 and 8.817 at Ra 1e3 to 1e6).
+	 */
 	nusselt: number;
 	/** Maximum horizontal velocity on the vertical midplane and its height; maximum vertical velocity on the horizontal midplane and its x. */
 	uMax: number;
