@@ -55,6 +55,8 @@ const url = `http://127.0.0.1:${server.address().port}/`;
 
 const HOUSE = 'house';
 const SHOTS = {
+	/** Not a screenshot set: prints which outside walls fade, and whether the inside walls are cut, at each yaw of a turn (see below). */
+	sweep: () => [],
 	overview: () => ['studio', 'one-bedroom', 'two-bedroom', 'house'].map((plan) => ({ name: `${plan}-three-quarter`, state: { plan, furniture: true } })),
 	north: () => [{ name: 'two-bedroom-from-north', state: { plan: 'two-bedroom', yaw: 180, furniture: true } }, { name: 'house-from-north', state: { plan: HOUSE, yaw: 180, furniture: true } }],
 	topdown: () => ['studio', 'one-bedroom', 'two-bedroom', 'house'].map((plan) => ({ name: `${plan}-topdown`, state: { plan, topDown: true, furniture: true } })),
@@ -100,6 +102,27 @@ for (const [width, height] of sizes) {
 		} catch (error) {
 			log.push(`[${width}x${height} shot ${name}] ${error.message}`);
 		}
+	}
+	if (wanted.includes('sweep') && width === sizes[0][0]) {
+		// Turn the camera a full circle in 10° steps, once up and once back down, at a low and at the default pitch. The dollhouse
+		// keeps its state between steps, so this is its hysteresis at work. Walls are listed north, east, south, west: F fades, - solid.
+		const rows = await page.evaluate(async () => {
+			const out = [];
+			for (const pitch of [20, 30, 38, 60]) {
+				for (const direction of [1, -1]) {
+					let line = `pitch ${String(pitch).padStart(2)} ${direction > 0 ? 'yaw +' : 'yaw -'}: `;
+					for (let yaw = -180; yaw <= 180; yaw += 10) {
+						const at = direction > 0 ? yaw : -yaw;
+						await window.__setState({ plan: 'two-bedroom', yaw: at, pitch });
+						const d = window.__debug();
+						line += `${d.outside.map((w) => (w.goal < 1 ? 'F' : '-')).join('')}${d.cutaway ? 'c' : ' '} `;
+					}
+					out.push(line);
+				}
+			}
+			return out;
+		});
+		console.log(rows.join('\n'));
 	}
 	if (process.env.DEBUG_STATE) console.log(JSON.stringify(await page.evaluate(() => window.__debug())));
 	await context.close();
