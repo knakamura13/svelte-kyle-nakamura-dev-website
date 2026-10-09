@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { DEVICE_MODELS, FAN_MODELS } from '../../src/lib/experiments/airflow/devices/catalog';
 import type { DeviceModel } from '../../src/lib/experiments/airflow/devices/types';
 import { planById } from '../../src/lib/experiments/airflow/homes/plans';
 import { SCENARIOS } from '../../src/lib/experiments/airflow/scenarios';
@@ -7,7 +8,7 @@ import { CpuBackend } from '../../src/lib/experiments/airflow/solver/cpu/backend
 import { LIMITS, MAX_DEVICES, type Setup } from '../../src/lib/experiments/airflow/state';
 
 const make: BackendFactory = (config, initial) => new CpuBackend({ ...config, scalarSubsteps: undefined }, initial);
-const models = new Map<string, DeviceModel>();
+const models = new Map<string, DeviceModel>(DEVICE_MODELS.map((m) => [m.id, m]));
 /** The coarse grid the page's CPU fallback uses. */
 const H = 0.2;
 
@@ -55,6 +56,10 @@ test.describe('scenario presets', () => {
 				expect(c[key], `${preset.id}: ${key}`).toBeLessThanOrEqual(LIMITS[key].max);
 			}
 			expect(preset.setup.devices.length).toBeLessThanOrEqual(MAX_DEVICES);
+			for (const device of preset.setup.devices) {
+				expect(models.has(device.model), `${preset.id}: model ${device.model}`).toBe(true);
+				if (device.opening) expect(known.has(device.opening), `${preset.id}: window ${device.opening}`).toBe(true);
+			}
 		}
 	});
 
@@ -90,6 +95,26 @@ test.describe('scenario presets', () => {
 		expect(low).toBeGreaterThan(0.02);
 		expect(high).toBeLessThan(-0.02);
 		expect(Math.abs(low + high) / low).toBeLessThan(0.15);
+		world.dispose();
+	});
+
+	test('a fan in the window: with no wind, the fan draws air in at about its rating and it leaves by the open bedroom window, and turned off it stops', async () => {
+		const preset = scenario('window-fan');
+		expect(preset.setup.conditions.windSpeed).toBe(0);
+		const fan = preset.setup.devices[0];
+		const rated = FAN_MODELS.find((m) => m.id === fan.model)!.flow.high;
+		const world = await create(preset.setup);
+		run(world, 30);
+		const drawn = await inflow(world, fan.opening!);
+		const out = await inflow(world, 'bedroom-1-window');
+		console.log(`window fan: ${drawn.toFixed(3)} m³/s in through the fan window (rated ${rated.toFixed(3)} at high), ${out.toFixed(3)} through the bedroom window`);
+		expect(drawn).toBeGreaterThan(0.5 * rated);
+		expect(drawn).toBeLessThan(1.05 * rated);
+		expect(Math.abs(drawn + out) / drawn).toBeLessThan(0.1);
+
+		world.apply({ ...preset.setup, devices: [{ ...fan, power: 0 }] }, 30);
+		run(world, 15);
+		expect(Math.abs(await inflow(world, fan.opening!))).toBeLessThan(0.02 * rated);
 		world.dispose();
 	});
 });

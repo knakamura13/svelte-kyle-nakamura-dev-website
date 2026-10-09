@@ -1,4 +1,7 @@
-import { blankSetup, type Clock, type Setup, type View } from './state';
+import { FAN_MODELS } from './devices/catalog';
+import { newDevice } from './devices/placement';
+import { planById } from './homes/plans';
+import { blankSetup, type Clock, type DeviceState, type Setup, type View } from './state';
 
 /** A prepared Home, Devices, Openings and weather that shows one idea. */
 export interface Scenario {
@@ -15,9 +18,17 @@ export interface Scenario {
 	smoke?: number;
 }
 
+/** The catalog's window fan in the first window of a plan that can hold one, drawing air in at full speed. */
+function windowFanIn(planId: string): DeviceState {
+	const model = FAN_MODELS.find((m) => m.kind === 'window-fan')!;
+	const made = newDevice(planById(planId)!, model, []);
+	if (!('device' in made)) throw new Error(made.reason);
+	return { ...made.device, id: 'window-fan', power: 1 };
+}
+
 /**
- * The guided scenarios. The two that need an air purifier, clearing the smoke and the smoky day, wait for the device
- * catalog. `tests/solver/scenario-presets.spec.ts` runs each one in the solver and checks that what `notice` says happens.
+ * The guided scenarios. The two that need an air purifier, clearing the smoke and the smoky day, wait for purifiers in
+ * the device catalog. `tests/solver/scenario-presets.spec.ts` runs each one in the solver and checks that what `notice` says happens.
  */
 export const SCENARIOS: Scenario[] = [
 	{
@@ -44,6 +55,21 @@ export const SCENARIOS: Scenario[] = [
 			...blankSetup('house'),
 			openings: { 'living-north-window-1': 1, 'living-north-window-2': 1, 'clerestory-window': 1 },
 			conditions: { windFrom: 270, windSpeed: 0, outdoorTemp: -5, indoorTemp: 21, outdoorPm25: 0 }
+		},
+		view: { layer: 'temperature' },
+		clock: { speed: 5 }
+	},
+	{
+		id: 'window-fan',
+		name: 'A fan in the window',
+		blurb: 'No wind at all: one window fan pulls the air through the whole home.',
+		notice:
+			'The fan in the dining room window draws cool air in and pushes it across the living room and down the hall. It leaves by the open window in bedroom 1. Turn the fan off and the air stops moving.',
+		setup: {
+			...blankSetup('two-bedroom'),
+			devices: [windowFanIn('two-bedroom')],
+			openings: { 'bedroom-1-door': 1, 'bedroom-1-window': 1 },
+			conditions: { windFrom: 270, windSpeed: 0, outdoorTemp: 16, indoorTemp: 24, outdoorPm25: 0 }
 		},
 		view: { layer: 'temperature' },
 		clock: { speed: 5 }
