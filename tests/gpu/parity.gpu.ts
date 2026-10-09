@@ -108,6 +108,12 @@ test('face updates (geometryScatter) leave the packed geometry the host expects'
 	expect(c.maxAbs).toBe(0);
 });
 
+test('the diagnostics pass (measure, measureFinish) matches cpu/solver.ts measure and cpu/scalars.ts maxCfl', async () => {
+	const c = await call<Record<string, Comparison>>(page, 'measureParity', 12);
+	for (const [name, comparison] of Object.entries(c)) report(`measure ${name}`, comparison);
+	for (const comparison of Object.values(c)) expect(comparison.rel).toBeLessThan(TOLERANCE);
+});
+
 test('step time', async () => {
 	for (const [nx, ny, nz] of [
 		[64, 32, 48],

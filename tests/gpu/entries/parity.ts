@@ -8,6 +8,7 @@ import { CpuSolver, emptyExterior } from '$lib/experiments/airflow/solver/cpu/so
 import { PressureSolver } from '$lib/experiments/airflow/solver/cpu/pressure';
 import { eddyViscosity } from '$lib/experiments/airflow/solver/cpu/turbulence';
 import { extractSlice, samplePoints } from '$lib/experiments/airflow/solver/cpu/readouts';
+import { maxCfl } from '$lib/experiments/airflow/solver/cpu/scalars';
 import { diffuseVelocity } from '$lib/experiments/airflow/solver/cpu/diffuse';
 import { advectVelocity, type Velocity } from '$lib/experiments/airflow/solver/cpu/advect';
 import { boxGeometry } from '$lib/experiments/airflow/solver/geometry';
@@ -467,6 +468,49 @@ async function faceUpdateParity(seed: number) {
 	return compare({ geo: [gpu, packGeometry(grid, expected)] });
 }
 
+/**
+ * The diagnostics pass (measure, measureFinish) on a random state, its per-workgroup sums finished here in double as
+ * the backend would: largest face speed, relative divergence, and the CFL number of the scalar substep estimate.
+ */
+async function measureParity(seed: number) {
+	const config = boxConfig(12, 10, 8, 0.1, 1.5e-5);
+	const grid = new Grid(config.grid);
+	const dt = 0.05;
+	const vel = randomVelocity(grid, config, seed);
+	const cpu = new CpuSolver(config);
+	cpu.vel = copy(vel);
+	(cpu as any).measure(dt);
+	const expected = cpu.diagnostics();
+	const cfl = maxCfl(grid, config.geometry, vel, dt, config.fluid.settling);
+	const solver = await GpuSolver.create(await context(), config);
+	solver.device.queue.writeBuffer(solver.vel, 0, packVelocity(vel.u, vel.v, vel.w));
+	await runPass(solver, (pass) => solver.measure(pass));
+	const groups = solver.cellGroups[0] * solver.cellGroups[1];
+	const partials = await readBack(solver.device, solver.measurePartials, 32 * groups);
+	const result = await readBack(solver.device, solver.measureResult, 16);
+	solver.dispose();
+	let sumSquares = 0;
+	let cells = 0;
+	let fastest = 0;
+	let squares = 0;
+	for (let g = 0; g < groups; g++) {
+		sumSquares += partials[8 * g];
+		cells += partials[8 * g + 1];
+		fastest = Math.max(fastest, partials[8 * g + 2]);
+		squares += partials[8 * g + 3];
+	}
+	const reference = Math.max(Math.sqrt(squares / Math.max(cells, 1)), 0.01);
+	const divergence = cells ? Math.sqrt(sumSquares / cells) / reference : 0;
+	const single = (gpu: number, cpu: number) => compare({ value: [Float32Array.of(gpu), Float32Array.of(cpu)] });
+	return {
+		cells: single(cells, cpu.fluidCells),
+		maxSpeed: single(fastest, expected.maxSpeed),
+		fastestFinish: single(result[1], expected.maxSpeed),
+		divergence: single(divergence, expected.divergence),
+		cfl: single((result[0] * dt) / grid.h, cfl)
+	};
+}
+
 /** Wall-clock time per whole step on a grid, averaged over `steps` after a warm-up. */
 async function stepTime(nx: number, ny: number, nz: number, steps: number) {
 	const config = boxConfig(nx, ny, nz, 0.1, 1.5e-5);
@@ -492,5 +536,5 @@ async function stepTime(nx: number, ny: number, nz: number, steps: number) {
 	return { cells: nx * ny * nz, ms };
 }
 
-(window as any).parity = { diffuseParity, advectParity, turbulenceParity, pressureParity, cavityParity, heatedParity, devicesParity, readoutParity, faceUpdateParity, stepTime };
+(window as any).parity = { diffuseParity, advectParity, turbulenceParity, pressureParity, cavityParity, heatedParity, devicesParity, readoutParity, faceUpdateParity, measureParity, stepTime };
 (window as any).harnessReady = true;
