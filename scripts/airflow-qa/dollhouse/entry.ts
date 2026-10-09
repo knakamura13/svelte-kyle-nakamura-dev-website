@@ -57,7 +57,9 @@ let last: { cutaway: unknown } | null = null;
 function light(tint: number) {
 	if (lit) return;
 	lit = true;
-	studio(scene, tint, { pool: 22, fog: [40, 100] });
+	// The rig pulls the camera back to fit the house by width on a narrow Stage: 77 m for the house at 390 px. The kit's usual fog
+	// (40 to 100 m) would wash it out there, so the fog starts well past that.
+	studio(scene, tint, { pool: 22, fog: [200, 500] });
 	// The studio's floor pool sits at y = -0.004, which is inside the dollhouse; the plinth runs to -0.16, so a ground plane goes below it.
 	for (const child of scene.children) if (child instanceof Mesh && child.geometry instanceof CircleGeometry) child.position.y = -0.17;
 }
