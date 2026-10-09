@@ -3,7 +3,7 @@
  * input, in the page, and reports how far apart the results are.
  */
 import { GpuContext } from '$lib/experiments/airflow/solver/gpu/context';
-import { GpuSolver, packGeometry, packPair, packVelocity, unpackPair, unpackVelocity } from '$lib/experiments/airflow/solver/gpu/solver';
+import { GpuSolver, PROFILE_GROUPS, PROFILE_SLOT_BYTES, packGeometry, packPair, packVelocity, unpackPair, unpackVelocity } from '$lib/experiments/airflow/solver/gpu/solver';
 import { CpuSolver, emptyExterior } from '$lib/experiments/airflow/solver/cpu/solver';
 import { PressureSolver } from '$lib/experiments/airflow/solver/cpu/pressure';
 import { eddyViscosity } from '$lib/experiments/airflow/solver/cpu/turbulence';
@@ -620,6 +620,49 @@ async function particlesSanity() {
 	return { validation: error ? error.message : '', tracers: { count: results[0].count, bad: results[0].bad }, smoke: { count: results[1].count, bad: results[1].bad }, moved };
 }
 
+/** The profiled step (one pass per kernel group with timestamp writes): it must validate, and its times are logged. */
+async function profiledStep(nx: number, ny: number, nz: number) {
+	const profiling = await GpuContext.create({ timestamps: true });
+	if (!profiling.timestamps) {
+		profiling.dispose();
+		return { supported: false, validation: '', groups: {} as Record<string, number> };
+	}
+	const config = boxConfig(nx, ny, nz, 0.1, 1.5e-5);
+	config.sides = [WALL, WALL, WALL, { slip: 'no-slip', velocity: [1, 0, 0] }, WALL, WALL];
+	const solver = await GpuSolver.create(profiling, config, { profile: true });
+	const device = solver.device;
+	device.pushErrorScope('validation');
+	const steps = 8;
+	for (let s = 0; s < steps; s++) {
+		solver.writeStep(0.05, 1, solver.diffusionSubsteps(0.05), s);
+		const encoder = device.createCommandEncoder();
+		solver.encodeStep(encoder, 0.05, 1, s, s);
+		device.queue.submit([encoder.finish()]);
+	}
+	const error = await device.popErrorScope();
+	const bytes = PROFILE_SLOT_BYTES * steps;
+	const staging = device.createBuffer({ size: bytes, usage: 0x0001 | 0x0008 });
+	const encoder = device.createCommandEncoder();
+	encoder.copyBufferToBuffer((solver as any).profileBuffer, 0, staging, 0, bytes);
+	device.queue.submit([encoder.finish()]);
+	await staging.mapAsync(0x0001);
+	const stamps = new BigUint64Array(staging.getMappedRange().slice(0));
+	staging.unmap();
+	solver.dispose();
+	profiling.dispose();
+	const groups: Record<string, number> = {};
+	PROFILE_GROUPS.forEach((name, g) => {
+		let total = 0;
+		// Skip the first steps as warm-up.
+		for (let s = 2; s < steps; s++) {
+			const at = (PROFILE_SLOT_BYTES / 8) * s + 2 * g;
+			total += Number(stamps[at + 1] - stamps[at]) / 1e6;
+		}
+		groups[name] = total / (steps - 2);
+	});
+	return { supported: true, validation: error ? error.message : '', groups };
+}
+
 /** Wall-clock time per whole step on a grid, averaged over `steps` after a warm-up. */
 async function stepTime(nx: number, ny: number, nz: number, steps: number) {
 	const config = boxConfig(nx, ny, nz, 0.1, 1.5e-5);
@@ -645,5 +688,5 @@ async function stepTime(nx: number, ny: number, nz: number, steps: number) {
 	return { cells: nx * ny * nz, ms };
 }
 
-(window as any).parity = { diffuseParity, advectParity, turbulenceParity, pressureParity, cavityParity, heatedParity, devicesParity, readoutParity, faceUpdateParity, measureParity, roomsParity, particlesSanity, stepTime };
+(window as any).parity = { diffuseParity, advectParity, turbulenceParity, pressureParity, cavityParity, heatedParity, devicesParity, readoutParity, faceUpdateParity, measureParity, roomsParity, particlesSanity, profiledStep, stepTime };
 (window as any).harnessReady = true;

@@ -132,6 +132,12 @@ test('particles stay finite and inside the box, and tracers move in a draught (s
 	expect(c.moved).toBeGreaterThan(c.tracers.count / 2);
 });
 
+test('the profiled step (timestamp queries) validates', async () => {
+	const c = await call<{ supported: boolean; validation: string; groups: Record<string, number> }>(page, 'profiledStep', 128, 48, 96);
+	console.log(`profiled step 128x48x96: ${c.supported ? Object.entries(c.groups).map(([g, ms]) => `${g} ${ms.toFixed(3)} ms`).join(', ') : 'timestamp-query not offered by this adapter'}`);
+	expect(c.validation).toBe('');
+});
+
 test('step time', async () => {
 	for (const [nx, ny, nz] of [
 		[64, 32, 48],
