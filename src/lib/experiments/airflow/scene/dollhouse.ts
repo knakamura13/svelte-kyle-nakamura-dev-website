@@ -167,6 +167,13 @@ class Boxes {
 	}
 }
 
+/**
+ * Wall pieces meet edge to edge, and each box also has a side face against its neighbour. At the seam that hidden face
+ * ties on depth with the neighbour's front face and shows as a dark hairline. A depth offset pushes a polygon back by its
+ * slope, and a side face seen at a grazing angle has by far the steepest slope, so it loses the tie.
+ */
+const WALL_SURFACE = { vertexColors: true, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 };
+
 /** A box on a wall, from `u0`..`u1` along it and `n0`..`n1` across it, into world-space `boxes`. */
 function addOnWall(boxes: Boxes, run: WallRun, u0: number, u1: number, y0: number, y1: number, n0: number, n1: number, side: Color, top: Color = side, range: [number, number] = ALWAYS) {
 	const { x0, x1, z0, z1 } = wallBox(run, u0, u1, n0, n1);
@@ -382,13 +389,13 @@ export class Dollhouse {
 		const wall = color(COLORS.wall);
 		const cap = color(COLORS.cap);
 		const runs = wallRuns(plan);
-		const indoor = { wall: cutClay(0xffffff, this.interiorCut, { vertexColors: true }), frame: cutClay(0xffffff, this.interiorCut, { vertexColors: true }), glass: this.glass(this.interiorCut) };
+		const indoor = { wall: cutClay(0xffffff, this.interiorCut, WALL_SURFACE), frame: cutClay(0xffffff, this.interiorCut, { vertexColors: true }), glass: this.glass(this.interiorCut) };
 		const indoorBoxes = { wall: new Boxes(), frame: new Boxes(), glass: new Boxes() };
 		const indoorView = this.view(null, indoor);
 
 		for (const run of runs) {
 			const exterior = run.out !== 0;
-			const materials = exterior ? { wall: cutClay(0xffffff, this.exteriorCut, { vertexColors: true }), frame: cutClay(0xffffff, this.exteriorCut, { vertexColors: true }), glass: this.glass(this.exteriorCut) } : indoor;
+			const materials = exterior ? { wall: cutClay(0xffffff, this.exteriorCut, WALL_SURFACE), frame: cutClay(0xffffff, this.exteriorCut, { vertexColors: true }), glass: this.glass(this.exteriorCut) } : indoor;
 			const boxes = exterior ? { wall: new Boxes(), frame: new Boxes(), glass: new Boxes() } : indoorBoxes;
 			const view = exterior ? this.view(run, materials) : indoorView;
 			const cut = exterior ? this.exteriorCut : this.interiorCut;
@@ -459,7 +466,7 @@ export class Dollhouse {
 		for (const [x, z, a, b] of posts) {
 			const boxes = new Boxes();
 			boxes.add(x, x + t, 0, ceiling, z, z + t, wall, cap);
-			const material = cutClay(0xffffff, this.exteriorCut, { vertexColors: true });
+			const material = cutClay(0xffffff, this.exteriorCut, WALL_SURFACE);
 			const mesh = new Mesh(boxes.build(), material);
 			this.group.add(mesh);
 			this.corners.push({ material, mesh, walls: [a, b], fade: 1 });
