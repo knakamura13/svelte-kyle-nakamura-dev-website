@@ -29,6 +29,7 @@
 		"@tailwindcss/vite": "^4.1.0",
 		"@types/node": "20.14.12",
 		"@types/three": "^0.186.0",
+		"esbuild": "0.25.12",
 		"prettier": "^3.3.3",
 		"prettier-plugin-svelte": "^3.2.6",
 		"svelte": "^5.28.0",
