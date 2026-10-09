@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { isDeepStrictEqual } from 'node:util';
 import { LINK_VERSION, MAX_LINK_LENGTH, MAX_POSITION, decodeSetup, encodeSetup, normalizeSetup, setupFromHash, setupToHash, type LinkCatalog } from '../../src/lib/experiments/airflow/link';
 import { COMPASS_POINTS, bearingToVector, compassName, describeDirection, vectorToBearing } from '../../src/lib/experiments/airflow/readout';
 import { AIR } from '../../src/lib/experiments/airflow/solver/types';
@@ -26,8 +27,20 @@ import {
 	type QuantityName
 } from '../../src/lib/experiments/airflow/units';
 
+/*
+ * A note on speed. Playwright's `expect` costs about a millisecond a call, and more the more calls a test has already
+ * made: a loop of 61,000 of them took 72 seconds, and the loop that decodes random links makes 217,000 and had not
+ * finished after three and a half minutes. The test body is synchronous, so the per-test timeout cannot interrupt it,
+ * and the test looked like a hang.
+ * Every loop below therefore does plain checks, collects what it finds wrong as sentences, and makes one `expect` at the
+ * end that shows the first few.
+ */
+
 /** Expected text with `_` for the narrow no-break space between a number and its unit. */
 const n = (text: string) => text.replaceAll('_', UNIT_SPACE);
+
+/** True when `a` and `b` differ by less than `toBeCloseTo(b, digits)` allows. */
+const close = (a: number, b: number, digits: number) => Math.abs(a - b) < 10 ** -digits / 2;
 
 /** A small seeded generator (mulberry32), so a failing random case can be replayed. */
 function random(seed: number) {
@@ -154,6 +167,7 @@ test.describe('units: sliders in display units', () => {
 	});
 
 	test('every slider position survives the trip to SI exactly and lands inside LIMITS', () => {
+		const found: string[] = [];
 		for (const key of Object.keys(LIMITS) as LimitKey[])
 			for (const units of ['metric', 'imperial'] as const) {
 				const range = sliderRange(key, units);
@@ -161,21 +175,24 @@ test.describe('units: sliders in display units', () => {
 				for (let i = 0; i <= positions; i++) {
 					const shown = Number((range.min + i * range.step).toFixed(range.digits));
 					const si = range.fromDisplay(shown);
-					expect(range.toDisplay(si), `${key} ${units} ${shown}`).toBe(shown);
-					expect(si).toBeGreaterThanOrEqual(LIMITS[key].min - 1e-9);
-					expect(si).toBeLessThanOrEqual(LIMITS[key].max + 1e-9);
+					if (!Object.is(range.toDisplay(si), shown)) found.push(`${key} ${units} ${shown} comes back as ${range.toDisplay(si)}`);
+					if (!(si >= LIMITS[key].min - 1e-9 && si <= LIMITS[key].max + 1e-9)) found.push(`${key} ${units} ${shown} is ${si} in SI, outside its LIMITS`);
 				}
 			}
+		expect(found.slice(0, 10)).toEqual([]);
 	});
 
 	test('an SI value comes back from display units to within a billionth', () => {
 		const next = random(7);
+		const found: string[] = [];
 		for (const name of Object.keys(QUANTITIES) as QuantityName[])
 			for (const units of ['metric', 'imperial'] as const)
 				for (let i = 0; i < 200; i++) {
 					const value = (next() - 0.5) * 200;
-					expect(Math.abs(QUANTITIES[name].fromDisplay(QUANTITIES[name].toDisplay(value, units), units) - value)).toBeLessThan(1e-9);
+					const back = QUANTITIES[name].fromDisplay(QUANTITIES[name].toDisplay(value, units), units);
+					if (!(Math.abs(back - value) < 1e-9)) found.push(`${name} ${units} ${value} comes back as ${back}`);
 				}
+		expect(found.slice(0, 10)).toEqual([]);
 		expect(QUANTITIES.temperature.toDisplay(20, 'imperial')).toBe(68);
 		expect(QUANTITIES.temperature.toDisplay(100, 'imperial')).toBe(212);
 		expect(QUANTITIES.speed.toDisplay(0.44704, 'imperial')).toBe(1);
@@ -207,12 +224,14 @@ test.describe('readout: which way the air is going', () => {
 		const northeast = bearingToVector(45);
 		expect(northeast.east).toBeCloseTo(Math.SQRT1_2, 12);
 		expect(northeast.south).toBeCloseTo(-Math.SQRT1_2, 12);
+		const found: string[] = [];
 		for (let bearing = 0; bearing < 360; bearing += 7.3) {
 			const { east, south } = bearingToVector(bearing);
-			expect(Math.hypot(east, south)).toBeCloseTo(1, 12);
-			expect(vectorToBearing(east, south)).toBeCloseTo(bearing, 9);
-			expect(vectorToBearing(3 * east, 3 * south)).toBeCloseTo(bearing, 9);
+			if (!close(Math.hypot(east, south), 1, 12)) found.push(`${bearing}: not a unit vector`);
+			if (!close(vectorToBearing(east, south), bearing, 9)) found.push(`${bearing}: comes back as ${vectorToBearing(east, south)}`);
+			if (!close(vectorToBearing(3 * east, 3 * south), bearing, 9)) found.push(`${bearing}: three times the vector gives ${vectorToBearing(3 * east, 3 * south)}`);
 		}
+		expect(found.slice(0, 10)).toEqual([]);
 	});
 
 	test('the wording: a compass point or a cardinal word, then rising, sinking or level', () => {
@@ -352,43 +371,53 @@ function maximalSetup(): Setup {
 	};
 }
 
-/** Everything a decoded setup must be, whatever the link was: within LIMITS, on the link's precision, and naming only what the catalog knows. */
-function expectValid(setup: Setup | null, catalog = CATALOG) {
-	if (setup === null) return;
+/**
+ * What is wrong with a decoded setup, as sentences (none when it is as it must be, and none for null): every number
+ * within LIMITS and on the link's precision, only ids the catalog knows, at most MAX_DEVICES devices with fresh ids, and
+ * a setup that survives another trip through the link unchanged. Plain checks, not `expect` calls: see the note on speed.
+ */
+function invalidities(setup: Setup | null, catalog = CATALOG): string[] {
+	if (setup === null) return [];
+	const bad: string[] = [];
 	const plan = catalog.plans.find((p) => p.id === setup.plan);
-	expect(plan).toBeDefined();
-	const within = (x: number, min: number, max: number) => {
-		expect(Number.isFinite(x)).toBe(true);
-		expect(x).toBeGreaterThanOrEqual(min);
-		expect(x).toBeLessThanOrEqual(max);
+	if (!plan) bad.push(`plan ${setup.plan} is not in the catalog`);
+	const within = (what: string, x: number, min: number, max: number) => {
+		if (!(Number.isFinite(x) && x >= min && x <= max)) bad.push(`${what} is ${x}, outside ${min} to ${max}`);
 	};
-	expect(typeof setup.furniture).toBe('boolean');
-	expect(setup.devices.length).toBeLessThanOrEqual(MAX_DEVICES);
+	if (typeof setup.furniture !== 'boolean') bad.push('furniture is not true or false');
+	if (setup.devices.length > MAX_DEVICES) bad.push(`${setup.devices.length} devices, more than ${MAX_DEVICES}`);
 	setup.devices.forEach((device, i) => {
-		expect(device.id).toBe(`d${i + 1}`);
-		expect(catalog.models).toContain(device.model);
-		within(device.x, 0, MAX_POSITION);
-		within(device.z, 0, MAX_POSITION);
-		within(device.y, 0, 2.4);
-		within(device.height, 0, 2.4);
-		within(device.yaw, 0, 359);
-		within(device.tilt, LIMITS.tilt.min, LIMITS.tilt.max);
-		within(device.power, 0, 1);
-		within(device.oscillation.sweep, LIMITS.oscillationSweep.min, LIMITS.oscillationSweep.max);
-		within(device.oscillation.period, LIMITS.oscillationPeriod.min, LIMITS.oscillationPeriod.max);
-		expect(typeof device.oscillation.on).toBe('boolean');
-		if (device.opening !== undefined) expect(plan!.openings).toContain(device.opening);
-		if (device.intake !== undefined) expect(typeof device.intake).toBe('boolean');
+		const at = `device ${i + 1}`;
+		if (device.id !== `d${i + 1}`) bad.push(`${at} has the id ${device.id}`);
+		if (!catalog.models.includes(device.model)) bad.push(`${at} has the model ${device.model}, which the catalog lacks`);
+		within(`${at} x`, device.x, 0, MAX_POSITION);
+		within(`${at} z`, device.z, 0, MAX_POSITION);
+		within(`${at} y`, device.y, 0, 2.4);
+		within(`${at} height`, device.height, 0, 2.4);
+		within(`${at} yaw`, device.yaw, 0, 359);
+		within(`${at} tilt`, device.tilt, LIMITS.tilt.min, LIMITS.tilt.max);
+		within(`${at} power`, device.power, 0, 1);
+		within(`${at} sweep`, device.oscillation.sweep, LIMITS.oscillationSweep.min, LIMITS.oscillationSweep.max);
+		within(`${at} period`, device.oscillation.period, LIMITS.oscillationPeriod.min, LIMITS.oscillationPeriod.max);
+		if (typeof device.oscillation.on !== 'boolean') bad.push(`${at} oscillation.on is not true or false`);
+		if (device.opening !== undefined && !plan?.openings.includes(device.opening)) bad.push(`${at} sits in the opening ${device.opening}, which its plan lacks`);
+		if (device.intake !== undefined && typeof device.intake !== 'boolean') bad.push(`${at} intake is not true or false`);
 	});
 	for (const [id, amount] of Object.entries(setup.openings)) {
-		expect(plan!.openings).toContain(id);
-		within(amount, 0, 1);
+		if (!plan?.openings.includes(id)) bad.push(`the opening ${id} is not in the plan`);
+		within(`opening ${id}`, amount, 0, 1);
 	}
-	within(setup.conditions.windFrom, 0, 359);
-	for (const key of ['windSpeed', 'outdoorTemp', 'indoorTemp', 'outdoorPm25'] as const) within(setup.conditions[key], LIMITS[key].min, LIMITS[key].max);
+	within('windFrom', setup.conditions.windFrom, 0, 359);
+	for (const key of ['windSpeed', 'outdoorTemp', 'indoorTemp', 'outdoorPm25'] as const) within(key, setup.conditions[key], LIMITS[key].min, LIMITS[key].max);
 	// A decoded setup is already as the link keeps it, so it survives another trip unchanged.
-	expect(normalizeSetup(setup)).toEqual(setup);
-	expect(decodeSetup(encodeSetup(setup), catalog)).toEqual(setup);
+	if (!isDeepStrictEqual(normalizeSetup(setup), setup)) bad.push('normalizeSetup changes it');
+	if (!isDeepStrictEqual(decodeSetup(encodeSetup(setup), catalog), setup)) bad.push('another trip through the link changes it');
+	return bad;
+}
+
+/** For a setup checked once. A loop collects `invalidities` itself. */
+function expectValid(setup: Setup | null, catalog = CATALOG) {
+	expect(invalidities(setup, catalog)).toEqual([]);
 }
 
 /** Raw link parts, to give the decoder links the encoder would never write: numbers become varints, arrays are bytes as they are. */
@@ -408,15 +437,17 @@ const HUGE_EVEN = [0xfe, 0xff, 0xff, 0xff, 0x7f];
 test.describe('link: the shareable setup', () => {
 	test('decoding an encoded setup gives normalizeSetup of it, for random setups in and out of range', () => {
 		const next = random(30);
+		const found: string[] = [];
 		for (let i = 0; i < 400; i++) {
 			const setup = randomSetup(next, i % 2 === 1);
 			const normal = normalizeSetup(setup);
 			const link = encodeSetup(setup);
-			expect(decodeSetup(link, CATALOG)).toEqual(normal);
-			expect(encodeSetup(normal)).toBe(link);
-			expect(normalizeSetup(normal)).toEqual(normal);
-			expectValid(normal);
+			if (!isDeepStrictEqual(decodeSetup(link, CATALOG), normal)) found.push(`setup ${i}: ${link} does not decode to normalizeSetup of it`);
+			if (encodeSetup(normal) !== link) found.push(`setup ${i}: the normalized setup encodes to another link`);
+			if (!isDeepStrictEqual(normalizeSetup(normal), normal)) found.push(`setup ${i}: normalizeSetup is not idempotent`);
+			found.push(...invalidities(normal).map((what) => `setup ${i}: ${what}`));
 		}
+		expect(found.slice(0, 10)).toEqual([]);
 	});
 
 	test('numbers keep a fixed precision: centimetres, degrees, percent, half degrees', () => {
@@ -515,7 +546,8 @@ test.describe('link: the shareable setup', () => {
 
 	test('unknown models and openings are dropped, devices are capped at six, and ids are fresh', () => {
 		// Two devices of an unknown model, then seven known ones at x = 3 to 9 m; one known device sits in an unknown opening.
-		const device = (model: number, x: number, extra: number[] = []) => [model, BIT.x | (extra.length ? BIT.opening | BIT.intakeSet | BIT.intake : 0), x * 100, ...extra];
+		// Every number is a varint: the mask for a device in an opening is 7,169 and x is in centimetres, both over 127.
+		const device = (model: number, x: number, extra: number[] = []) => [...varint(model), ...varint(BIT.x | (extra.length ? BIT.opening | BIT.intakeSet | BIT.intake : 0)), ...varint(x * 100), ...extra.flatMap(varint)];
 		const link = craft(
 			strings('house', 'mystery-fan', 'box-fan-lasko-b20200', 'attic-hatch', 'front-door', 'back-door'),
 			0,
@@ -597,24 +629,37 @@ test.describe('link: the shareable setup', () => {
 		expect(decodeSetup(` ${good}\n`, CATALOG)).toEqual(normalizeSetup(maximalSetup()));
 	});
 
-	test('decoding never throws: random text, truncated and corrupted links, wrong types', () => {
+	test('decoding never throws: random text and bytes, truncated and corrupted links, wrong types', () => {
 		const next = random(99);
 		const base64url = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 		const noise = `${base64url}.=+/ %#&~é🙂\u0000\n`;
-		const decode = (text: string, catalog = CATALOG) => {
-			let setup: Setup | null = null;
-			expect(() => (setup = decodeSetup(text, catalog)), text).not.toThrow();
-			return setup;
+		const found: string[] = [];
+		/** Decodes without `expect`, noting a throw or an invalid setup instead (see the note on speed). The catalog is this file's unless one is passed, `undefined` included. */
+		const decode = (text: unknown, ...given: [unknown?]): Setup | null => {
+			const catalog = (given.length ? given[0] : CATALOG) as LinkCatalog;
+			try {
+				const setup = decodeSetup(text as string, catalog);
+				found.push(...invalidities(setup, catalog).map((what) => `${what}, from ${String(text).slice(0, 60)}`));
+				return setup;
+			} catch (error) {
+				found.push(`threw ${String(error)} on ${String(text).slice(0, 60)}`);
+				return null;
+			}
 		};
+		const randomBytes = (count: number) => Array.from({ length: count }, () => Math.floor(next() * 256));
 		for (let i = 0; i < 2000; i++) {
 			const characters = next() < 0.8 ? base64url : noise;
 			let text = next() < 0.7 ? LINK_VERSION : '';
 			for (let length = Math.floor(next() ** 2 * 600); length > 0; length--) text += characters[Math.floor(next() * characters.length)];
-			expectValid(decode(text));
+			decode(text);
 		}
 
+		// Random bytes behind the version tag, alone and behind the start of a real link (two strings, the plan, furniture), so the decoder gets past the strings.
+		const start = [...strings('studio', 'box-fan-lasko-b20200'), 0, 1];
+		for (let i = 0; i < 2000; i++) decode(LINK_VERSION + Buffer.from([...(i % 2 ? start : []), ...randomBytes(Math.floor(next() ** 2 * 300))]).toString('base64url'));
+
 		const link = encodeSetup(maximalSetup());
-		for (let end = 0; end <= link.length; end++) expectValid(decode(link.slice(0, end)));
+		for (let end = 0; end <= link.length; end++) decode(link.slice(0, end));
 
 		// Corrupted links: characters replaced, and bytes overwritten, in links to random setups.
 		let decoded = 0;
@@ -631,16 +676,17 @@ test.describe('link: the shareable setup', () => {
 				bytes[Math.floor(next() * bytes.length)] = Math.floor(next() * 256);
 				text = LINK_VERSION + bytes.toString('base64url');
 			}
-			const setup = decode(text);
-			if (setup) decoded++;
-			expectValid(setup);
+			if (decode(text)) decoded++;
 		}
 		console.log(`corrupted links: ${decoded} of ${trials} still decoded to a valid setup, the rest to null`);
 		// Enough of them decode that the checks above were exercised on real setups.
 		expect(decoded).toBeGreaterThan(trials / 10);
 
-		for (const value of [undefined, null, 42, {}, [], true, Symbol('link')]) expect(decode(value as unknown as string)).toBeNull();
-		for (const catalog of [null, undefined, {}, { plans: 'none', models: 5 }, { plans: [null], models: [] }]) expect(decode(link, catalog as unknown as LinkCatalog)).toBeNull();
+		const notNull: string[] = [];
+		for (const value of [undefined, null, 42, {}, [], true, Symbol('link')]) if (decode(value) !== null) notNull.push(`a ${typeof value} gave a setup`);
+		for (const catalog of [null, undefined, {}, { plans: 'none', models: 5 }, { plans: [null], models: [] }]) if (decode(link, catalog) !== null) notNull.push(`the catalog ${JSON.stringify(catalog)} gave a setup`);
+		expect(notNull).toEqual([]);
+		expect(found.slice(0, 10)).toEqual([]);
 	});
 
 	test(`decoding reads at most ${MAX_LINK_LENGTH} characters, whatever it is given`, () => {
@@ -650,13 +696,16 @@ test.describe('link: the shareable setup', () => {
 		expect(decodeSetup(link.padEnd(MAX_LINK_LENGTH + 1, ' '), CATALOG)).toBeNull();
 		const huge = `${LINK_VERSION}${'A'.repeat(10_000_000)}`;
 		const hash = `#s=${huge}`;
+		let refused = 0;
 		const started = performance.now();
 		for (let i = 0; i < 100; i++) {
-			expect(decodeSetup(huge, CATALOG)).toBeNull();
-			expect(setupFromHash(hash, CATALOG)).toBeNull();
+			if (decodeSetup(huge, CATALOG) === null) refused++;
+			if (setupFromHash(hash, CATALOG) === null) refused++;
 		}
+		const elapsed = performance.now() - started;
+		expect(refused).toBe(200);
 		// Both look at the length and stop: scanning ten megabytes a hundred times would take seconds.
-		expect(performance.now() - started).toBeLessThan(500);
+		expect(elapsed).toBeLessThan(500);
 	});
 
 	test('the location hash carries the link as s=', () => {
