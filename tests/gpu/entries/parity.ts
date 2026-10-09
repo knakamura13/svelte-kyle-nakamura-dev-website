@@ -565,6 +565,61 @@ async function roomsParity(seed: number) {
 	return Object.fromEntries(lanes.map((lane) => [lane, compare({ [lane]: [Float32Array.from(gpu, (r) => r[lane]), Float32Array.from(expected, (r) => r[lane])] })]));
 }
 
+/**
+ * The particle kernel is not meant to reproduce the CPU's dots (each particle has its own random stream), so this is
+ * a sanity check, not parity: after placement and 30 frames in a draught every tracer and smoke particle is finite
+ * and inside the box, and the tracers have moved.
+ */
+async function particlesSanity() {
+	const [nx, ny, nz, h] = [24, 16, 20, 0.1];
+	const config = boxConfig(nx, ny, nz, h, 1.5e-5);
+	config.sides = [WALL, WALL, WALL, { slip: 'no-slip', velocity: [1, 0, 0] }, WALL, WALL];
+	const solver = await GpuSolver.create(await context(), config);
+	const device = solver.device;
+	solver.fill(0, 30);
+	device.pushErrorScope('validation');
+	for (let s = 0; s < 10; s++) {
+		solver.writeStep(0.05, 1, solver.diffusionSubsteps(0.05), s);
+		const encoder = device.createCommandEncoder();
+		solver.encodeStep(encoder, 0.05, 1, s);
+		device.queue.submit([encoder.finish()]);
+	}
+	// Then a uniform 0.3 m/s draught along x on every open x face, so every particle has somewhere to go.
+	const draught = new Float32Array(4 * solver.grid.size);
+	for (let n = 0; n < solver.grid.size; n++) if (config.geometry.au[n] > 0) draught[4 * n] = 0.3;
+	device.queue.writeBuffer(solver.vel, 0, draught);
+	solver.configureParticles(4000, 4000, 30, 42);
+	const sets = [(solver as any).tracers, (solver as any).smoke];
+	const placed = await readBack(device, sets[0].parts, 16 * sets[0].count);
+	for (let frame = 1; frame <= 30; frame++) {
+		for (const set of sets) {
+			// One submit per set and frame, so each frame's uniform write lands before its dispatch.
+			solver.writeParticles(set, set.mode, 1 / 60, 30, frame);
+			const encoder = device.createCommandEncoder();
+			const pass = encoder.beginComputePass();
+			solver.particlePass(pass, set);
+			pass.end();
+			device.queue.submit([encoder.finish()]);
+		}
+	}
+	const error = await device.popErrorScope();
+	const results = [];
+	for (const set of sets) {
+		const parts = await readBack(device, set.parts, 16 * set.count);
+		let bad = 0;
+		for (let n = 0; n < set.count; n++) {
+			const [x, y, z] = [parts[4 * n], parts[4 * n + 1], parts[4 * n + 2]];
+			if (!(x >= 0 && x <= nx * h && y >= 0 && y <= ny * h && z >= 0 && z <= nz * h)) bad++;
+		}
+		results.push({ count: set.count, bad, parts });
+	}
+	let moved = 0;
+	for (let n = 0; n < sets[0].count; n++)
+		if (Math.hypot(results[0].parts[4 * n] - placed[4 * n], results[0].parts[4 * n + 1] - placed[4 * n + 1], results[0].parts[4 * n + 2] - placed[4 * n + 2]) > 1e-3) moved++;
+	solver.dispose();
+	return { validation: error ? error.message : '', tracers: { count: results[0].count, bad: results[0].bad }, smoke: { count: results[1].count, bad: results[1].bad }, moved };
+}
+
 /** Wall-clock time per whole step on a grid, averaged over `steps` after a warm-up. */
 async function stepTime(nx: number, ny: number, nz: number, steps: number) {
 	const config = boxConfig(nx, ny, nz, 0.1, 1.5e-5);
@@ -590,5 +645,5 @@ async function stepTime(nx: number, ny: number, nz: number, steps: number) {
 	return { cells: nx * ny * nz, ms };
 }
 
-(window as any).parity = { diffuseParity, advectParity, turbulenceParity, pressureParity, cavityParity, heatedParity, devicesParity, readoutParity, faceUpdateParity, measureParity, roomsParity, stepTime };
+(window as any).parity = { diffuseParity, advectParity, turbulenceParity, pressureParity, cavityParity, heatedParity, devicesParity, readoutParity, faceUpdateParity, measureParity, roomsParity, particlesSanity, stepTime };
 (window as any).harnessReady = true;

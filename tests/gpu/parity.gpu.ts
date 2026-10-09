@@ -123,6 +123,15 @@ test('the room statistics kernel matches cpu/readouts.ts roomStats', async () =>
 	for (const comparison of Object.values(c)) expect(comparison.rel).toBeLessThan(TOLERANCE);
 });
 
+test('particles stay finite and inside the box, and tracers move in a draught (sanity, not parity)', async () => {
+	const c = await call<{ validation: string; tracers: { count: number; bad: number }; smoke: { count: number; bad: number }; moved: number }>(page, 'particlesSanity');
+	console.log(`particles: ${JSON.stringify(c)}`);
+	expect(c.validation).toBe('');
+	expect(c.tracers.bad).toBe(0);
+	expect(c.smoke.bad).toBe(0);
+	expect(c.moved).toBeGreaterThan(c.tracers.count / 2);
+});
+
 test('step time', async () => {
 	for (const [nx, ny, nz] of [
 		[64, 32, 48],
