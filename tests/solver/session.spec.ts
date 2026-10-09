@@ -1,0 +1,175 @@
+import { expect, test } from '@playwright/test';
+import { planById, plans } from '../../src/lib/experiments/airflow/homes/plans';
+import { emptyReadout } from '../../src/lib/experiments/airflow/readouts';
+import { SimulationSession, type SessionParams } from '../../src/lib/experiments/airflow/sim/session';
+import type { BackendFactory } from '../../src/lib/experiments/airflow/sim/world';
+import { CpuBackend } from '../../src/lib/experiments/airflow/solver/cpu/backend';
+import { blankSetup, DEFAULT_CLOCK, DEFAULT_VIEW } from '../../src/lib/experiments/airflow/state';
+
+/** The page's runtime driver, run with a fake clock: each `update(dt)` is one drawn frame of `dt` real seconds. */
+
+const make: BackendFactory = (config, initial) => new CpuBackend({ ...config, scalarSubsteps: undefined }, initial);
+const studio = planById('studio')!;
+const FRAME = 1 / 60;
+
+const makeSession = (tweak?: (params: SessionParams) => void) => {
+	const params: SessionParams = {
+		setup: blankSetup('studio'),
+		view: { ...DEFAULT_VIEW, units: 'metric' },
+		clock: { ...DEFAULT_CLOCK },
+		probes: [],
+		emission: { strength: 0.5, active: false },
+		restarts: 0,
+		startingSmoke: 0
+	};
+	tweak?.(params);
+	const readout = emptyReadout();
+	const invalidated = { count: 0 };
+	const session = new SimulationSession({ params, plans, models: [], make, cellSize: () => 0.2, readout, invalidate: () => invalidated.count++, reducedMotion: () => false });
+	return { session, params, readout, invalidated };
+};
+
+const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+/** Lets the snapshot reads that the last frames asked for finish. */
+const settle = async () => {
+	for (let n = 0; n < 6; n++) await pause(5);
+};
+
+/** Draws frames until the session has built its world. */
+const start = async (session: SimulationSession) => {
+	const deadline = Date.now() + 30000;
+	while (!session.world && Date.now() < deadline) {
+		session.update(FRAME);
+		await pause(5);
+	}
+	expect(session.world, 'the world was built').not.toBeNull();
+};
+
+/** Draws `frames` frames of `dt` real seconds, letting each one's snapshot read finish. */
+const draw = async (session: SimulationSession, frames: number, dt = FRAME) => {
+	for (let n = 0; n < frames; n++) {
+		session.update(dt);
+		await settle();
+	}
+};
+
+test.describe('simulation session', () => {
+	test.describe.configure({ timeout: 120000 });
+
+	test('builds a world on the first frame and says what it is running on', async () => {
+		const { session, readout, invalidated } = makeSession();
+		expect(readout.status).toBe('loading');
+		await start(session);
+		expect(readout.status).toBe('running');
+		expect(readout.physics.backend).toBe('cpu');
+		expect(readout.physics.cellSize).toBe(0.2);
+		expect(readout.physics.cells).toBeGreaterThan(1000);
+		expect(readout.physics.reducedDetail).toBe(true);
+		expect(invalidated.count).toBeGreaterThan(0);
+		session.dispose();
+	});
+
+	test('simulated time advances by no more than the clock asks for, and faster at a higher speed', async () => {
+		const slow = makeSession();
+		await start(slow.session);
+		const from = slow.session.simTime;
+		for (let n = 0; n < 60; n++) slow.session.update(FRAME);
+		const slowTime = slow.session.simTime - from;
+		expect(slowTime).toBeGreaterThan(0);
+		expect(slowTime).toBeLessThanOrEqual(60 * FRAME + 1e-6);
+
+		const fast = makeSession((p) => (p.clock.speed = 5));
+		await start(fast.session);
+		const fastFrom = fast.session.simTime;
+		for (let n = 0; n < 60; n++) fast.session.update(FRAME);
+		const fastTime = fast.session.simTime - fastFrom;
+		expect(fastTime).toBeLessThanOrEqual(60 * FRAME * 5 + 1e-6);
+		expect(fastTime).toBeGreaterThan(1.5 * slowTime);
+		slow.session.dispose();
+		fast.session.dispose();
+	});
+
+	test('a frame that took a long time (a tab coming back) advances at most a tenth of a second', async () => {
+		const { session } = makeSession();
+		await start(session);
+		const before = session.simTime;
+		session.update(10);
+		const advanced = session.simTime - before;
+		expect(advanced).toBeGreaterThan(0);
+		expect(advanced).toBeLessThanOrEqual(0.1 + 1e-6);
+		session.dispose();
+	});
+
+	test('paused: time stands still, the status says so, and the session stops asking for frames once the picture has caught up', async () => {
+		const { session, params, readout } = makeSession();
+		await start(session);
+		await draw(session, 10);
+		params.clock.paused = true;
+		const frozen = session.simTime;
+		let more = true;
+		for (let n = 0; n < 40 && more; n++) {
+			more = session.update(FRAME);
+			await settle();
+		}
+		expect(session.simTime).toBe(frozen);
+		expect(readout.status).toBe('paused');
+		expect(more).toBe(false);
+		params.clock.paused = false;
+		expect(session.update(FRAME)).toBe(true);
+		expect(readout.status).toBe('running');
+		session.dispose();
+	});
+
+	test('the slice, the hover reading, a pinned probe and the per-room numbers all arrive from the solver', async () => {
+		const { session, params, readout } = makeSession((p) => (p.probes = [{ id: 'p1', x: 5.1, y: 1.1, z: 2.7 }]));
+		await start(session);
+		// A frame of 0.6 s asks for the per-room pass as well; its simulated step is capped at a tenth of a second.
+		await draw(session, 12, 0.6);
+		const { slice } = session.latest;
+		expect(slice).not.toBeNull();
+		expect(slice!.y).toBeCloseTo(params.view.sliceHeight, 0);
+		const hover = session.hover(5.1, 2.7);
+		expect(hover).not.toBeNull();
+		for (const value of [hover!.speed, hover!.temperature, hover!.particulates]) expect(Number.isFinite(value)).toBe(true);
+		expect(Math.abs(hover!.temperature - params.setup.conditions.indoorTemp)).toBeLessThan(0.5);
+
+		expect(readout.probes).toHaveLength(1);
+		expect(readout.probes[0].label).toBe('Probe 1');
+		expect(readout.probes[0].inAir).toBe(true);
+		expect(Number.isFinite(readout.probes[0].speed)).toBe(true);
+
+		expect(readout.rooms).toHaveLength(studio.rooms.length);
+		for (const room of readout.rooms) {
+			expect(room.volume).toBeGreaterThan(0);
+			expect(Number.isFinite(room.changesPerHour)).toBe(true);
+		}
+		expect(readout.physics.time).toBeGreaterThan(0);
+		expect(readout.physics.divergence).toBeLessThan(0.05);
+		session.dispose();
+	});
+
+	test('opening something is applied in place, while changing the furniture builds a new world', async () => {
+		const { session, params } = makeSession();
+		await start(session);
+		await draw(session, 5);
+		const world = session.world!;
+		const windowId = studio.openings.find((o) => o.kind !== 'door')!.id;
+		params.setup = { ...params.setup, openings: { [windowId]: 1 } };
+		session.update(FRAME);
+		expect(session.world).toBe(world);
+		expect(world.current.openings[windowId]).toBe(1);
+
+		const version = session.latest.version;
+		params.setup = { ...params.setup, furniture: false };
+		const deadline = Date.now() + 30000;
+		while (session.world === world && Date.now() < deadline) {
+			session.update(FRAME);
+			await pause(5);
+		}
+		expect(session.world).not.toBe(world);
+		expect(session.world!.current.furniture).toBe(false);
+		expect(session.simTime).toBeLessThan(1);
+		expect(session.latest.version).toBeGreaterThan(version);
+		session.dispose();
+	});
+});
