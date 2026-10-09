@@ -94,6 +94,14 @@ test('steps of a room with windows, a window fan, a fan, a source and a purifier
 	expect(c.nut.rel).toBeLessThan(1e-4);
 });
 
+test('the point sampler and the slice match cpu/readouts.ts on the same state', async () => {
+	const c = await call<Record<'sample' | 'slice', Comparison>>(page, 'readoutParity', 9);
+	report('readout sample', c.sample);
+	report('readout slice', c.slice);
+	expect(c.sample.rel).toBeLessThan(TOLERANCE);
+	expect(c.slice.rel).toBeLessThan(TOLERANCE);
+});
+
 test('step time', async () => {
 	for (const [nx, ny, nz] of [
 		[64, 32, 48],

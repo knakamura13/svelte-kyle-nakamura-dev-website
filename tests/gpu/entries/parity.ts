@@ -7,6 +7,7 @@ import { GpuSolver, packPair, packVelocity, unpackPair, unpackVelocity } from '$
 import { CpuSolver, emptyExterior } from '$lib/experiments/airflow/solver/cpu/solver';
 import { PressureSolver } from '$lib/experiments/airflow/solver/cpu/pressure';
 import { eddyViscosity } from '$lib/experiments/airflow/solver/cpu/turbulence';
+import { extractSlice, samplePoints } from '$lib/experiments/airflow/solver/cpu/readouts';
 import { diffuseVelocity } from '$lib/experiments/airflow/solver/cpu/diffuse';
 import { advectVelocity, type Velocity } from '$lib/experiments/airflow/solver/cpu/advect';
 import { boxGeometry } from '$lib/experiments/airflow/solver/geometry';
@@ -399,6 +400,53 @@ async function devicesParity(steps: number, off: string[] = []) {
 	};
 }
 
+/** The point sampler and the horizontal slice, on the same random state uploaded to the GPU. */
+async function readoutParity(seed: number) {
+	const [nx, ny, nz, h] = [14, 10, 12, 0.1];
+	const config = boxConfig(nx, ny, nz, h, 1.5e-5);
+	const grid = new Grid(config.grid);
+	const vel = randomVelocity(grid, config, seed);
+	const next = random(seed + 100);
+	const theta = Float32Array.from({ length: grid.size }, (_, n) => (config.geometry.fluid[n] ? 4 * next() - 2 : 0));
+	const c = Float32Array.from({ length: grid.size }, (_, n) => (config.geometry.fluid[n] ? 100 * next() : 0));
+	const count = 64;
+	const points = new Float32Array(3 * count);
+	for (let n = 0; n < count; n++) {
+		points[3 * n] = next() * nx * h;
+		points[3 * n + 1] = next() * ny * h;
+		points[3 * n + 2] = next() * nz * h;
+	}
+	// The corners of the box and a point outside it, where the samplers clamp.
+	points.set([0, 0, 0, nx * h, ny * h, nz * h, -0.3, 2, 5], 0);
+	const layer = 4;
+	const cpuSample = samplePoints(grid, vel, theta, c, points);
+	const cpuSlice = extractSlice(grid, config.geometry, vel, theta, c, (layer + 0.5) * h);
+	const solver = await GpuSolver.create(await context(), config);
+	solver.device.queue.writeBuffer(solver.vel, 0, packVelocity(vel.u, vel.v, vel.w));
+	solver.device.queue.writeBuffer(solver.scal, 0, packPair(theta, c));
+	let out: any;
+	await runPass(solver, (pass) => {
+		out = solver.sample(pass, points);
+		solver.slice(pass, layer);
+	});
+	const gpuSample = await readBack(solver.device, out, 20 * count);
+	const raw = await readBack(solver.device, (solver as any).sliceOut, 32 * nx * nz);
+	solver.dispose();
+	const lane = (n: number) => Float32Array.from({ length: nx * nz }, (_, id) => raw[8 * id + n]);
+	return {
+		sample: compare({ sample: [gpuSample, cpuSample] }),
+		slice: compare({
+			u: [lane(0), cpuSlice.u],
+			v: [lane(1), cpuSlice.v],
+			w: [lane(2), cpuSlice.w],
+			speed: [lane(3), cpuSlice.speed],
+			theta: [lane(4), cpuSlice.theta],
+			particulates: [lane(5), cpuSlice.particulates],
+			fluid: [lane(6), Float32Array.from(cpuSlice.fluid)]
+		})
+	};
+}
+
 /** Wall-clock time per whole step on a grid, averaged over `steps` after a warm-up. */
 async function stepTime(nx: number, ny: number, nz: number, steps: number) {
 	const config = boxConfig(nx, ny, nz, 0.1, 1.5e-5);
@@ -424,5 +472,5 @@ async function stepTime(nx: number, ny: number, nz: number, steps: number) {
 	return { cells: nx * ny * nz, ms };
 }
 
-(window as any).parity = { diffuseParity, advectParity, turbulenceParity, pressureParity, cavityParity, heatedParity, devicesParity, stepTime };
+(window as any).parity = { diffuseParity, advectParity, turbulenceParity, pressureParity, cavityParity, heatedParity, devicesParity, readoutParity, stepTime };
 (window as any).harnessReady = true;
