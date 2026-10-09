@@ -19,13 +19,13 @@
 			<li>
 				<strong>Fans are discs that push, and they push less when the room pushes back.</strong> Each model’s push is set so that, in open air, the flow
 				through its blades equals its rated flow. Against the free-jet benchmark a simulated fan delivers its rating to within 2 % and its jet slows as 1 over
-				the distance, with the decay constant measurements of real jets give (5.4 to 6.1).
+				the distance, with the decay constant measurements of real jets give (5.7 to 6.1).
 			</li>
 			<li>
 				<strong>Outdoors is not simulated; an open window meets the weather.</strong> Each opening takes the wind’s pressure on its wall, which depends on
 				the wind’s direction and speed and on which side of the home the wall faces, plus the pressure that warm and cold air make at different heights.
 				Air crossing an opening follows the orifice equation: flow is 0.62 × open area × √(2 × pressure difference ÷ density). The open area is exact, so
-				a window open halfway passes the flow of half its frame whatever the grid.
+				a window open halfway passes the flow of half its fully open area, whatever the grid.
 			</li>
 			<li>
 				<strong>Smoke is fine particulate matter, PM2.5.</strong> The air carries it and swirls spread it. It settles slowly, sticks to surfaces, leaves
