@@ -254,7 +254,9 @@ ${ENTRY} {
 				let rate = purifier + surfaces;
 				if (rate > 0.0) {
 					let after = result.y / (1.0 + rate * S.dtau);
-					let lost = (result.y - after) * volume;
+					// (value − after)·volume as in cpu/scalars.ts, written as after·rate·dτ·volume: the same in exact
+					// arithmetic, but the difference of two nearly equal f32 values lost most of its digits.
+					let lost = after * rate * S.dtau * volume;
 					tally.w = (lost * purifier) / rate;
 					deposited = (lost * surfaces) / rate;
 					result.y = after;
