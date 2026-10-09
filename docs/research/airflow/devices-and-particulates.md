@@ -177,3 +177,61 @@ UNCONFIRMED for every item (candle, incense, frying or sautéing, toasting, gas 
 - **Window fans:** Air King publishes one CFM per speed for both directions, so intake and exhaust are not distinguished. The 9166 sheet's text and drawing give different window-width ranges.
 - **Pedestal fans (2), purifiers (4), shut-off pressure and curve form (5), particle constants (6), emission rates (7), AQI and WHO values (8):** none were verified before the session ended. Each needs a fresh pass against the sources named in its section.
 - **Face velocities:** these use the full disk area including the hub, so they underestimate the velocity through the blade annulus.
+
+## Device ratings (second pass, 2026-10-09)
+
+This section adds to the sections above and replaces none of them. It records what `src/lib/experiments/airflow/devices/catalog.ts` uses.
+
+- **Method:** each Air King spec sheet was downloaded and its text layer extracted with PyMuPDF, and the values were read from that text. Product web pages were read through a page fetch. A value that appeared only in a search-engine summary is listed as a lead and is not used.
+- **Units:** as printed (inches, CFM). The catalog converts with 1 in = 0.0254 m and 1 CFM = 0.000471947443 m³/s.
+- **Test standard:** none of the Air King sheets names the standard its CFM was measured to.
+
+### Confirmed and in the catalog
+
+All four sheets carry "Updated 3-23", and all four were read on 2026-10-09. The 9723 and 9155 values match sections 1 and 3 exactly.
+
+| Model | Kind | CFM Low / Med / High | Blade | Product dimensions, as printed | Source |
+|---|---|---|---|---|---|
+| Air King 9723, 20" Commercial Grade Box Fan | box fan | 1463 / 1900 / 2163 | 20" ("Blade Size 20"") | 21.38"L x 6.38"W x 22.5"H (L across the face, W along the airflow) | https://www.airkinglimited.com/wp-content/uploads/2020/09/9723spec1.pdf |
+| Air King 9119, 18" Oscillating Pedestal Fan | pedestal fan | 1380 / 1680 / 1950 | 18" (from the title) | 20.25"L x 20.25"W x 53.75"H | https://www.airkinglimited.com/wp-content/uploads/2020/09/9119Spec1.pdf |
+| Air King 9126, 16" Oscillating Pedestal Fan | pedestal fan | 1220 / 1420 / 1580 | 16" (from the title) | 18"L x 18"W x 52"H | https://www.airkinglimited.com/wp-content/uploads/2020/09/9126Spec1.pdf |
+| Air King 9155, 16" Window Fan (single blade) | window fan | 1360 / 1700 / 2470 | 16" (from the title) | 26.5"L x 8.25"W x 22"H (W through the window; fits windows 26.5" to 34.5" x 22"H) | https://www.airkinglimited.com/wp-content/uploads/2020/09/9155Spec1.pdf |
+
+Other values printed on the two pedestal sheets (new in this pass):
+
+| Quantity | 9119 (18") | 9126 (16") |
+|---|---|---|
+| RPM High / Med / Low | 1100 / 950 / 800 | 1450 / 1320 / 1050 |
+| Amps High / Med / Low | 0.85 / 0.67 / 0.56 | 0.60 / 0.50 / 0.45 |
+| Watts High / Med / Low | 95 / 82 / 68 | 70 / 60 / 50 |
+| dB A High / Med / Low | 51 / 48 / 43 | 50 / 45 / 39 |
+| Oscillation | "90° or can be locked in non-oscillating position" | same |
+| Height adjustment | "Telescoping from 37" to 53.75"" | "Telescoping from 36" to 52"" |
+| Motor | 3-speed, 1/20 HP, 120V, PSC | same |
+| Shipping weight | 16.5 lbs | 11.3 lbs |
+
+**Derived for the catalog (not published):** the sheets give the pedestal fan's overall height, but `FanModel.heightRange` is the height of the head's centre. The catalog takes the centre as half the head's width below the top: 9119, 37 − 10.125 = 26.875" to 53.75 − 10.125 = 43.625" (0.683 to 1.108 m); 9126, 36 − 9 = 27" to 52 − 9 = 43" (0.686 to 1.092 m). This assumes that the printed width (20.25" or 18") is the head's guard and that the guard's top is the fan's top. Neither sheet says so.
+
+**Not published, left to code defaults:** a window fan's shut-off pressure. The 9155 entry has no `shutoff`, so `devices/solver.ts` uses its default of 25 Pa, which is not sourced (see section 5).
+
+### Twin-blade window fan: not confirmed
+
+No manufacturer page with CFM at each speed was found for a twin-blade window fan. One web search returned only retailer listings (Lasko at Ace Hardware, Comfort Zone CZ319WT, Black+Decker, Perfect Aire 2PAFW9, Shinic, Phyfalip) and one unbranded spec sheet with no CFM. None of these pages was read, and the search summary gave at most a single maximum CFM for any of them. The catalog's window fan is the single-blade Air King 9155 instead.
+
+### Room air purifiers: top-speed CADR only, so none is in the catalog
+
+Each page below was read on 2026-10-09. None gives CADR at any speed except the highest. None mentions AHAM. None says where air goes in or comes out, so `inlet` and `outletDiameter` are unconfirmed for all three.
+
+| Slot | Model | CADR as printed | Fan speeds as printed | Room size as printed | Dimensions as printed | Weight | Source |
+|---|---|---|---|---|---|---|---|
+| small | Levoit Core 300-P | "CADR: 143 CFM" (particle not stated) | not stated | "1066 ft2 (1 ACH) / 222 ft2 (4.8 ACH)" | "8.7 x 8.7 x 14.2 in / 22 x 22 x 36 cm" | 7.9 lb | https://levoit.com/collections/air-purifiers-for-small-spaces-up-to-200-sq-ft/products/core300-p-air-purifier |
+| medium | Coway Airmega Mighty AP-1512HH | "233 (Smoke), 246 (Dust), 240 (Pollen)", no unit printed | "5 Stages (Auto - 1 - 2 - 3 - Eco)" | 361 ft² (34 m²) at 4.8 air changes/hr; 874 ft² at 2; 1,748 ft² at 1 | 16.8 x 18.3 x 9.6 in (W x H x D) | 12.3 lbs | https://cowaymega.com/products/mighty-air-purifier-ap-1512hh |
+| large | Coway Airmega 400 | "328 (Smoke), 328 (Dust), 400 (Pollen)" | Sleep, Low, Medium, High | 1,560 ft² (145 m²) at 2 air changes/hr; 3,120 ft² (290 m²) at 1 | 14.8 x 22.8 x 14.8 in (W x H x D) | 24.7 lbs | https://cowaymega.com/products/airmega-400 |
+
+Leads that were not read:
+
+- A search summary says the ENERGY STAR record for the Airmega 400 (AP-2015F) lists a smoke CADR of 376.0 cfm, which disagrees with Coway's 328: https://www.energystar.gov/productfinder/product/certified-room-air-cleaners/details/4512742. The AHAM Verifide directory was not read in this pass.
+
+**Lower speeds:** the PNNL-38694 PDF (cover dated February 10, 2026, text extracted 2026-10-09) is a slide deck. It tested 7 units at their lowest, medium and highest settings under AHAM AC-1. The units are anonymized ("2025-PAC-1" to "2025-PAC-7"), all are rated 400 to 600 cfm, and the per-setting CADR appears only in plots. Its text says room coverage "drops 70-85% for most products" at the lowest setting and "drops 40-60%" at the medium setting. Because no model is named, these figures cannot be attached to a catalog entry.
+
+**Open decision:** `PurifierModel.cadr` needs four sourced values (Sleep, Low, Medium, High), and the published ratings give one. The options are: (a) store only the rated top-speed CADR and define the lower marks by a stated, cited assumption; (b) find a lab that measured named models at each speed; (c) keep purifiers out. Until this is decided, the catalog has no purifier, and `tests/solver/catalog.spec.ts` carries a `test.fixme` for one of each size.
