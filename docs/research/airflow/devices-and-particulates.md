@@ -216,7 +216,13 @@ Other values printed on the two pedestal sheets (new in this pass):
 
 ### Twin-blade window fan: not confirmed
 
-No manufacturer page with CFM at each speed was found for a twin-blade window fan. One web search returned only retailer listings (Lasko at Ace Hardware, Comfort Zone CZ319WT, Black+Decker, Perfect Aire 2PAFW9, Shinic, Phyfalip) and one unbranded spec sheet with no CFM. None of these pages was read, and the search summary gave at most a single maximum CFM for any of them. The catalog's window fan is the single-blade Air King 9155 instead.
+No manufacturer page with CFM at each speed was found for a twin-blade window fan. The one maker's page that was read gives only a maximum:
+
+| Model | CFM as printed | Speeds | Size as printed | Other | Source, read 2026-10-09 |
+|---|---|---|---|---|---|
+| Lasko W09550, Twin Window Fan, electrically reversible, with remote | "moving up to 560 CFM" (maximum only; per-speed not stated) | 3 | height 12.9 in, width 24.0 in, depth 4.9 in; expander panels fit windows "from 24 to 32 inches wide" | "two 9-inch fan motors" (blade diameter not stated); 22 W to 31 W; 8.0 lb | https://lasko.com/products/lasko-3-speed-electrically-reversible-twin-window-fan-with-remote-control-w09550-white |
+
+A web search also returned retailer listings (Comfort Zone CZ319WT, Black+Decker, Perfect Aire 2PAFW9, Shinic, Phyfalip) and one unbranded spec sheet with no CFM. None of those was read. Because the catalog's shape needs CFM at Low, Medium and High, the W09550 is not in it. The catalog's window fan is the single-blade Air King 9155 instead.
 
 ### Room air purifiers: top-speed CADR only, so none is in the catalog
 
