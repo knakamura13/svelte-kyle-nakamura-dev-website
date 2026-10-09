@@ -39,12 +39,48 @@ test('advection matches cpu/advect.ts, semi-Lagrangian and MacCormack', async ()
 	}
 });
 
-test('a few steps of the lid-driven cavity match CpuSolver', async () => {
-	const c = await call<{ velocity: Comparison; pressure: Comparison }>(page, 'cavityParity', 32, 3);
-	report('cavity velocity', c.velocity);
-	report('cavity pressure', c.pressure);
-	expect(c.velocity.rel).toBeLessThan(1e-4);
-	expect(c.pressure.rel).toBeLessThan(1e-4);
+test('turbulence (eddy viscosity) matches cpu/turbulence.ts', async () => {
+	const c = await call<Comparison>(page, 'turbulenceParity', 4);
+	report('turbulence', c);
+	expect(c.rel).toBeLessThan(TOLERANCE);
+});
+
+test('the pressure solve (assembly, V-cycles, mean removal, projection) matches cpu/pressure.ts', async () => {
+	for (const [nx, ny, nz] of [
+		[12, 10, 8],
+		[24, 20, 14]
+	]) {
+		const c = await call<{ levels: string; velocity: Comparison; pressure: Comparison }>(page, 'pressureParity', 5, nx, ny, nz);
+		report(`pressure ${c.levels} velocity`, c.velocity);
+		report(`pressure ${c.levels} p`, c.pressure);
+		// The V-cycle sums many terms in a different order on the GPU (red-black, reductions), so rounding grows.
+		expect(c.velocity.rel).toBeLessThan(1e-4);
+		expect(c.pressure.rel).toBeLessThan(1e-4);
+	}
+});
+
+test('steps of the lid-driven cavity match CpuSolver', async () => {
+	for (const steps of [3, 20]) {
+		const c = await call<{ velocity: Comparison; pressure: Comparison }>(page, 'cavityParity', 32, steps);
+		report(`cavity ${steps} steps velocity`, c.velocity);
+		report(`cavity ${steps} steps pressure`, c.pressure);
+		expect(c.velocity.rel).toBeLessThan(1e-4);
+		expect(c.pressure.rel).toBeLessThan(1e-4);
+	}
+});
+
+test('steps of the heated cavity (buoyancy, scalars, particulates) match CpuSolver, 2D and 3D with turbulence', async () => {
+	for (const [nz, turbulent] of [
+		[1, false],
+		[8, true]
+	] as const) {
+		const c = await call<Record<'velocity' | 'theta' | 'particulates' | 'nut', Comparison>>(page, 'heatedParity', 32, nz, 10, turbulent);
+		for (const [name, comparison] of Object.entries(c)) report(`heated nz ${nz} ${name}`, comparison);
+		expect(c.velocity.rel).toBeLessThan(1e-4);
+		expect(c.theta.rel).toBeLessThan(1e-4);
+		expect(c.particulates.rel).toBeLessThan(1e-4);
+		if (turbulent) expect(c.nut.rel).toBeLessThan(1e-4);
+	}
 });
 
 test('step time', async () => {

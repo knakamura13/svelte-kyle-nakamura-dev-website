@@ -3,13 +3,15 @@
  * input, in the page, and reports how far apart the results are.
  */
 import { GpuContext } from '$lib/experiments/airflow/solver/gpu/context';
-import { GpuSolver, packVelocity, unpackVelocity } from '$lib/experiments/airflow/solver/gpu/solver';
-import { CpuSolver } from '$lib/experiments/airflow/solver/cpu/solver';
+import { GpuSolver, packPair, packVelocity, unpackPair, unpackVelocity } from '$lib/experiments/airflow/solver/gpu/solver';
+import { CpuSolver, emptyExterior } from '$lib/experiments/airflow/solver/cpu/solver';
+import { PressureSolver } from '$lib/experiments/airflow/solver/cpu/pressure';
+import { eddyViscosity } from '$lib/experiments/airflow/solver/cpu/turbulence';
 import { diffuseVelocity } from '$lib/experiments/airflow/solver/cpu/diffuse';
 import { advectVelocity, type Velocity } from '$lib/experiments/airflow/solver/cpu/advect';
 import { boxGeometry } from '$lib/experiments/airflow/solver/geometry';
 import { Grid } from '$lib/experiments/airflow/solver/grid';
-import { AIR, sideConditions, type SideCondition, type SolverConfig } from '$lib/experiments/airflow/solver/types';
+import { AIR, DEFAULT_PRESSURE, sideConditions, type SideCondition, type SolverConfig } from '$lib/experiments/airflow/solver/types';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -148,6 +150,58 @@ async function advectParity(seed: number, maccormack: boolean) {
 	return compare({ u: [gpu.u, cpuOut.u], v: [gpu.v, cpuOut.v], w: [gpu.w, cpuOut.w] });
 }
 
+/** The eddy viscosity of a random field (the shear-length closure). */
+async function turbulenceParity(seed: number) {
+	const config: SolverConfig = { ...boxConfig(12, 10, 8, 0.1, 1.5e-5), turbulence: 'shear-length' };
+	const grid = new Grid(config.grid);
+	const input = randomVelocity(grid, config, seed);
+	const nut = new Float32Array(grid.size);
+	const scratch = () => new Float32Array(grid.size);
+	eddyViscosity(grid, config.geometry, input, { coefficient: config.fluid.shearCoefficient, maxLength: config.fluid.maxLength }, 0.05, nut, scratch(), scratch(), scratch());
+	const solver = await GpuSolver.create(await context(), config);
+	solver.device.queue.writeBuffer(solver.vel, 0, packVelocity(input.u, input.v, input.w));
+	await runPass(solver, (pass) => solver.turbulence(pass));
+	const gpu = await readBack(solver.device, solver.nut, 4 * grid.size);
+	solver.dispose();
+	return compare({ nut: [gpu, nut] });
+}
+
+/** Assembly, the V-cycles, the mean removal and the projection, on a random (divergent) field in a closed box. */
+async function pressureParity(seed: number, nx: number, ny: number, nz: number) {
+	const config = boxConfig(nx, ny, nz, 0.1, 1.5e-5);
+	const grid = new Grid(config.grid);
+	const dt = 0.05;
+	const half = dt / 2;
+	const input = randomVelocity(grid, config, seed);
+	const cpuVel = copy(input);
+	const pressure = new PressureSolver(grid, { ...DEFAULT_PRESSURE });
+	pressure.assemble(half, config.fluid.rho, config.fluid.cd, config.geometry, emptyExterior(grid), cpuVel);
+	pressure.solve();
+	pressure.project(half, config.fluid.rho, config.geometry, cpuVel);
+	const solver = await GpuSolver.create(await context(), config);
+	solver.device.queue.writeBuffer(solver.vel, 0, packVelocity(input.u, input.v, input.w));
+	solver.writeStep(dt, 1, 1);
+	await runPass(solver, (pass) => {
+		solver.assemble(pass);
+		solver.solve(pass);
+		solver.project(pass);
+	});
+	const gpu = await gpuVelocity(solver);
+	const p = await readBack(solver.device, solver.levels[0].p, 4 * grid.size);
+	const levels = solver.levels.map((l) => `${l.nx}x${l.ny}x${l.nz}`).join(' > ');
+	solver.dispose();
+	const inside = (c: number) => {
+		const k = Math.floor(c / grid.sxy);
+		const j = Math.floor((c - k * grid.sxy) / grid.sx);
+		return c - k * grid.sxy - j * grid.sx < grid.nx && j < grid.ny && k < grid.nz;
+	};
+	return {
+		levels,
+		velocity: compare({ u: [gpu.u, cpuVel.u], v: [gpu.v, cpuVel.v], w: [gpu.w, cpuVel.w] }),
+		pressure: compare({ p: [p, pressure.pressure as Float32Array] }, inside)
+	};
+}
+
 /** The lid-driven cavity of tests/solver/scenarios.ts: `steps` whole steps on both solvers. */
 function cavityConfig(n: number): SolverConfig {
 	const h = 1 / n;
@@ -195,6 +249,62 @@ async function cavityParity(n: number, steps: number) {
 	};
 }
 
+/**
+ * The differentially heated cavity of tests/solver/scenarios.ts (Ra 1e5), which brings in buoyancy and the scalar
+ * transport, with particulates that settle and deposit; `nz` > 1 with the turbulence closure on makes it 3D.
+ */
+async function heatedParity(n: number, nz: number, steps: number, turbulent: boolean) {
+	const h = 1 / n;
+	const prandtl = 0.71;
+	const alpha = 1 / Math.sqrt(1e5 * prandtl);
+	const SLIP: SideCondition = { slip: 'free-slip' };
+	const config = (): SolverConfig => ({
+		grid: { nx: n, ny: n, nz, h },
+		fluid: { ...AIR, rho: 1, nu: prandtl * alpha, alpha, beta: 1, g: 1, mixing: 0 },
+		geometry: boxGeometry({ nx: n, ny: n, nz, h }),
+		sides: [{ slip: 'no-slip', theta: 0.5 }, { slip: 'no-slip', theta: -0.5 }, WALL, WALL, nz > 1 ? WALL : SLIP, nz > 1 ? WALL : SLIP],
+		turbulence: turbulent ? 'shear-length' : 'none',
+		pressure: { cycles: 4, pre: 2, post: 2, coarse: 30 },
+		scalarSubsteps: 2
+	});
+	const dt = 0.5 * h;
+	const cpu = new CpuSolver(config());
+	cpu.fill(0, 0);
+	// Patchy particulates, so their advection, diffusion, settling and deposition all move them.
+	const next = random(7);
+	for (let n = 0; n < cpu.c.length; n++) if (cpu.geometry.fluid[n]) cpu.c[n] = 100 * next();
+	const initialC = cpu.c.slice();
+	for (let s = 0; s < steps; s++) cpu.step(dt);
+	const solver = await GpuSolver.create(await context(), config());
+	solver.device.queue.writeBuffer(solver.scal, 0, packPair(new Float32Array(solver.grid.size), initialC));
+	const device = solver.device;
+	device.pushErrorScope('validation');
+	for (let s = 0; s < steps; s++) {
+		solver.writeStep(dt, 2, solver.diffusionSubsteps(dt), s);
+		const encoder = device.createCommandEncoder();
+		solver.encodeStep(encoder, dt, 2, s);
+		device.queue.submit([encoder.finish()]);
+	}
+	const error = await device.popErrorScope();
+	if (error) throw new Error(`validation: ${error.message}`);
+	const gpu = await gpuVelocity(solver);
+	const [theta, c] = unpackPair(await readBack(device, solver.scal, 8 * solver.grid.size));
+	const nut = await readBack(device, solver.nut, 4 * solver.grid.size);
+	solver.dispose();
+	const grid = cpu.grid;
+	const inside = (n: number) => {
+		const k = Math.floor(n / grid.sxy);
+		const j = Math.floor((n - k * grid.sxy) / grid.sx);
+		return n - k * grid.sxy - j * grid.sx < grid.nx && j < grid.ny && k < grid.nz;
+	};
+	return {
+		velocity: compare({ u: [gpu.u, cpu.vel.u], v: [gpu.v, cpu.vel.v], w: [gpu.w, cpu.vel.w] }),
+		theta: compare({ theta: [theta, cpu.theta] }, inside),
+		particulates: compare({ c: [c, cpu.c] }, inside),
+		nut: compare({ nut: [nut, cpu.nut] }, inside)
+	};
+}
+
 /** Wall-clock time per whole step on a grid, averaged over `steps` after a warm-up. */
 async function stepTime(nx: number, ny: number, nz: number, steps: number) {
 	const config = boxConfig(nx, ny, nz, 0.1, 1.5e-5);
@@ -220,5 +330,5 @@ async function stepTime(nx: number, ny: number, nz: number, steps: number) {
 	return { cells: nx * ny * nz, ms };
 }
 
-(window as any).parity = { diffuseParity, advectParity, cavityParity, stepTime };
+(window as any).parity = { diffuseParity, advectParity, turbulenceParity, pressureParity, cavityParity, heatedParity, stepTime };
 (window as any).harnessReady = true;
