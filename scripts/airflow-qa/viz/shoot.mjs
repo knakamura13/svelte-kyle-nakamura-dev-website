@@ -3,12 +3,12 @@
  * screenshots listed below. Nothing is written inside the repository except what you point `--out` at (use a scratch
  * folder: never commit the PNGs).
  *
- *   node scripts/airflow-qa/viz/shoot.mjs --out /tmp/airflow-viz [--only name,name] [--seconds 30] [--plan two-bedroom] [--swiftshader] [--fan] [--purifier] [--wind 6] [--probe]
+ *   node scripts/airflow-qa/viz/shoot.mjs --out /tmp/airflow-viz [--only name,name] [--seconds 30] [--plan two-bedroom] [--swiftshader] [--fan] [--purifier] [--wind 6] [--probe] [--browser chromium|firefox|webkit]
  *
  * Console messages and page errors are printed first: shader compile errors show up there.
  */
 import { build } from 'esbuild';
-import { chromium } from '@playwright/test';
+import { chromium, firefox, webkit } from '@playwright/test';
 import { createServer } from 'node:http';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -89,7 +89,8 @@ add('dark-temperature', DESKTOP, { layer: 'temperature', theme: 'dark' });
 add('dark-topdown-direction', DESKTOP, { layer: 'direction', theme: 'dark', topDown: true });
 
 const launch = { args: flag('swiftshader') ? ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] : [] };
-const browser = await chromium.launch(launch);
+const engine = { chromium, firefox, webkit }[option('browser', 'chromium')];
+const browser = await engine.launch(option('browser', 'chromium') === 'chromium' ? launch : {});
 let failed = false;
 try {
 	const context = await browser.newContext({ viewport: { width: DESKTOP[0], height: DESKTOP[1] }, deviceScaleFactor: 1 });
