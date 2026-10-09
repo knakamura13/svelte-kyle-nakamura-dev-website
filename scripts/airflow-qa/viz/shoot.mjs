@@ -3,7 +3,7 @@
  * screenshots listed below. Nothing is written inside the repository except what you point `--out` at (use a scratch
  * folder: never commit the PNGs).
  *
- *   node scripts/airflow-qa/viz/shoot.mjs --out /tmp/airflow-viz [--only name,name] [--seconds 30] [--plan two-bedroom] [--swiftshader]
+ *   node scripts/airflow-qa/viz/shoot.mjs --out /tmp/airflow-viz [--only name,name] [--seconds 30] [--plan two-bedroom] [--swiftshader] [--fan] [--purifier] [--wind 6] [--probe]
  *
  * Console messages and page errors are printed first: shader compile errors show up there.
  */
@@ -107,9 +107,17 @@ try {
 	});
 	await page.goto(url);
 	await page.waitForFunction(() => window.__ready === true);
-	console.log(await page.evaluate((o) => window.__init(o), { plan, smoke: smokeBurst }));
+	console.log(await page.evaluate((o) => window.__init(o), { plan, smoke: smokeBurst, fan: flag('fan'), purifier: flag('purifier'), windSpeed: Number(option('wind', '6')) }));
 	console.log(await page.evaluate((s) => window.__simulate(s), seconds));
+	if (flag('probe')) {
+		for (const layer of ['speed', 'direction', 'particulates', 'temperature'])
+			for (const sensitivity of [1, 0.5, 2]) {
+				const result = await page.evaluate(([l, s]) => window.__probe(l, s), [layer, sensitivity]);
+				console.log(`probe ${layer} sensitivity ${sensitivity}: worst difference ${Math.max(...result.rows.map((r) => r.maxDiff))} bytes\n  ${result.rows.map((r) => `${r.value}: expected ${r.expected} got ${r.estimate}`).join('\n  ')}`);
+			}
+	}
 	for (const shot of shots) {
+		if (flag('probe') && !only.length) break;
 		if (only.length && !only.some((name) => shot.name === name || shot.name.includes(name))) continue;
 		await page.setViewportSize({ width: shot.viewport[0], height: shot.viewport[1] });
 		const base = { layer: 'speed', sensitivity: 1, sliceHeight: 1.1, tracers: true, smoke: true, topDown: false, theme: 'light', tint: 'mist', units: 'imperial', baseline: 0, labels: 'compass', slice: true, pixelRatio: 1, azimuth: 28 };

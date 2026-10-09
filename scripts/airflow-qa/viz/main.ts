@@ -26,18 +26,20 @@ import { plans } from '../../../src/lib/experiments/airflow/homes/plans';
 import { isExterior, type HomePlan } from '../../../src/lib/experiments/airflow/homes/types';
 import { DirectionArrows } from '../../../src/lib/experiments/airflow/scene/arrows';
 import { SmokePoints, TracerPoints } from '../../../src/lib/experiments/airflow/scene/particles';
-import { SliceLayer } from '../../../src/lib/experiments/airflow/scene/sliceLayer';
+import { SLICE_OPACITY, SliceLayer } from '../../../src/lib/experiments/airflow/scene/sliceLayer';
 import { World, type BackendFactory } from '../../../src/lib/experiments/airflow/sim/world';
 import { CpuBackend } from '../../../src/lib/experiments/airflow/solver/cpu/backend';
 import type { Slice } from '../../../src/lib/experiments/airflow/solver/types';
 import { blankSetup, type DeviceState, type LayerId, type Setup } from '../../../src/lib/experiments/airflow/state';
 import { legendFor, type Legend, type LegendFormat, type LegendUnits } from '../../../src/lib/experiments/airflow/viz/legend';
+import { colorFor } from '../../../src/lib/experiments/airflow/viz/palettes';
 
 declare global {
 	interface Window {
 		__init: (options?: InitOptions) => Promise<string>;
 		__simulate: (seconds: number, dt?: number) => Promise<string>;
 		__setState: (state: Partial<ViewState>) => Promise<Record<string, unknown>>;
+		__probe: (layer: LayerId, sensitivity?: number) => Promise<Record<string, unknown>>;
 		__ready: boolean;
 	}
 }
@@ -121,7 +123,7 @@ const labelsEl = document.getElementById('labels')!;
 const legendEl = document.getElementById('legend')!;
 const statusEl = document.getElementById('status')!;
 
-const renderer = new WebGLRenderer({ canvas, antialias: true, powerPreference: 'default' });
+const renderer = new WebGLRenderer({ canvas, antialias: true, powerPreference: 'default', preserveDrawingBuffer: true });
 const scene = new Scene();
 const camera = new PerspectiveCamera(32, 1, 0.1, 500);
 const TINTS = { sage: 0xe1e9d9, sand: 0xf4e9d8, cream: 0xf0e3cf, peach: 0xf1dfcd, butter: 0xf5e1bb, mist: 0xdde7ee, lilac: 0xe6ddf0 };
@@ -394,7 +396,14 @@ function summarize(snapshot: Slice) {
 export async function setViewState(next: Partial<ViewState>) {
 	if (!world || !plan || !slice || !arrows || !tracerPoints || !smokePoints) throw new Error('init first');
 	Object.assign(state, next);
+	const options = { sensitivity: state.sensitivity, baseline: state.baseline };
 	document.documentElement.dataset.theme = state.theme;
+	// The legend first: its height sets the Stage's, and the canvas must be sized to the Stage as it will stay.
+	const { format, units } = formats();
+	const narrow = document.documentElement.clientWidth < 480;
+	const legend = legendFor(state.layer, { ...options, format, units, maxTicks: narrow ? 3 : undefined });
+	renderLegend(legend);
+
 	const tint = state.theme === 'dark' ? DARK_STAGE : TINTS[state.tint];
 	scene.background = new Color(tint);
 	stage.style.background = `#${tint.toString(16).padStart(6, '0')}`;
@@ -415,7 +424,6 @@ export async function setViewState(next: Partial<ViewState>) {
 	}
 	const snapshot = await world.backend.snapshot({ sliceY: state.sliceHeight, particles: true });
 	const sliceData = snapshot.slice!;
-	const options = { sensitivity: state.sensitivity, baseline: state.baseline };
 	slice.mesh.visible = state.slice;
 	slice.setHeight(sliceData.y);
 	slice.update(sliceData, state.layer, options);
@@ -427,10 +435,6 @@ export async function setViewState(next: Partial<ViewState>) {
 	smokePoints.setVisible(state.smoke);
 	smokePoints.update(snapshot.smoke!, { dense });
 
-	const { format, units } = formats();
-	const narrow = stage.clientWidth < 480;
-	const legend = legendFor(state.layer, { ...options, format, units, maxTicks: narrow ? 3 : undefined });
-	renderLegend(legend);
 	frame();
 	renderer.render(scene, camera);
 	placeLabels();
@@ -449,6 +453,57 @@ export async function setViewState(next: Partial<ViewState>) {
 	};
 }
 
+/**
+ * Reads pixels back from the canvas under the slice and compares them with what `colorFor` says the scale shows: for
+ * each chosen cell centre, the colour the slice contributed (undoing the 82 % blend over what is under it) against the
+ * expected sRGB bytes. Differences of a few bytes are rounding; more means the shader and the scale disagree.
+ */
+export async function probe(layer: LayerId, sensitivity = 1) {
+	const base = { layer, sensitivity, topDown: true, tracers: false, smoke: false, labels: 'none' as const, pixelRatio: 1, theme: 'light' as const, tint: 'mist' as const, sliceHeight: 1.1, baseline: 0 };
+	const read = (points: [number, number][]) => {
+		const copy = document.createElement('canvas');
+		copy.width = canvas.width;
+		copy.height = canvas.height;
+		const context = copy.getContext('2d')!;
+		context.drawImage(canvas, 0, 0);
+		return points.map(([x, y]) => Array.from(context.getImageData(Math.round(x), Math.round(y), 1, 1).data.slice(0, 3)));
+	};
+	await setViewState({ ...base, slice: false });
+	const shot = (await world!.backend.snapshot({ sliceY: base.sliceHeight })).slice!;
+	const { nx, nz, h } = shot;
+	const value = (n: number) => (layer === 'temperature' ? shot.theta[n] : layer === 'particulates' ? shot.particulates[n] : shot.speed[n]);
+	const interior: number[] = [];
+	for (let k = 2; k < nz - 2; k++)
+		for (let i = 2; i < nx - 2; i++) {
+			let all = true;
+			for (let dk = -1; dk <= 1; dk++) for (let di = -1; di <= 1; di++) if (!shot.fluid[i + di + nx * (k + dk)]) all = false;
+			if (all) interior.push(i + nx * k);
+		}
+	interior.sort((a, b) => (layer === 'direction' ? Math.hypot(shot.u[a], shot.w[a]) - Math.hypot(shot.u[b], shot.w[b]) : value(a) - value(b)));
+	const picks = [0.03, 0.25, 0.5, 0.75, 0.9, 0.995].map((q) => interior[Math.min(interior.length - 1, Math.floor(q * interior.length))]);
+	const worldPoints = picks.map((n) => new Vector3(((n % nx) + 0.5) * h, shot.y, (Math.floor(n / nx) + 0.5) * h));
+	const pixels = worldPoints.map((point) => {
+		point.project(camera);
+		return [((point.x + 1) / 2) * canvas.width, ((1 - point.y) / 2) * canvas.height] as [number, number];
+	});
+	const under = read(pixels);
+	await setViewState({ ...base, slice: true });
+	const actual = read(pixels);
+	const options = { sensitivity, baseline: 0 };
+	const rows = picks.map((n, index) => {
+		const expected = colorFor(layer, layer === 'direction' ? [shot.u[n], shot.w[n]] : value(n), options).map((c) => c * 255);
+		const estimate = actual[index].map((a, c) => (a - (1 - SLICE_OPACITY) * under[index][c]) / SLICE_OPACITY);
+		return {
+			value: layer === 'direction' ? `${shot.u[n].toFixed(2)},${shot.w[n].toFixed(2)}` : Number(value(n).toPrecision(3)),
+			expected: expected.map(Math.round),
+			estimate: estimate.map(Math.round),
+			maxDiff: Math.round(Math.max(...expected.map((e, c) => Math.abs(e - estimate[c]))))
+		};
+	});
+	return { layer, sensitivity, rows };
+}
+
+window.__probe = probe;
 window.__init = init;
 window.__simulate = simulate;
 window.__setState = setViewState;
