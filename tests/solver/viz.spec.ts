@@ -61,6 +61,24 @@ test('legend ticks are ordered, in range and round, and scale with sensitivity',
 	expect(legendFor('particulates', { ...options, format }).ticks.map((tick) => tick.value)).toEqual([0.001, 0.01, 0.1, 1, 10]);
 });
 
+test('a narrow legend thins its ticks evenly and keeps the ends; the baseline label is never crowded by a round tick', () => {
+	const decades = legendFor('particulates', { ...options, format, maxTicks: 3 }).ticks;
+	expect(decades.map((tick) => tick.value)).toEqual([0.001, 0.1, 10]);
+	expect(decades.map((tick) => tick.at)).toEqual([0, 0.5, 1]);
+	expect(legendFor('speed', { ...options, format, maxTicks: 3 }).ticks.length).toBeLessThanOrEqual(3);
+	// 21 °C is 69.8 °F, a fifth of a degree from the round 70 °F: that tick would sit under the baseline's own label.
+	const fahrenheit = { scale: 1.8, offset: 69.8 };
+	for (const maxTicks of [undefined, 3, 4]) {
+		const legend = legendFor('temperature', { ...options, format, units: { temperature: fahrenheit }, maxTicks });
+		expect(legend.midpoint?.at).toBe(0.5);
+		for (const tick of legend.ticks) expect(Math.abs(tick.at - 0.5)).toBeGreaterThanOrEqual(0.5 / (maxTicks ?? 6) - 1e-6);
+		expect(legend.ticks.length).toBeLessThanOrEqual(maxTicks ?? 6);
+		expect(legend.ticks.length).toBeGreaterThanOrEqual(2);
+	}
+	const celsius = legendFor('temperature', { ...options, baseline: 0, format, units: { temperature: { scale: 1, offset: 21 } } });
+	expect(celsius.ticks.map((tick) => tick.value + 21)).toEqual([16, 18, 20, 22, 24, 26]);
+});
+
 test('sampleAt interpolates over air only and reports furniture as not air', () => {
 	const nx = 4;
 	const nz = 2;
