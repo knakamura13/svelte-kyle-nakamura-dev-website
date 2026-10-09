@@ -846,8 +846,9 @@ test.describe('link: the shareable setup', () => {
 		const decoded = decodeSetup(encodeSetup(setup), CATALOG)!;
 		const normal = normalizeSetup(setup);
 		const lost: string[] = [];
-		const compare = (what: string, a: Record<string, unknown>, b: Record<string, unknown>, fields: Record<string, boolean>) => {
-			for (const [key, carried] of Object.entries(fields)) if (carried && !isDeepStrictEqual(a[key], b[key])) lost.push(`${what}.${key}`);
+		const compare = (what: string, a: object, b: object, fields: Record<string, boolean>) => {
+			const at = (object: object, key: string) => (object as Record<string, unknown>)[key];
+			for (const [key, carried] of Object.entries(fields)) if (carried && !isDeepStrictEqual(at(a, key), at(b, key))) lost.push(`${what}.${key}`);
 		};
 		compare('setup', decoded, normal, CARRIED.setup);
 		compare('conditions', decoded.conditions, normal.conditions, CARRIED.conditions);
