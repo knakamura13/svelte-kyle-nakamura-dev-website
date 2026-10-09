@@ -18,7 +18,7 @@
 			</li>
 			<li>
 				<strong>Fans are discs that push, and they push less when the room pushes back.</strong> Each model’s push is set so that, in open air, the flow
-				through its blades equals its rated flow. Against the free-jet benchmark a simulated fan delivers its rating to within 2 % and its jet slows as 1 over
+				through its blades equals its rated flow. Against the free-jet benchmark a simulated fan delivers its rating to within 2&nbsp;% and its jet slows as 1 over
 				the distance, with the decay constant measurements of real jets give (5.7 to 6.1).
 			</li>
 			<li>
@@ -55,9 +55,9 @@
 		<ul class="sources">
 			<li>The weather outside is a pressure and a temperature at each opening. Nothing outdoors is simulated, so there are no gusts, no neighbouring buildings, and no sun.</li>
 			<li>
-				The wind slider is the speed a weather report gives, measured 10 m up over open ground. The home gets about 55 % of it at the eaves, as on a suburban lot.
-				That is the top of the 44 to 55 % that published tables give for such a lot, so the wind’s push on the home is on the high side. Open country would be about
-				85 % and a city about 30 %.
+				The wind slider is the speed a weather report gives, measured 10 m up over open ground. The home gets about 55&nbsp;% of it at the eaves, as on a suburban lot.
+				That is the top of the 44 to 55&nbsp;% that published tables give for such a lot, so the wind’s push on the home is on the high side. Open country would be about
+				85&nbsp;% and a city about 30&nbsp;%.
 			</li>
 			<li>
 				The wind’s effect on each wall uses averages for an isolated low-rise building. They come from a fit made on buildings whose eaves were 0.1 to 0.4 times as high
@@ -67,8 +67,8 @@
 			<li>There are no heat sources, no sunlight through windows, no heat through walls, and no humidity. Warm and cold air come only from the temperatures you set.</li>
 			<li>The four homes are single-story and rectangular, with fixed furniture. Doors and windows stay where they are drawn.</li>
 			<li>
-				A window’s free area is less than its frame. Published figures put a double-hung or sliding window at about 40 to 50 % of its frame and a single casement sash
-				at about 80 %. The model uses half for a double-hung window and a sliding door, and all of the frame for a casement and a door, so a casement passes more air
+				A window’s free area is less than its frame. Published figures put a double-hung or sliding window at about 40 to 50&nbsp;% of its frame and a single casement sash
+				at about 80&nbsp;%. The model uses half for a double-hung window and a sliding door, and all of the frame for a casement and a door, so a casement passes more air
 				here than those figures suggest. Every opening also uses one discharge coefficient, 0.62, although measured windows range from 0.2 to 1.
 			</li>
 			<li>Turbulence is modelled, not resolved. Swirls smaller than a few centimetres, and the thin layers of air at walls, are approximated.</li>
@@ -166,7 +166,7 @@
 			</li>
 			<li>
 				Orme, Liddament and Wilson, “Numerical Data for Air Infiltration and Natural Ventilation Calculations,” Technical Note 44, Air Infiltration and Ventilation Centre (1998
-				printing): pressure coefficients for exposed, semi-sheltered and sheltered sites as a cross-check, and three of the four wind-speed tables behind the 44 to 55 %. Read by
+				printing): pressure coefficients for exposed, semi-sheltered and sheltered sites as a cross-check, and three of the four wind-speed tables behind the 44 to 55&nbsp;%. Read by
 				eye on scanned pages.
 			</li>
 			<li>
@@ -197,8 +197,8 @@
 				Construcción</i> 35(2), 203–214 (2020): full-size windows tested in a wind tunnel, with coefficients from 0.06 to 0.55, below the 0.60 to 0.65 often assumed.
 			</li>
 			<li>
-				Breezway, “Comparative Ventilation Openings Of Various Window Types,” technical bulletin (2012): the free area of a single window as a share of its frame, 41 to 43 % for
-				double-hung and sliding windows and 78 to 80 % for a casement sash, and less for larger units with several panels. It is one maker’s bulletin, measured on Australian
+				Breezway, “Comparative Ventilation Openings Of Various Window Types,” technical bulletin (2012): the free area of a single window as a share of its frame, 41 to 43&nbsp;% for
+				double-hung and sliding windows and 78 to 80&nbsp;% for a casement sash, and less for larger units with several panels. It is one maker’s bulletin, measured on Australian
 				aluminium windows.
 			</li>
 			<li>
@@ -211,7 +211,7 @@
 		<ul class="sources">
 			<li>
 				Nazaroff, “Indoor particle dynamics,” <i>Indoor Air</i> 14 (Suppl. 7), 2004: the balance of particles entering, leaving, settling and being filtered in one room. Its loss
-				rates by particle size were read off a graph, so they are good to about 10 %.
+				rates by particle size were read off a graph, so they are good to about 10&nbsp;%.
 			</li>
 			<li>
 				<i>ANSI/AHAM AC-1-2020, Method for Measuring Performance of Portable Household Electric Room Air Cleaners</i>, Association of Home Appliance Manufacturers: the definition of
