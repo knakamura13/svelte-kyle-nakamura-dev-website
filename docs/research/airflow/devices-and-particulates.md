@@ -228,6 +228,8 @@ Each page below was read on 2026-10-09. None gives CADR at any speed except the 
 | medium | Coway Airmega Mighty AP-1512HH | "233 (Smoke), 246 (Dust), 240 (Pollen)", no unit printed | "5 Stages (Auto - 1 - 2 - 3 - Eco)" | 361 ft² (34 m²) at 4.8 air changes/hr; 874 ft² at 2; 1,748 ft² at 1 | 16.8 x 18.3 x 9.6 in (W x H x D) | 12.3 lbs | https://cowaymega.com/products/mighty-air-purifier-ap-1512hh |
 | large | Coway Airmega 400 | "328 (Smoke), 328 (Dust), 400 (Pollen)" | Sleep, Low, Medium, High | 1,560 ft² (145 m²) at 2 air changes/hr; 3,120 ft² (290 m²) at 1 | 14.8 x 22.8 x 14.8 in (W x H x D) | 24.7 lbs | https://cowaymega.com/products/airmega-400 |
 
+**One maker that publishes CADR at each speed:** the Smart Air Sqair one-page sheet (https://cdn.shopify.com/s/files/1/0712/2783/4651/files/The_Sqair_-_1_pager.pdf, text extracted 2026-10-09) prints "Cleaning Power (CADR)" as 65m³/hr at Low, 180m³/hr at Medium and 315m³/hr at High. It also prints an "Optimal Room Size" of 9m², 24m² and 42m² ("Based on 3 air changes per hour"), noise of 23, 43 and 52 dB, and power of 6, 18 and 38 watts. The sheet names no particle type and no test standard (it is not an AHAM smoke CADR), gives no body dimensions, and has three speeds, while the catalog's shape has four. So the Sqair is not in the catalog. It is the only per-speed CADR from a maker found in this pass.
+
 Leads that were not read:
 
 - A search summary says the ENERGY STAR record for the Airmega 400 (AP-2015F) lists a smoke CADR of 376.0 cfm, which disagrees with Coway's 328: https://www.energystar.gov/productfinder/product/certified-room-air-cleaners/details/4512742. The AHAM Verifide directory was not read in this pass.
