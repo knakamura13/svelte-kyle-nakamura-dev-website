@@ -1,7 +1,7 @@
 import type { BackendUpdate, FieldState, FlowBackend, Snapshot, SnapshotRequest } from '../backend';
 import { POINT_FIELDS, type Diagnostics, type RoomStats, type Slice, type SolverConfig } from '../types';
 import { GpuContext } from './context';
-import { GpuSolver, LOG_CAPACITY, packPair, packVelocity, unpackPair, unpackVelocity } from './solver';
+import { GpuSolver, LOG_CAPACITY, PROFILE_GROUPS, PROFILE_SLOT_BYTES, PROFILE_STEPS, packPair, packVelocity, unpackPair, unpackVelocity, type ProfileGroup } from './solver';
 import { ROOMS_PER_PASS } from './shaders/readouts';
 import { BufferUsage, MapMode, type GpuBuffer, type GpuCommandEncoder } from './webgpu';
 
@@ -51,9 +51,9 @@ export class GpuBackend implements FlowBackend {
 	 * Builds the solver for `config` with the air at `initial` (as `CpuBackend`). Pass a `context` to share one device
 	 * between grids (the auto-tuner does); otherwise the backend makes and owns its own.
 	 */
-	static async create(config: SolverConfig, initial?: { theta?: number; particulates?: number }, context?: GpuContext) {
-		const owned = context ? null : await GpuContext.create();
-		const solver = await GpuSolver.create((context ?? owned)!, config);
+	static async create(config: SolverConfig, initial?: { theta?: number; particulates?: number }, context?: GpuContext, options: { profile?: boolean } = {}) {
+		const owned = context ? null : await GpuContext.create({ timestamps: options.profile });
+		const solver = await GpuSolver.create((context ?? owned)!, config, { profile: options.profile });
 		const backend = new GpuBackend(solver, owned);
 		const pair = solver.fill(initial?.theta ?? 0, initial?.particulates ?? 0);
 		let sum = 0;
@@ -77,7 +77,7 @@ export class GpuBackend implements FlowBackend {
 		const slot = this.steps % LOG_CAPACITY;
 		s.writeStep(dt, substeps, s.diffusionSubsteps(dt), slot);
 		const encoder = device.createCommandEncoder({ label: 'step' });
-		s.encodeStep(encoder, dt, substeps, slot);
+		s.encodeStep(encoder, dt, substeps, slot, s.querySet ? this.steps % PROFILE_STEPS : -1);
 		const readCfl = !this.cflPending;
 		if (readCfl) {
 			const pass = encoder.beginComputePass({ label: 'cfl' });
@@ -194,6 +194,34 @@ export class GpuBackend implements FlowBackend {
 			rooms: request.rooms ? this.toRooms(chunks, roomData as Float32Array[]) : undefined,
 			fanFlow: Float64Array.from({ length: s.fanCount }, (_, n) => fanState![4 * n])
 		};
+	}
+
+	/**
+	 * Mean milliseconds per kernel group over the last PROFILE_STEPS steps, from the timestamp queries; null unless the
+	 * backend was created with `profile` on an adapter that offers timestamps. Each step's timestamps sit
+	 * PROFILE_SLOT_BYTES apart in the profile buffer (resolveQuerySet needs 256-byte offsets).
+	 */
+	async profile(): Promise<Record<ProfileGroup, number> | null> {
+		const s = this.solver;
+		const slots = Math.min(this.steps, PROFILE_STEPS);
+		if (!s.profileBuffer || !slots) return null;
+		const encoder = s.device.createCommandEncoder({ label: 'profile' });
+		const pending = this.copy(encoder, s.profileBuffer, PROFILE_SLOT_BYTES * slots);
+		s.device.queue.submit([encoder.finish()]);
+		await pending.staging.mapAsync(MapMode.READ);
+		const stamps = new BigUint64Array(pending.staging.getMappedRange(0, pending.bytes).slice(0));
+		pending.staging.unmap();
+		pending.staging.destroy();
+		const result = {} as Record<ProfileGroup, number>;
+		PROFILE_GROUPS.forEach((group, g) => {
+			let total = 0;
+			for (let slot = 0; slot < slots; slot++) {
+				const at = (PROFILE_SLOT_BYTES / 8) * slot + 2 * g;
+				total += Number(stamps[at + 1] - stamps[at]) / 1e6;
+			}
+			result[group] = total / slots;
+		});
+		return result;
 	}
 
 	async samplePoints(points: Float32Array) {
