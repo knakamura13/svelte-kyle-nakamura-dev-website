@@ -83,19 +83,18 @@ interface CutUniform {
 	value: number;
 }
 
-const CUT_COMMON = /* glsl */ `#include <common>
+const cutCommon = (capped: boolean) => /* glsl */ `#include <common>
 uniform float uCut;
-attribute vec2 cutRange;
-varying float vClamped;`;
+attribute vec2 cutRange;${capped ? '\nvarying float vClamped;' : ''}`;
 
 /**
  * Walls are cut down for the overview and the plan by moving every vertex above the cut down to it, so a cut wall
  * keeps a real top face. A piece whose `cutRange` (lo, hi) does not hold the cut is dropped whole (a lintel above
- * the cut would otherwise squash into a sheet across its doorway); a piece shows while lo < cut ≤ hi. An upward face the
- * cut brought down is flagged, so the fragment shader can draw it as the cut surface it now is.
+ * the cut would otherwise squash into a sheet across its doorway); a piece shows while lo < cut ≤ hi. For a capped
+ * material an upward face the cut brought down is flagged, so the fragment shader can draw it as the cut surface it now
+ * is. A material that is not capped writes no varying, because a vertex output nothing reads is a warning in Firefox.
  */
-const CUT_PROJECT = /* glsl */ `vec4 mvPosition = modelMatrix * vec4( transformed, 1.0 );
-vClamped = ( objectNormal.y > 0.5 && mvPosition.y > uCut + 0.0005 ) ? 1.0 : 0.0;
+const cutProject = (capped: boolean) => /* glsl */ `vec4 mvPosition = modelMatrix * vec4( transformed, 1.0 );${capped ? '\nvClamped = ( objectNormal.y > 0.5 && mvPosition.y > uCut + 0.0005 ) ? 1.0 : 0.0;' : ''}
 mvPosition.y = min( mvPosition.y, uCut );
 mvPosition = viewMatrix * mvPosition;
 gl_Position = projectionMatrix * mvPosition;
@@ -117,7 +116,7 @@ function cutClay(value: ColorRepresentation, cut: CutUniform, extra: Parameters<
 	const material = clay(value, extra);
 	material.onBeforeCompile = (shader) => {
 		shader.uniforms.uCut = cut;
-		shader.vertexShader = shader.vertexShader.replace('#include <common>', CUT_COMMON).replace('#include <project_vertex>', CUT_PROJECT);
+		shader.vertexShader = shader.vertexShader.replace('#include <common>', cutCommon(capped)).replace('#include <project_vertex>', cutProject(capped));
 		if (!capped) return;
 		shader.uniforms.uCap = { value: CAP };
 		shader.fragmentShader = shader.fragmentShader.replace('#include <common>', CUT_FRAGMENT_COMMON).replace('#include <color_fragment>', CUT_FRAGMENT_COLOR);
