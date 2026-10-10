@@ -61,6 +61,8 @@ const FADE_ON = 0.2;
 const FADE_OFF = 0.15;
 /** Interior walls drop to this height while the camera is higher than CUT_ON above the horizon (back above CUT_OFF). */
 const CUTAWAY = 1.1;
+/** In the plan view furniture is cut to this height, so a wardrobe does not lean out over the walls in perspective. */
+const PLAN_FURNITURE = 0.45;
 const CUT_ON = (35 * Math.PI) / 180;
 const CUT_OFF = (32 * Math.PI) / 180;
 /** Rate of every eased change, per second. */
@@ -81,29 +83,46 @@ interface CutUniform {
 	value: number;
 }
 
-const CUT_COMMON = /* glsl */ `#include <common>
+const cutCommon = (capped: boolean) => /* glsl */ `#include <common>
 uniform float uCut;
-attribute vec2 cutRange;`;
+attribute vec2 cutRange;${capped ? '\nvarying float vClamped;' : ''}`;
 
 /**
  * Walls are cut down for the overview and the plan by moving every vertex above the cut down to it, so a cut wall
  * keeps a real top face. A piece whose `cutRange` (lo, hi) does not hold the cut is dropped whole (a lintel above
- * the cut would otherwise squash into a sheet across its doorway); a piece shows while lo < cut ≤ hi.
+ * the cut would otherwise squash into a sheet across its doorway); a piece shows while lo < cut ≤ hi. For a capped
+ * material an upward face the cut brought down is flagged, so the fragment shader can draw it as the cut surface it now
+ * is. A material that is not capped writes no varying, because a vertex output nothing reads is a warning in Firefox.
  */
-const CUT_PROJECT = /* glsl */ `vec4 mvPosition = modelMatrix * vec4( transformed, 1.0 );
+const cutProject = (capped: boolean) => /* glsl */ `vec4 mvPosition = modelMatrix * vec4( transformed, 1.0 );${capped ? '\nvClamped = ( objectNormal.y > 0.5 && mvPosition.y > uCut + 0.0005 ) ? 1.0 : 0.0;' : ''}
 mvPosition.y = min( mvPosition.y, uCut );
 mvPosition = viewMatrix * mvPosition;
 gl_Position = projectionMatrix * mvPosition;
 if ( cutRange.x >= uCut || uCut > cutRange.y ) gl_Position = vec4( 0.0, 0.0, 2.0, 1.0 );`;
 
-/** Clay that follows a cut height. Every geometry drawn with it needs a `cutRange` attribute. */
-function cutClay(value: ColorRepresentation, cut: CutUniform, extra: Parameters<typeof clay>[1] = {}) {
+/** Every surface the cut leaves on top, a jamb or a door leaf as much as a wall, is the same cap color. */
+const CUT_FRAGMENT_COMMON = /* glsl */ `#include <common>
+uniform vec3 uCap;
+varying float vClamped;`;
+const CUT_FRAGMENT_COLOR = /* glsl */ `#include <color_fragment>
+if ( vClamped > 0.5 ) diffuseColor.rgb = uCap;`;
+const CAP = color(COLORS.cap);
+
+/**
+ * Clay that follows a cut height. Every geometry drawn with it needs a `cutRange` attribute. `capped` paints the faces the
+ * cut leaves on top in the cap color (glass is left as it is).
+ */
+function cutClay(value: ColorRepresentation, cut: CutUniform, extra: Parameters<typeof clay>[1] = {}, capped = true) {
 	const material = clay(value, extra);
 	material.onBeforeCompile = (shader) => {
 		shader.uniforms.uCut = cut;
-		shader.vertexShader = shader.vertexShader.replace('#include <common>', CUT_COMMON).replace('#include <project_vertex>', CUT_PROJECT);
+		shader.vertexShader = shader.vertexShader.replace('#include <common>', cutCommon(capped)).replace('#include <project_vertex>', cutProject(capped));
+		if (!capped) return;
+		shader.uniforms.uCap = { value: CAP };
+		shader.fragmentShader = shader.fragmentShader.replace('#include <common>', CUT_FRAGMENT_COMMON).replace('#include <color_fragment>', CUT_FRAGMENT_COLOR);
 	};
-	material.customProgramCacheKey = () => 'dollhouse-cut';
+	// The two variants are different programs.
+	material.customProgramCacheKey = () => (capped ? 'dollhouse-cut-capped' : 'dollhouse-cut');
 	return material;
 }
 
@@ -166,6 +185,13 @@ class Boxes {
 		return geometry;
 	}
 }
+
+/**
+ * Wall pieces meet edge to edge, and each box also has a side face against its neighbour. At the seam that hidden face
+ * ties on depth with the neighbour's front face and shows as a dark hairline. A depth offset pushes a polygon back by its
+ * slope, and a side face seen at a grazing angle has by far the steepest slope, so it loses the tie.
+ */
+const WALL_SURFACE = { vertexColors: true, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 };
 
 /** A box on a wall, from `u0`..`u1` along it and `n0`..`n1` across it, into world-space `boxes`. */
 function addOnWall(boxes: Boxes, run: WallRun, u0: number, u1: number, y0: number, y1: number, n0: number, n1: number, side: Color, top: Color = side, range: [number, number] = ALWAYS) {
@@ -353,6 +379,7 @@ export class Dollhouse {
 
 	private readonly exteriorCut: CutUniform;
 	private readonly interiorCut: CutUniform;
+	private readonly furnitureCut: CutUniform;
 	private readonly clearCut: number;
 	private readonly walls: WallView[] = [];
 	private readonly outside: WallView[] = [];
@@ -377,18 +404,19 @@ export class Dollhouse {
 		this.clearCut = ceiling + 0.01;
 		this.exteriorCut = { value: this.clearCut };
 		this.interiorCut = { value: this.clearCut };
+		this.furnitureCut = { value: this.clearCut };
 		this.shadowTexture = softRectTexture();
 
 		const wall = color(COLORS.wall);
 		const cap = color(COLORS.cap);
 		const runs = wallRuns(plan);
-		const indoor = { wall: cutClay(0xffffff, this.interiorCut, { vertexColors: true }), frame: cutClay(0xffffff, this.interiorCut, { vertexColors: true }), glass: this.glass(this.interiorCut) };
+		const indoor = { wall: cutClay(0xffffff, this.interiorCut, WALL_SURFACE), frame: cutClay(0xffffff, this.interiorCut, { vertexColors: true }), glass: this.glass(this.interiorCut) };
 		const indoorBoxes = { wall: new Boxes(), frame: new Boxes(), glass: new Boxes() };
 		const indoorView = this.view(null, indoor);
 
 		for (const run of runs) {
 			const exterior = run.out !== 0;
-			const materials = exterior ? { wall: cutClay(0xffffff, this.exteriorCut, { vertexColors: true }), frame: cutClay(0xffffff, this.exteriorCut, { vertexColors: true }), glass: this.glass(this.exteriorCut) } : indoor;
+			const materials = exterior ? { wall: cutClay(0xffffff, this.exteriorCut, WALL_SURFACE), frame: cutClay(0xffffff, this.exteriorCut, { vertexColors: true }), glass: this.glass(this.exteriorCut) } : indoor;
 			const boxes = exterior ? { wall: new Boxes(), frame: new Boxes(), glass: new Boxes() } : indoorBoxes;
 			const view = exterior ? this.view(run, materials) : indoorView;
 			const cut = exterior ? this.exteriorCut : this.interiorCut;
@@ -459,7 +487,7 @@ export class Dollhouse {
 		for (const [x, z, a, b] of posts) {
 			const boxes = new Boxes();
 			boxes.add(x, x + t, 0, ceiling, z, z + t, wall, cap);
-			const material = cutClay(0xffffff, this.exteriorCut, { vertexColors: true });
+			const material = cutClay(0xffffff, this.exteriorCut, WALL_SURFACE);
 			const mesh = new Mesh(boxes.build(), material);
 			this.group.add(mesh);
 			this.corners.push({ material, mesh, walls: [a, b], fade: 1 });
@@ -481,7 +509,7 @@ export class Dollhouse {
 	}
 
 	private glass(cut: CutUniform) {
-		return cutClay(COLORS.glass, cut, { transparent: true, opacity: GLASS_OPACITY, depthWrite: false, roughness: 0.6 });
+		return cutClay(COLORS.glass, cut, { transparent: true, opacity: GLASS_OPACITY, depthWrite: false, roughness: 0.6 }, false);
 	}
 
 	/** An outside wall's view, or (with no run) the one all the inside walls share. */
@@ -608,11 +636,15 @@ export class Dollhouse {
 			const colors = new Float32Array(count * 3);
 			for (let i = 0; i < count; i++) colors.set([tone.r, tone.g, tone.b], i * 3);
 			geometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
+			// Furniture is cut like the walls (to PLAN_FURNITURE in the plan view), so it shows at every cut height.
+			const ranges = new Float32Array(count * 2);
+			for (let i = 0; i < count; i++) ranges.set(ALWAYS, i * 2);
+			geometry.setAttribute('cutRange', new Float32BufferAttribute(ranges, 2));
 			return geometry;
 		});
 		const merged = mergeGeometries(pieces)!;
 		for (const piece of pieces) piece.dispose();
-		const mesh = new Mesh(merged, clay(0xffffff, { vertexColors: true }));
+		const mesh = new Mesh(merged, cutClay(0xffffff, this.furnitureCut, { vertexColors: true }, false));
 		this.group.add(mesh);
 		return mesh;
 	}
@@ -686,6 +718,7 @@ export class Dollhouse {
 
 		if (this.ease(this.interiorCut, this.topDown ? PLAN_WALL : this.cutaway ? CUTAWAY : this.clearCut, k)) easing = true;
 		if (this.ease(this.exteriorCut, this.topDown ? PLAN_WALL : this.clearCut, k)) easing = true;
+		if (this.ease(this.furnitureCut, this.topDown ? PLAN_FURNITURE : this.clearCut, k)) easing = true;
 
 		for (const view of this.outside) {
 			this.toEye.subVectors(this.eye, view.middle).normalize();
@@ -782,7 +815,7 @@ export function dollhouseRig(plan: HomePlan, topDown: boolean): RigSetup {
 	const fov = 30;
 	const target: [number, number, number] = [plan.width / 2, 0.8, plan.depth / 2];
 	const pad = EXTERIOR_WALL + LEDGE;
-	const top = topDown ? PLAN_WALL : plan.ceiling;
+	const top = topDown ? Math.max(PLAN_WALL, PLAN_FURNITURE) : plan.ceiling;
 	const points: [number, number, number][] = [];
 	for (const x of [-pad, plan.width + pad]) for (const y of [PLINTH_BOTTOM, top]) for (const z of [-pad, plan.depth + pad]) points.push([x, y, z]);
 	const t = Math.tan((fov * Math.PI) / 360);
