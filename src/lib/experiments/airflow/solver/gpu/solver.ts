@@ -310,8 +310,9 @@ export class GpuSolver {
 		const device = context.device;
 		this.grid = new Grid(config.grid);
 		this.fluid = config.fluid;
-		// The solver keeps its own copy of the open fractions, since face updates change them.
-		this.geometry = { ...config.geometry, au: config.geometry.au.slice(), av: config.geometry.av.slice(), aw: config.geometry.aw.slice() };
+		// The open fractions are the caller's arrays, as in CpuSolver: face updates write into them, and World reads
+		// `raster.geometry` back (the flow through an opening, for one) expecting to see them.
+		this.geometry = config.geometry;
 		this.sides = sideConditions(config.sides);
 		this.turbulenceModel = config.turbulence ?? 'shear-length';
 		this.advection = config.advection ?? 'maccormack';
