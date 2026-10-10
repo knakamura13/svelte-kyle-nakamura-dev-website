@@ -50,6 +50,8 @@ Scenarios, in the CPU solver at 0.2 m cells (`tests/solver/scenario-presets.spec
 - Stack effect (house, no wind, −5 °C outside): 0.31 m³/s in at the low windows and out at the clerestory.
 - A fan in the window (two-bedroom, no wind, Air King 9155 on high): 1.03 m³/s, 88% of the rated 1.17 m³/s, and zero when turned off.
 
+Stability at other cell sizes (checked once, not a test): with the stability fix, all four plans stay finite over 5 s at 0.3, 0.2, 0.15 and 0.1 m cells, with three windows open, both in a 3 m/s wind and with no wind at −5 °C. The fastest air is at most 1.2 m/s and the divergence at most 1.7e-4.
+
 CPU step cost, one 0.05 s step on this Mac while other jobs ran:
 
 | Plan | 0.2 m cells | 0.15 m | 0.1 m |
