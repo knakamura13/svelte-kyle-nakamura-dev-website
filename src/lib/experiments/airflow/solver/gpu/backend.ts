@@ -6,8 +6,8 @@ import { ROOMS_PER_PASS } from './shaders/readouts';
 import { BufferUsage, MapMode, type GpuBuffer, type GpuCommandEncoder } from './webgpu';
 
 const READBACK = BufferUsage.MAP_READ | BufferUsage.COPY_DST;
-/** Steps after which a CFL reading no longer sets the scalar substep count (see `step`). */
-const STALE_STEPS = 4;
+/** How much the last CFL reading is enlarged for every step it is old (see `step`). */
+const STALE_GROWTH = 1.1;
 const UNIFORM = BufferUsage.UNIFORM | BufferUsage.COPY_DST;
 
 /** A copy from a device buffer into a fresh mappable buffer, read once the queue has caught up. */
@@ -78,10 +78,12 @@ export class GpuBackend implements FlowBackend {
 		const s = this.solver;
 		const device = s.device;
 		// The CFL speed arrives asynchronously, and not at all while the caller steps in a loop without awaiting
-		// anything. A reading more than a few steps old says nothing about a flow that is speeding up, and too few
-		// substeps make the explicit scalar transport blow up, so without a recent reading take the most (the cap).
-		const recent = this.steps - this.cflMeasuredAt <= STALE_STEPS;
-		const substeps = s.scalarSubsteps(dt, recent ? this.cflSpeed : Infinity);
+		// anything. Too few substeps make the explicit scalar transport blow up, so an older reading is enlarged by
+		// STALE_GROWTH for every step it is old (a flow speeding up faster than that is in trouble anyway), and with
+		// no reading at all the count is the cap.
+		const age = this.steps - this.cflMeasuredAt;
+		const speed = Number.isFinite(age) ? this.cflSpeed * STALE_GROWTH ** Math.max(0, age - 1) : Infinity;
+		const substeps = s.scalarSubsteps(dt, speed);
 		const slot = this.steps % LOG_CAPACITY;
 		s.writeStep(dt, substeps, s.diffusionSubsteps(dt), slot);
 		const encoder = device.createCommandEncoder({ label: 'step' });
