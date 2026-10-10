@@ -1,13 +1,13 @@
 /**
  * Screenshots the dollhouse scene in Chromium (issue #30). Throwaway QA tooling, not shipped.
  *
- *   node scripts/airflow-qa/dollhouse/shoot.mjs <outDir> [set ...] [--swiftshader] [--sizes=1280x800,390x800]
+ *   node scripts/airflow-qa/dollhouse/shoot.mjs <outDir> [set ...] [--browser=chromium|firefox|webkit] [--swiftshader] [--sizes=1280x800,390x800] [--dpr=2] [--clip=x,y,w,h]
  *
  * Sets: overview (every plan, three-quarter, furniture), north, topdown, openings (each kind at 0, 0.5, 1), bare (furniture
  * off), all (the default), or `state:<json>` for one shot. It bundles entry.ts with esbuild, serves the page on a free
  * port, and prints every console message and page error first, because a shader compile error shows up there.
  */
-import { chromium } from '@playwright/test';
+import { chromium, firefox, webkit } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
@@ -25,6 +25,8 @@ const outDir = resolve(positional.shift() ?? join(tmpdir(), 'airflow-dollhouse-q
 const sets = positional.length ? positional : ['all'];
 const sizes = (flags.find((f) => f.startsWith('--sizes='))?.slice(8) ?? '1280x800,390x800').split(',').map((s) => s.split('x').map(Number));
 const swiftshader = flags.includes('--swiftshader');
+// --browser=chromium (default), firefox or webkit.
+const engine = { chromium, firefox, webkit }[flags.find((f) => f.startsWith('--browser='))?.slice(10) ?? 'chromium'];
 const dpr = Number(flags.find((f) => f.startsWith('--dpr='))?.slice(6) ?? 1);
 // --clip=x,y,w,h crops each screenshot to that rectangle, in CSS pixels.
 const clip = flags.find((f) => f.startsWith('--clip='))?.slice(7).split(',').map(Number);
@@ -80,7 +82,7 @@ const order = ['overview', 'north', 'topdown', 'bare', 'openings'];
 const wanted = sets.includes('all') ? order : sets;
 const shots = wanted.flatMap((set, n) => (set.startsWith('state:') ? [{ name: `custom${n}`, state: JSON.parse(set.slice(6)) }] : (SHOTS[set]?.() ?? (console.error(`Unknown set ${set}`), []))));
 
-const browser = await chromium.launch(swiftshader ? { args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] } : {});
+const browser = await engine.launch(swiftshader ? { args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] } : {});
 const log = [];
 let failed = false;
 for (const [width, height] of sizes) {

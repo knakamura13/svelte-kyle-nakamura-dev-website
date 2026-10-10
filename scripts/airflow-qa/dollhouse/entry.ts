@@ -24,6 +24,8 @@ export interface State {
 	/** 0 to 1 of travel for every opening (a number), or per opening id. */
 	openings?: number | Record<string, number>;
 	furniture?: boolean;
+	/** False hides the studio kit's floor pool (the large soft radial under the house). */
+	pool?: boolean;
 	tint?: keyof typeof TINTS;
 	/** Frame this opening close up, from `side` ('in' looks at it from the room, 'out' from outdoors), `swing` degrees round from square on. */
 	focus?: string;
@@ -51,6 +53,7 @@ stage.append(renderer.domElement);
 const scene = new Scene();
 const camera = new PerspectiveCamera(30, 1, 0.1, 300);
 let lit = false;
+let pool: Mesh | null = null;
 let current: { id: PlanId; tint: string; house: Dollhouse; furniture: boolean } | null = null;
 let last: { cutaway: unknown } | null = null;
 
@@ -61,7 +64,12 @@ function light(tint: number) {
 	// (40 to 100 m) would wash it out there, so the fog starts well past that.
 	studio(scene, tint, { pool: 22, fog: [200, 500] });
 	// The studio's floor pool sits at y = -0.004, which is inside the dollhouse; the plinth runs to -0.16, so a ground plane goes below it.
-	for (const child of scene.children) if (child instanceof Mesh && child.geometry instanceof CircleGeometry) child.position.y = -0.17;
+	for (const child of scene.children) {
+		if (child instanceof Mesh && child.geometry instanceof CircleGeometry) {
+			child.position.y = -0.17;
+			pool = child;
+		}
+	}
 }
 
 function framing(state: State): RigSetup {
@@ -105,6 +113,7 @@ async function setState(state: State) {
 	light(tint);
 	(scene.background as Color).set(tint);
 	scene.fog?.color.set(tint);
+	if (pool) pool.visible = state.pool !== false;
 	const furniture = state.furniture ?? true;
 	if (!current || current.id !== plan.id || current.tint !== tintName) {
 		if (current) current.house.dispose();
