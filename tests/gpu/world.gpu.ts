@@ -14,7 +14,8 @@ test.beforeAll(async ({ browser }) => {
 const call = (name: string, ...args: unknown[]) => page.evaluate(([name, args]) => (window as any).world[name as string](...(args as unknown[])), [name, args] as const) as Promise<any>;
 
 test('GpuBackend matches CpuBackend through World: two-bedroom home, west wind, two windows, one fan, 20 steps', async () => {
-	const r = await call('windyHome', 20, 0.15);
+	// dt 0.01 s keeps the fan jet (about 10 m/s) under one cell per step at h = 0.15 m.
+	const r = await call('windyHome', 20, 0.15, 0.01);
 	console.log(JSON.stringify(r));
 	expect(r.kind).toEqual(['cpu', 'webgpu']);
 	expect(r.fluidCells[1]).toBe(r.fluidCells[0]);

@@ -44,8 +44,7 @@ async function run(setup: Setup, make: BackendFactory, h: number, steps: number,
 	return world;
 }
 
-async function windyHome(steps: number, h: number) {
-	const dt = 0.05;
+async function windyHome(steps: number, h: number, dt: number) {
 	const a = await run(windySetup(), cpu, h, steps, dt);
 	const b = await run(windySetup(), gpu, h, steps, dt);
 	const [sa, sb] = await Promise.all([a.backend.snapshot({ sliceY: 1.1, rooms: true }), b.backend.snapshot({ sliceY: 1.1, rooms: true })]);
