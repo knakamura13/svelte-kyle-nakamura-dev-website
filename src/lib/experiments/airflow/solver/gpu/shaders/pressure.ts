@@ -10,9 +10,7 @@ import { DECODE, ENTRY, F32, LINEAR, VEC2, VEC4, read, uniform, write, type Kern
 const SHIFT = '1e-7';
 /** cpu/pressure.ts U_REGULAR and STALL. */
 const U_REGULAR = '0.05';
-// The root's floor in a window fan's linearised slope (not in its flow): 0.3, as cpu/pressure.ts. Steeper slopes near
-// stall overshoot from one step to the next.
-const STALL = '0.3';
+const STALL = '0.01';
 
 /** The diagonal of cell c of a level, and whether the cell is in the system at all (`dg > 0` in the CPU). */
 const DIAGONAL = (coef: string, sx: string, sxy: string) => `fn diagonal(c: i32) -> f32 {
@@ -152,9 +150,10 @@ ${ENTRY} {
 };
 
 /**
- * The operator one level up (cpu/pressure.ts `coarsen`): a coarse face sums the fine faces across it that exist (an
- * odd fine size leaves the last coarse cell one fine cell wide), divided by the coarsening factor for an interior
- * face. The right-hand-side lane is left zero; restriction fills it.
+ * The operator one level up (cpu/pressure.ts `coarsen`), the Galerkin PᵀAP for the piecewise-constant transfer: a
+ * coarse face sums the fine faces across it that exist (an odd fine size leaves the last coarse cell one fine cell
+ * wide), and nothing is divided. Halving interior faces (the rediscretised operator) made the coarse correction about
+ * twice too large, so smooth errors flipped sign every cycle. The right-hand-side lane is left zero; restriction fills it.
  */
 export const coarsen: KernelSource = {
 	name: 'coarsen',
@@ -180,7 +179,7 @@ export const coarsen: KernelSource = {
 				total = total + fine[face + L.sx * b + L.sxy * c].x;
 			}
 		}
-		cx = select(total, total / f32(L.fx), I > 0 && I < L.cnx);
+		cx = total;
 	}
 	if (I < L.cnx && K < L.cnz) {
 		let face = min(J * L.fy, L.ny);
@@ -190,7 +189,7 @@ export const coarsen: KernelSource = {
 				total = total + fine[a + L.sx * face + L.sxy * c].y;
 			}
 		}
-		cy = select(total, total / f32(L.fy), J > 0 && J < L.cny);
+		cy = total;
 	}
 	if (I < L.cnx && J < L.cny) {
 		let face = min(K * L.fz, L.nz);
@@ -200,7 +199,7 @@ export const coarsen: KernelSource = {
 				total = total + fine[a + L.sx * b + L.sxy * face].z;
 			}
 		}
-		cz = select(total, total / f32(L.fz), K > 0 && K < L.cnz);
+		cz = total;
 	}
 	coarse[id] = vec4<f32>(cx, cy, cz, 0.0);
 }`
