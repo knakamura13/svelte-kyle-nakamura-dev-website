@@ -1,86 +1,107 @@
 # Airflow experiment (issue #30): status and how to resume
 
-Written 2026-10-07, when the session working on issue 30 stopped at a usage limit. This supersedes the Phases checklist in [2026-10-07-airflow-experiment.md](2026-10-07-airflow-experiment.md), which still shows the original plan. Nothing is pushed and no pull request exists.
+First written 2026-10-07 and rewritten 2026-10-09 at the end of a one-hour session. It supersedes the Phases checklist in [2026-10-07-airflow-experiment.md](2026-10-07-airflow-experiment.md), which still shows the original plan.
+
+Branches. This session's work is on `knakamura/funny-bassi-7c3d37` (worktree `.claude/worktrees/funny-bassi-7c3d37`), forked at `40e5fdd` from `knakamura/issue-30-completion-7a3fb7`, which is on origin. The fork is local only: nothing from this session is pushed and no pull request exists. To bring it into the issue branch, run `git merge --ff-only knakamura/funny-bassi-7c3d37` in the issue-30 worktree.
 
 ## Where it stands
 
-About 30% by the measure "0% is not started, 100% is a fully functional, physically accurate sandbox with every planned feature". The solver is finished and matches the published benchmarks. Nothing renders yet: no scene is wired to the solver, and there is no UI, page route, scenario or catalog entry.
+About 40% by the measure "0% is not started, 100% is a fully functional, physically accurate sandbox with every planned feature". The solver, the GPU solver, the plans, the scene pieces, the share link and three scenarios exist, and each is tested or has been rendered in a throwaway browser harness. The page does not exist yet: no scene is wired to the solver, and there is no UI, route or catalog entry.
 
 | Phase | Status |
 | --- | --- |
 | 0. Catalog-driven landing page (#29) | Done |
-| 1. CPU solver, units, benchmarks | Done |
-| 2. WebGPU solver, CPU worker fallback, parity tests, auto-tune, 30 fps budget | Kernels written in an unmerged branch and never compiled. Nothing else |
-| 3. Homes | Plan format and four plans merged. Dollhouse scene unmerged and never rendered |
-| 4. Devices | Fan and purifier models, solver coupling, placement and turning math merged. Meshes and the model catalog not started |
-| 5. Particulates and probing | Solver side done. Probe and tracer UI not started |
-| 6. Visualization | Unmerged and never rendered |
-| 7. Page | Not started. The state model is merged. The share-link codec and units are in an unmerged worktree |
+| 1. CPU solver and benchmarks | Done. A stability fix for the one-bedroom and studio plans is in (issue 1 below) |
+| 2. WebGPU solver, CPU worker fallback, parity tests, auto-tune, 30 fps | The 29 kernels and `GpuBackend` are done and match the CPU solver (GPU status: see issue 1). The worker fallback and the auto-tuner are not started |
+| 3. Homes | Done. The four plans, and a dollhouse scene rendered in Chromium, Firefox and WebKit in a harness |
+| 4. Devices | Models, solver coupling, placement and turning math done. The catalog has four fans from maker spec sheets and no purifiers. Device meshes not started |
+| 5. Particulates and probing | Solver, session probes and hover readings done. The probe and smoke controls are not started |
+| 6. Visualization | The four layers, arrows, tracers, smoke and legends render from real solver data (harness). Not wired to a page |
+| 7. Page | Not started. Ready for it: state, session, share link, units, readouts, three scenarios, and the explainer with its Sources |
 
 ## On the branch
 
-Branch `knakamura/issue-30-completion-7a3fb7`, worktree `.claude/worktrees/issue-30-completion-7a3fb7`, all committed. `yarn test:solver` runs the Node-only suite (`playwright.solver.config.ts`: no browser, no web server). `yarn test` runs it and then the e2e suite.
+All committed. `yarn test:solver` runs the Node suite (`playwright.solver.config.ts`: no browser, no web server). `yarn test:gpu` runs the GPU suite and needs a real WebGPU adapter. `yarn test` runs the Node suite and then the e2e suite.
 
 - `src/lib/experiments/engine/`: scene pointer and key hooks (`SceneInput`), `framing`, `rig.setSetup`, `LabelLayer.remove`, `setExperience`.
-- `airflow/solver/`: grid, geometry, fan rasterizer, the `FlowBackend` interface, and the CPU backend (advection, shear-length turbulence closure, diffusion, forces, multigrid pressure solve with orifice and fan-curve openings, scalar transport, readouts, particles).
-- `airflow/homes/`: plan format, validator, rasterizer, wind and weather model, and the four plans: studio 7.8 × 5.4 m, one-bedroom 8.4 × 7.8 m, two-bedroom 12.0 × 7.8 m, house 14.4 × 9.6 m. Every wall sits on the 0.6 m module, so the solver box equals the footprint at every cell size.
-- `airflow/devices/`: fan and purifier models, solver coupling, placement. `airflow/scene/deviceMath.ts`: turning, tilting, placing, window-fan snapping.
-- `airflow/sim/`: `World` (applies a setup to a backend), `SimulationSession`, rolling history.
-- `airflow/state.ts`, `readouts.ts`, `emission.ts` (placeholder rates), `scenarios.ts` (type only), `experience.svelte.ts`, `ui/Explainer.svelte` (How it works and What it isn't; no Sources list yet).
-- `tests/solver/`, `docs/research/airflow/` (three notes), `CONTEXT.md` terms, `static/images/experiments/airflow.svg`.
+- `airflow/solver/`: the `FlowBackend` interface, the CPU backend, and `gpu/` (WebGPU context, layout, `GpuSolver`, `GpuBackend`, 29 WGSL kernels in `gpu/shaders/`).
+- `airflow/homes/`: plan format, validator, rasterizer, wind model, and the four plans: studio 7.8 × 5.4 m, one-bedroom 8.4 × 7.8 m, two-bedroom 12.0 × 7.8 m, house 14.4 × 9.6 m. Every wall sits on the 0.6 m module, so the solver box equals the footprint at every cell size.
+- `airflow/devices/`: fan and purifier models, solver coupling, placement, and `catalog.ts`: Air King 9723 (20 in box fan), 9119 and 9126 (pedestal fans) and 9155 (16 in window fan), rated from the makers' spec sheets read on 2026-10-09. The pedestal head heights are derived from the published overall height, and no maker publishes a window fan's shutoff pressure, so the solver's unsourced 25 Pa default applies.
+- `airflow/sim/`: `World`, `SimulationSession` (tested with a fake clock), rolling history.
+- `airflow/scene/` and `airflow/viz/`: the dollhouse (`dollhouse.ts`, `wallPieces.ts`), the slice layer, direction arrows, tracers and smoke points, palettes and legends, and `deviceMath.ts`.
+- `airflow/state.ts`, `link.ts` (share link: `1.` plus base64url; a typical setup is 184 characters and the worst real case 702; out-of-range numbers are clamped), `units.ts`, `readout.ts` (direction words), `readouts.ts`, `emission.ts` (placeholder rates), `scenarios.ts` (cross-ventilation, stack effect, a fan in the window), `experience.svelte.ts`, `ui/Explainer.svelte` (How it works, What it isn't, and a Sources list of 32 entries in four groups).
+- `tests/solver/`: benchmarks, invariants, weather, world, devices-scene, homes, dollhouse, viz, state, catalog, scenario-presets, robustness (random openings, weather, fans and purifiers, changed mid-run, five seeds per plan) and session. `tests/gpu/` with `playwright.gpu.config.ts`.
+- `scripts/airflow-qa/dollhouse/` and `scripts/airflow-qa/viz/`: throwaway Chromium (and Firefox and WebKit) screenshot harnesses. `scripts/airflow-plan-preview.ts` draws the plans.
+- `docs/research/airflow/` (three notes; each lists what it could not confirm), `CONTEXT.md` terms, `static/images/experiments/airflow.svg`.
 
-Checks run: the Node suite was green at 31 tests before the device-math spec (10 pass) and the homes spec (18 pass, 2 `fixme`) were added. The existing e2e suite passed on chromium, firefox and webkit (612 passed, 3 skipped) at an earlier commit. The type check is at its baseline, one error in `tests/resume.spec.ts` and one warning in `PortfolioShell.svelte`, both older than this work.
+## Results
 
-Benchmark results, CPU solver:
+Benchmarks on the CPU solver (before the stability fix in issue 1):
 
 - Lid-driven cavity at 128²: 1.77% max and 1.18% rms against Ghia, 2.45% and 1.64% against Botella–Peyret.
 - Heated cavity: average Nu within 1% of de Vahl Davis at Ra 1e3, 1e4 and 1e5.
-- Openings: wind through-flow is 96–99% of the orifice formula. Stack effect is 96% of the formula in a uniform room.
-- Well-mixed decay: 99.8% of the analytic rate, and the particulate mass balance closes to 1e-5.
-- Window fan: matches the analytic series solution (0.1077 m³/s both).
-- Free jet: delivered flow 98.3%, decay exponent −1.05, jet constant K 5.85.
-- World on a small plan: wind through-flow 98.6% of the formula, a window fan delivers its rated 0.236 m³/s, a purifier cuts smoke 34% in four minutes.
+- Openings: wind through-flow 96–99% of the orifice formula. Stack effect 96% of the formula in a uniform room.
+- Well-mixed decay 99.8% of the analytic rate, and the particulate mass balance closes to 1e-5.
+- Window fan: matches the analytic series solution. Free jet: delivered flow 98.3%, decay exponent −1.05, constant K 5.85.
 
-## Unmerged work
+Scenarios, in the CPU solver at 0.2 m cells (`tests/solver/scenario-presets.spec.ts`):
 
-Agent worktrees live under `.claude/worktrees/agent-<id>`, are locked, and hold the only checked-out copy of anything uncommitted. Do not remove them until their commits are merged or pushed (the branches persist in the repo either way). `git log --oneline HEAD..<branch>` lists what a branch adds, and `git merge-base HEAD <branch>` shows where it starts. The device math (`worktree-agent-af99b46f56ed73ca4`) and the plans (`worktree-agent-a0a6d8919ae685198`) are already on this branch.
+- Cross-ventilation (two-bedroom, 4 m/s west wind): 1.09 m³/s in at the west windows and out at the east ones, and a closed bedroom door cuts that bedroom's flow to zero.
+- Stack effect (house, no wind, −5 °C outside): 0.31 m³/s in at the low windows and out at the clerestory.
+- A fan in the window (two-bedroom, no wind, Air King 9155 on high): 1.03 m³/s, 88% of the rated 1.17 m³/s, and zero when turned off.
 
-| Branch | Tip | Holds | State |
+CPU step cost, one 0.05 s step on this Mac while other jobs ran:
+
+| Plan | 0.2 m cells | 0.15 m | 0.1 m |
 | --- | --- | --- | --- |
-| `worktree-agent-a02ccff3da16fdca9` | 726c6fd | WebGPU solver core and 29 WGSL kernels (`git show --stat 726c6fd`), plus esbuild as a devDependency (773508f) for bundling the test harness | WIP. No WGSL compiled, no parity test, nothing run |
-| `worktree-agent-ae52283ab906d274b` | 0480931 | `airflow/scene/dollhouse.ts`, `scene/wallPieces.ts`, `tests/solver/dollhouse.spec.ts` | WIP. 5 tests pass, 1 skipped. Never rendered, no screenshots |
-| `worktree-agent-ad103dc5ad9007100` | d7c0482 | Color scales, legends, slice layer, direction arrows, particles | WIP. 7 tests pass. Never rendered |
-| `worktree-agent-a0baf3260a07cf3a1` | see `git log` | `airflow/link.ts` (share-link codec), `readout.ts`, `units.ts`, `tests/solver/state.spec.ts` | The agent was stopped at the usage limit while chasing a hanging test in `state.spec.ts`: it had just re-run with a 60 s per-test timeout to name the test, and the cause was not found. Files committed as WIP. Do not merge the spec into this branch until the hang is fixed, or `yarn test:solver` will hang |
+| Studio | 14 ms (15k padded cells) | 34 ms | 127 ms |
+| One-bedroom | 22 ms | 49 ms | 201 ms |
+| Two-bedroom | 28 ms | 74 ms | 285 ms |
+| House | 41 ms (47k) | 109 ms | 427 ms |
 
-Dollhouse API: `new Dollhouse(plan, { furniture, tint })` with `setOpenings`, `setTopDown`, `setFurniture`, `update(camera, dt)` (pass `Infinity` to settle at once for reduced motion) and `dispose`, plus `roomAnchors` and `pickables`. `dollhouseRig(plan, topDown)` frames the camera. Integration notes:
+GPU step cost on the house plan, windows closed: 0.2 m 0.64 ms (41k cells), 0.15 m 0.86 ms (98k), 0.1 m 1.98 ms (332k), 0.075 m 4.89 ms (786k). So a 0.2 m CPU grid runs faster than real time for every plan, the house at 0.1 m on the CPU runs about 8 times slower than real time, and fine grids need the GPU.
 
-- Door and casement leaves hinge on the edge opposite the opening's `anchor`, so the visible gap is on the side the solver opens. To hinge the other way, flip the plan's `anchor`.
-- Faded walls draw at render order 20, so tracers and the slice plane must stay below that.
-- The plinth spans y = −0.16 to −0.02, so any ground plane must be at or below −0.16.
-- A pick ray can hit the side of a piece of furniture. Ignore hits whose normal does not point up when only tops are wanted.
-- The engine's idle yaw drift can turn the top-down plan by up to about 6°, so north does not stay exactly up.
+GPU against CPU, through `World`: the slice at 1.1 m within 2.5e-5, the fan flow within 4e-8, and the cross-ventilation window flows within 3e-6. Every kernel stage matches to about 2e-5 or better.
+
+Checks at the end of the session are in the final message of the session that wrote this. The type check (`yarn run check`) stays at its baseline of one error in `tests/resume.spec.ts` and one warning in `PortfolioShell.svelte`, both older than this work. The e2e suite was not re-run this session: no route or catalog entry loads the airflow code.
 
 ## Not started
 
-Scene assembly (dollhouse, slice layer and particles on the session, with an engine loader), the dock and page UI, scenario data, the catalog entry, share-link wiring, the device catalog, end-to-end tests, a visual QA pass at desktop and phone widths, WCAG 2.1 AA checks, GPU performance measurement and auto-tune, and the Sources list on the page.
+Scene assembly, the engine loader, the dock and page UI, the route and catalog entry, the CPU worker backend, the auto-tuner and backend selection, device meshes, purifiers in the catalog and the two purifier scenarios, end-to-end tests, the visual and accessibility pass at desktop and phone widths, and the Physics panel text.
 
 ## Resume order
 
-1. Bring in the dollhouse, visualization and state-utility branches, then look at them, because nothing in them has been rendered. Build a throwaway screenshot harness (esbuild with `--alias:$lib=./src/lib`, serve on port 0, open in Playwright Chromium). Screenshot the dollhouse at 1280×800 and 390×800: three-quarter view, from the north, top-down, and each opening kind at 0, 0.5 and 1. Fix what is wrong. The likeliest problems are the wall shader injection, the fade toggling and the colors.
-2. Assemble the scene on `SimulationSession` with an engine loader. The CPU backend already implements `FlowBackend`, so this can go ahead before the GPU backend is finished. Measure the CPU step cost per plan here, since it sets how much the GPU backend has to deliver.
-3. Dock and page UI (the `AirflowExperience` actions already exist), then scenarios, the catalog entry and the share link.
-4. Finish the GPU backend: compile every kernel in a browser, check parity against the CPU backend, measure against the 30 fps budget, add auto-tune. In Playwright on an M-series Mac, Chromium launched with `channel: 'chromium'` has a real Metal adapter. The default headless shell needs `--enable-unsafe-webgpu --enable-features=Vulkan,WebGPU` and gets a slow software adapter. WebKit has a real adapter. Firefox has none, so it takes the CPU fallback. Default device limits on every adapter: 8 storage buffers per shader stage, 128 MiB binding size, workgroup size 256.
-5. Device catalog and emission rates: a second research pass for fan CFM, purifier CADR and indoor emission rates. Use an Opus research agent and keep the wording to product specifications and particle-mass constants, because a Sonnet 5.5 research agent was stopped by a safeguard on this subject.
-6. End-to-end tests, the visual and accessibility pass, then the Sources list.
+1. Assemble the scene. A `SceneFactory` (`engine/types.ts`: `(host, params, readout) => SceneInstance`) in a new `airflow/scene/airflowScene.ts` that builds `new Dollhouse(plan, { furniture, tint })`, `SliceLayer(width, depth)`, `DirectionArrows(width, depth)`, `TracerPoints` and `SmokePoints`. Each frame `update(dt)` calls `session.update(dt)`, and when `session.latest.version` changes it feeds `sliceLayer.update(slice, layer, scale)`, `arrows.update(slice, scale)`, `tracers.update(array, scale)` and `smoke.update(array, { dense })`. It applies `dollhouse.setOpenings`, `setTopDown` and `setFurniture` from the setup and the view, takes framing from `dollhouseRig(plan, topDown)`, and implements `SceneInput` (hover calls `session.hover`, a click pins a probe, a hold calls `session.setEmitPoint`). Then a loader like `relativity/experience.ts`'s `loadEngine`, and the route `src/routes/experiments/airflow/+page.svelte` using `provideAirflow` with the plans, the catalog models, `SCENARIOS`, and `linkCatalog` with `setupFromHash` / `setupToHash` from `link.ts`. This section comes from reading the APIs and has not been built. From the harness runs:
+   - Fog: the rig pulls the camera back by width on a narrow Stage (about 45 m for the studio and 77 m for the house at 390 px). The kit's fog (24 to 60 m) washes the house out, so use no fog or start it past 80 m, and keep the far plane beyond 100 m.
+   - The kit's pool sits at y = −0.004, inside the dollhouse floor. Put any ground plane at or below −0.16.
+   - Draw order: `sliceLayer.ts` says the dollhouse's faded walls draw first, while the dollhouse draws them at render order 20, after the slice (10), arrows (11), tracers (12) and smoke (13). One is wrong, and the first integrated frame will show which.
+   - In plan view the furniture is cut to 0.45 m, so the slice plane at 1.1 m is clear of it. The requested slice height snaps to a cell layer (0.3 m draws at 0.375 m at h = 0.15), so place the plane and the readout at `slice.y`.
+   - The kit's sun is from the south-west, so the interior goes grey seen from the north.
+2. The CPU worker backend, as a `FlowBackend` proxy. The session's frame budget (`FRAME_BUDGET`, `stepCost`) measures how long `backend.step` takes, so a worker needs step acknowledgements or the session will queue far too many steps. Backend selection (WebGPU when an adapter exists, else the worker) and device loss (`backend.solver.context.onLost`) are page code.
+3. The dock and page UI (the `AirflowExperience` actions already exist), the catalog entry (`tests/experiments.spec.ts` checks every catalog entry has a page), and the share link.
+4. The auto-tuner: pick the cell size from the measured step time, using the tables above as the starting guide.
+5. Purifiers and the two scenarios that need them (clearing the smoke, the smoky day). See issue 2.
+6. End-to-end tests, the visual and accessibility pass, and the Physics panel text.
 
 ## Known issues and open decisions
 
-1. The studio and one-bedroom plans do not step cleanly in the solver. Studio: pressure residual 1.5e-2 against the 1e-2 limit. One-bedroom: the flow blows up (residual 0.36, 18 m³/s in against 75 m³/s out). Both are `test.fixme` in `tests/solver/homes.spec.ts` (`NOT_YET_STEPPING`). The two-bedroom and house pass. The cause is unknown and may be the solver, not the plans. Change one thing at a time: no furniture, `pressure: { cycles: 6 }`, h = 0.15, grid padded to multiples of 16.
-2. `tests/solver/references.ts` labels the de Vahl Davis Nu values as the hot-wall average. 1.118, 2.243, 4.519 and 8.800 are the whole-cavity average (hot wall: 1.117, 2.238, 4.509, 8.817). Fix the label.
-3. Jet constant: commit messages and tests cite 5.4 to 6.1. The research note finds 5.7 to 6.1 (5.4 is one source's figure, and another prints 5.70). The solver's 5.85 is inside both.
-4. Opening limits: the research gives a single casement sash a free area of 0.78 to 0.80 of the frame, but `OPENING_LIMITS` in `homes/types.ts` allows 1. The 0.5 limits for double-hung and sliding match the research (0.40 to 0.50 and 0.41 to 0.43).
-5. Wind: the slider is the 10 m weather-report speed and the eaves see 0.55 of it, the top of the published 0.435 to 0.55 range at 3 m. The pressure-coefficient fit covers an eave-height to short-wall ratio of 0.1 to 0.4 and the studio and one-bedroom walls fall outside it, so their coefficients are extrapolated. Say both in "What it isn't".
-6. Emission rates in `emission.ts` are placeholders. `docs/research/airflow/devices-and-particulates.md` is partial, and most device models have no verified numbers. Each research note lists what it could not confirm. Read that list before relying on a constant.
-7. Smagorinsky turbulence was rejected: its jet decay exponent was −0.09 to −0.43 against −1. The shear-length closure (c = 0.015) is tuned to the jet constant and is off for the laminar benchmarks.
-8. The plan previews were not re-rendered after the last small furniture moves. Re-render and look: `node_modules/.bin/esbuild scripts/airflow-plan-preview.ts --bundle --platform=node --format=esm --packages=external --outfile=/tmp/airflow-plan-preview.mjs && node /tmp/airflow-plan-preview.mjs /tmp/airflow-plans`.
-9. An agent started with `isolation: "worktree"` may start from the original base commit, not this branch. Put `git merge knakamura/issue-30-completion-7a3fb7` first in its prompt.
+1. Stability fix and the GPU. The studio and one-bedroom plans blew up or converged poorly in the CPU solver. Cause, at about 85% confidence: the half step of pressure gradient applied before advection uses the pressure from the last solve, which allows a pressure pattern that flips sign every step and is not damped. It grows 1.65 times per step on the one-bedroom (61 Pa at step 10, 3,130 Pa at step 18) and 1.08 times on the studio. Zeroing the pressure before each step, or dropping that half step, both stop the growth. The fix uses the mean of the last two pressure solves for that half step (`CpuSolver.step` in `solver/cpu/solver.ts`); it removed the two `fixme` stepping tests and the `KNOWN_UNSTABLE` list in the robustness spec. Raising the multigrid cycles to 6 also passes but only hides it. The fix moved the free-jet benchmark: delivered flow 98.3% to 100.2%, decay exponent −1.05 to −0.88, constant K 5.85 to 6.23. That is inside the test's band (exponent −1.2 to −0.85, K 5.4 to 6.4) but outside the published 5.7 to 6.1. Next: try the filter `(3·p[n] + 2·p[n−1] − p[n−2]) / 4` (a third stored pressure), recheck the jet, and retune `shearCoefficient` (now 0.015) only if the exponent recovers. The GPU step follows the CPU step, so it must mirror the change: GPU STATUS PENDING.
+2. Purifiers. No maker or listing read publishes a purifier's CADR at each speed, and `PurifierModel.cadr` needs four. Top-speed figures seen: Coway AP-1512HH 233 cfm for smoke, Coway Airmega 400 328 cfm for smoke (an ENERGY STAR record may say 376, not opened), Levoit Core 300-P 143 cfm (particle not stated). None gave AHAM listing, body size, or where air goes in and out. Smart Air publishes 65, 180 and 315 m³/h for its Sqair, but with no test standard. Options: store the top speed and scale the lower speeds by a stated assumption; find a lab that measured named models at each speed; or leave purifiers out.
+3. Share link: out-of-range numbers are clamped (bearings wrap), so a link still loads if a slider range is narrowed later. Rejecting them (null) is a small change in `read()` in `link.ts`.
+4. Opening limits: the research gives a single casement sash a free area of 0.78 to 0.80 of its frame, but `OPENING_LIMITS` in `homes/types.ts` allows 1, and the explainer says so. Double-hung and sliding at 0.5 match the research.
+5. Wind: the slider is the 10 m weather-report speed and the eaves see 0.55 of it, the top of the published 0.435 to 0.55 range at 3 m. The pressure-coefficient fit covers an eave-height to short-wall ratio of 0.1 to 0.4, and only the studio falls outside it (about 0.44 to 0.56); the two bigger plans are inside. The explainer says so.
+6. The explainer's "How it works" names Stam (1999) and Zuo and Chen (2009) but no research note covers them, so they are not in Sources. Titles and years of a few sources (Ghia 1982, de Vahl Davis 1983, Botella and Peyret 1998, Hortmann et al. 1990, Sippola and Nazaroff 2002) were filled from memory, and no link was opened. A person should check them. Wording that goes stale when the casement limit, the purifier numbers or the emission rates change is listed in the explainer's commit messages.
+7. Emission rates in `emission.ts` and the particle constants in `sim/world.ts` (`PARTICLE`) are placeholders, marked unconfirmed in the research note. The Physics panel has no formatter for emission strength or the cell count. `readout.ts` (direction words) and `readouts.ts` (reading data) are easy to confuse, and renaming the first `direction.ts` would help.
+8. Visual choices from the viz harness: at sensitivity 1 the speed scale (0 to 3 m/s) shows ordinary room air nearly the same pale blue as still air, and 0.5 would read better (`DEFAULT_VIEW.sensitivity`). In the particulates layer the lightest color means "at or below 1.2 µg/m³" and can read as smoke. The temperature layer's neutral is a glaring white in a dark scheme, though the site has no dark theme yet. The 12% fade of near walls is faint on a 1x phone. A 12 m plan fills about a third of a portrait Stage.
+9. WebKit shows random colored speckle over the kit's ground pool (`studio()` in `engine/kit.ts`) in Playwright's WebKit. The relativity scenes use the same pool, so Safari may show it on the live site. Check a relativity Stage in WebKit.
+10. GPU, open items: the window-fan-only room differs from the CPU by 1.5e-4 in pressure after 10 steps (tolerance 1e-4; probably amplified rounding, moderate confidence), the particulate mass balance through `World` was not exercised, the temperature and particulate substep count is estimated from an older reading, and a snapshot must be taken at least every 8,192 steps.
+11. A stored memory note (hmem, project `svelte-kylenakamura-website`, "airflow-experiment-worktree-completion") says a 2026-10-08 session added a rendering spec and a catalog entry and pushed. Neither is in git history, so that note is wrong or refers to work that was lost.
+12. A second agent worktree can start from an old base commit. Put `git merge knakamura/funny-bassi-7c3d37` first in an isolated agent's prompt. Agent worktrees under `.claude/worktrees/agent-*` are locked, and each holds its branch's commits; everything useful from them is merged here, and they can be removed once this branch is pushed.
+
+## Re-running the harnesses
+
+- Dollhouse: `node scripts/airflow-qa/dollhouse/shoot.mjs <outDir> all` (also `sweep`, `state:<json>`, `--dpr=2`, `--browser=firefox|webkit`).
+- Visualization: `node scripts/airflow-qa/viz/shoot.mjs --out <dir> --seconds 30` (also `--only`, `--probe`, `--fan --purifier --wind 3`, `--browser`).
+- Plans: `node_modules/.bin/esbuild scripts/airflow-plan-preview.ts --bundle --platform=node --format=esm --packages=external --outfile=/tmp/airflow-plan-preview.mjs && node /tmp/airflow-plan-preview.mjs /tmp/airflow-plans`.
+- WebGPU in Playwright on an M-series Mac: Chromium launched with `channel: 'chromium'` has a real Metal adapter, the default headless shell has none without software flags, WebKit has a real adapter, and Firefox has none so it takes the CPU fallback. Default device limits: 8 storage buffers per shader stage, 128 MiB binding size, workgroup size 256.
+- Use an Opus research agent for fan, purifier or particulate research and keep the wording to product specifications: a Sonnet 5.5 research agent was stopped by a safeguard on this subject.
