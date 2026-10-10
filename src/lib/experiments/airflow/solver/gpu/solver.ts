@@ -477,11 +477,6 @@ export class GpuSolver {
 		return this.context.device;
 	}
 
-	/** Per fan (flow, acceleration, Σweight, Σweight·axial), as the fan kernel last wrote it; the backend reads `flow`. */
-	get fanStateBuffer() {
-		return this.fanState.buffer;
-	}
-
 	storage(label: string, bytes: number) {
 		const buffer = this.device.createBuffer({ label, size: Math.max(16, Math.ceil(bytes / 16) * 16), usage: STORAGE });
 		this.owned.push(buffer);
