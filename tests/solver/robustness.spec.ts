@@ -129,6 +129,7 @@ for (const plan of plans) {
 			const { diagnostics } = await world.backend.snapshot({});
 			const fields = await world.backend.readFields();
 			const where = `${plan.id}, seed ${seed}, wind ${setup.conditions.windSpeed} m/s from ${setup.conditions.windFrom}°, ${setup.conditions.outdoorTemp} °C outside`;
+			if (process.env.ROBUST_VERBOSE) console.log(`${where}: fastest ${diagnostics.maxSpeed.toFixed(1)} m/s, divergence ${diagnostics.divergence.toExponential(1)}`);
 			expect(fields.u.length, where).toBeGreaterThan(0);
 			for (const name of ['u', 'v', 'w', 'p', 'theta'] as const) expect.soft(finite(fields[name]), `${where}: ${name} is finite`).toBe(true);
 			expect.soft(diagnostics.maxSpeed, `${where}: fastest air`).toBeLessThan(40);
@@ -168,6 +169,7 @@ for (const plan of plans) {
 			const fields = await world.backend.readFields();
 			const list = setup.devices.map((d) => `${d.model}${d.opening ? ` in ${d.opening}` : ` at ${d.x.toFixed(1)},${d.z.toFixed(1)}`}`).join('; ');
 			const where = `${plan.id}, seed ${seed}, wind ${setup.conditions.windSpeed} m/s, devices: ${list}`;
+			if (process.env.ROBUST_VERBOSE) console.log(`${where}: fastest ${diagnostics.maxSpeed.toFixed(1)} m/s, divergence ${diagnostics.divergence.toExponential(1)}`);
 			for (const name of ['u', 'v', 'w', 'p', 'theta', 'particulates'] as const) expect.soft(finite(fields[name]), `${where}: ${name} is finite`).toBe(true);
 			expect.soft(diagnostics.maxSpeed, `${where}: fastest air`).toBeLessThan(40);
 			expect.soft(diagnostics.divergence, `${where}: divergence`).toBeLessThan(0.05);
