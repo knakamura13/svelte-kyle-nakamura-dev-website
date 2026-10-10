@@ -515,4 +515,22 @@ ${ENTRY} {
 }`
 };
 
-export const PRESSURE_KERNELS = [assemble, exterior, coarsen, smooth, coarsest, restrict, prolong, meanPartials, meanFinish, meanSubtract, project];
+/**
+ * cpu/solver.ts `step`: the pressure the first half-step applies is the mean of the last two solves. Writes that mean
+ * to `start` and moves the latest solve into `prev` for the next step. Over every index of the fine grid.
+ */
+export const pressureMean: KernelSource = {
+	name: 'pressureMean',
+	bindings: [uniform('C', 'Consts'), read('p', F32), write('prev', F32), write('start', F32)],
+	code: `${ENTRY} {
+	${LINEAR}
+	if (id >= C.size) {
+		return;
+	}
+	let latest = p[id];
+	start[id] = 0.5 * (latest + prev[id]);
+	prev[id] = latest;
+}`
+};
+
+export const PRESSURE_KERNELS = [assemble, exterior, coarsen, smooth, coarsest, restrict, prolong, meanPartials, meanFinish, meanSubtract, project, pressureMean];

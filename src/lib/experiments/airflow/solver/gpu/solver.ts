@@ -75,8 +75,8 @@ export function multigridLevels(nx: number, ny: number, nz: number) {
 /** Bytes of device memory a grid needs, for the auto-tuner's memory cap and the Physics panel. */
 export function gpuMemoryEstimate(spec: { nx: number; ny: number; nz: number }) {
 	const size = (spec.nx + 1) * (spec.ny + 1) * (spec.nz + 1);
-	// Four velocity sets (vec4), geometry (vec4), two scalar sets and the source/sink rates (vec2), eddy viscosity.
-	let bytes = size * (4 * 16 + 16 + 3 * 8 + 4);
+	// Four velocity sets (vec4), geometry (vec4), two scalar sets and the source/sink rates (vec2), eddy viscosity and the two start pressures.
+	let bytes = size * (4 * 16 + 16 + 3 * 8 + 3 * 4);
 	for (const level of multigridLevels(spec.nx, spec.ny, spec.nz)) bytes += (level.nx + 1) * (level.ny + 1) * (level.nz + 1) * 20;
 	// Reduction partials, places, slice output: small next to the fields.
 	bytes += Math.ceil(size / WG) * 64 + spec.nx * spec.ny * spec.nz * 4 + spec.nx * spec.nz * 32;
@@ -252,6 +252,11 @@ export class GpuSolver {
 	scalNext: GpuBuffer;
 	readonly srcsink: GpuBuffer;
 	readonly nut: GpuBuffer;
+	/** The pressure the previous step started from, and the mean of it and the latest solve (cpu/solver.ts `previousPressure`, `startPressure`). */
+	readonly prevP: GpuBuffer;
+	readonly startP: GpuBuffer;
+	/** Steps encoded, as cpu/solver.ts `steps`: the first one starts `prevP` from the latest pressure. */
+	stepsTaken = 0;
 	readonly ext: GpuBuffer;
 	readonly qg: GpuBuffer;
 	readonly slotBase: number[];
@@ -340,6 +345,8 @@ export class GpuSolver {
 		this.scalNext = this.storage('scalNext', 8 * size);
 		this.srcsink = this.storage('srcsink', 8 * size);
 		this.nut = this.storage('nut', 4 * size);
+		this.prevP = this.storage('prevP', 4 * size);
+		this.startP = this.storage('startP', 4 * size);
 
 		this.levels = multigridLevels(nx, ny, nz).map((dims) => {
 			const sx = dims.nx + 1;
@@ -644,7 +651,9 @@ export class GpuSolver {
 	/** 2a. The carried quantity: velocity plus half a step of the pressure gradient, buoyancy and fans. */
 	forcesBefore(pass: GpuComputePassEncoder) {
 		if (this.fanCount) this.run(pass, 'fanFlow', { C: this.consts, vel: this.vel, fanCells: this.fanCells.buffer, fanInfo: this.fanInfo.buffer, fanState: this.fanState.buffer }, [this.fanCount, 1]);
-		this.run(pass, 'quantity', { C: this.consts, S: this.step, vel: this.vel, geo: this.geo, p: this.levels[0].p, scal: this.scal, out: this.quantity }, this.cellGroups);
+		// The first half-step applies the mean of the last two solves (cpu/solver.ts `step`).
+		this.run(pass, 'pressureMean', { C: this.consts, p: this.levels[0].p, prev: this.prevP, start: this.startP }, this.cellGroups);
+		this.run(pass, 'quantity', { C: this.consts, S: this.step, vel: this.vel, geo: this.geo, p: this.startP, scal: this.scal, out: this.quantity }, this.cellGroups);
 		this.applyFans(pass, this.quantity);
 	}
 
@@ -768,6 +777,8 @@ export class GpuSolver {
 	 */
 	encodeStep(encoder: GpuCommandEncoder, dt: number, scalarSubsteps: number, slot: number, profileSlot = -1) {
 		this.clearLogSlot(encoder, slot);
+		if (this.stepsTaken === 0) encoder.copyBufferToBuffer(this.levels[0].p, 0, this.prevP, 0, 4 * this.grid.size);
+		this.stepsTaken++;
 		const diffusion = this.diffusionSubsteps(dt);
 		const stages: [ProfileGroup, (pass: GpuComputePassEncoder) => void][] = [
 			['turbulence', (pass) => this.turbulence(pass)],
