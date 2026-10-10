@@ -29,6 +29,13 @@ test('GpuBackend matches CpuBackend through World: two-bedroom home, west wind, 
 	expect(r.fanFlow.gpu.length).toBe(r.fanFlow.cpu.length);
 	r.fanFlow.gpu.forEach((q: number, n: number) => expect(Math.abs(q - r.fanFlow.cpu[n]) / Math.abs(r.fanFlow.cpu[n])).toBeLessThan(1e-3));
 	expect(r.rooms.rel).toBeLessThan(1e-3);
+	expect(r.sampleCount[1]).toBe(r.sampleCount[0]);
+	expect(r.samples.rel).toBeLessThan(1e-3);
+	expect(r.tracers).toBe(4 * 500);
+	expect(r.smoke).toBe(4 * 300);
+	expect(r.tracersFinite).toBe(true);
+	expect(r.writeDoubled.maxAbs).toBe(0);
+	expect(r.writeRestored.maxAbs).toBe(0);
 });
 
 test('cross-ventilation scenario, 10 simulated seconds: the flow through the west and east windows matches', async () => {

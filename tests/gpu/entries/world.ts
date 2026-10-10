@@ -70,9 +70,33 @@ async function windyHome(steps: number, h: number) {
 			[sb.rooms!.map((r) => r.volume), sa.rooms!.map((r) => r.volume)]
 		])
 	};
+	// The rest of the interface: point samples, particles in a snapshot, and a readFields/writeFields round trip.
+	const points = new Float32Array([1.2, 1.1, 4.2, 2.4, 1.5, 5.4, 6.9, 0.9, 6.0, 10.5, 1.8, 6.0, 3.0, 2.0, 1.5]);
+	const [pa, pb] = await Promise.all([a.backend.samplePoints(points), b.backend.samplePoints(points)]);
+	b.backend.configureParticles({ tracers: 500, smoke: 300, scale: 50, seed: 3 });
+	for (let f = 0; f < 10; f++) b.backend.stepParticles(1 / 60);
+	const withParticles = await b.backend.snapshot({ particles: true });
+	const before = await b.backend.readFields();
+	b.backend.writeFields({ ...before, u: before.u.map((x) => 2 * x) });
+	const doubled = await b.backend.readFields();
+	b.backend.writeFields(before);
+	const restored = await b.backend.readFields();
+	const extra = {
+		samples: compareArrays([[pb, pa]]),
+		sampleCount: [pa.length, pb.length],
+		tracers: withParticles.tracers?.length ?? -1,
+		smoke: withParticles.smoke?.length ?? -1,
+		tracersFinite: Array.from(withParticles.tracers ?? []).every(Number.isFinite),
+		writeDoubled: compareArrays([[doubled.u, before.u.map((x) => 2 * x)]]),
+		writeRestored: compareArrays([
+			[restored.u, before.u],
+			[restored.p, before.p],
+			[restored.theta, before.theta]
+		])
+	};
 	a.dispose();
 	b.dispose();
-	return result;
+	return { ...result, ...extra };
 }
 
 /** Flow in through the windows on one facade, m³/s, from the fields (positive into the home). */
