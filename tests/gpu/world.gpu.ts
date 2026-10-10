@@ -46,10 +46,11 @@ test('cross-ventilation scenario, 10 simulated seconds: the flow through the wes
 });
 
 test('step time of the house plan on the GPU backend', async () => {
-	for (const h of [0.2, 0.15, 0.1, 0.075]) {
-		const r = await call('houseStepTime', h, 20);
-		console.log(`house h ${h} m: ${r.nx}x${r.ny}x${r.nz} = ${r.cells} cells (${r.fluidCells} air): ${r.ms.toFixed(2)} ms per step`);
-	}
+	for (const h of [0.2, 0.15, 0.1, 0.075])
+		for (const mode of ['tight', 'paced'] as const) {
+			const r = await call('houseStepTime', h, 40, mode);
+			console.log(`house h ${h} m (${mode}): ${r.nx}x${r.ny}x${r.nz} = ${r.cells} cells (${r.fluidCells} air): ${r.ms.toFixed(2)} ms per step`);
+		}
 });
 
 test('GpuBackend profiling readout on the house plan (timestamp queries, 256-byte slots)', async () => {

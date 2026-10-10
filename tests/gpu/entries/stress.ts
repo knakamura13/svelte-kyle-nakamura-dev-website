@@ -33,13 +33,14 @@ const planOf = (id: string) => plans.find((p) => p.id === id)!;
  * thresholds: the CPU's scalar substep count is uncapped, so once the flow blows up a step can take minutes. Returns
  * the step that failed, or 0.
  */
-async function stepAll(world: World, steps: number, watch: boolean, each: (n: number) => void = () => {}) {
+async function stepAll(world: World, steps: number, watch: boolean, each: (n: number) => void = () => {}, divergence = true) {
 	for (let n = 0; n < steps; n++) {
 		each(n);
 		world.backend.step(DT);
 		if (!watch) continue;
 		const { diagnostics: d } = await world.backend.snapshot({});
-		if (!(d.maxSpeed < 40) || !(d.divergence < 0.05)) return n + 1;
+		// With `divergence` off only a runaway stops the run, so a passing divergence spike is judged at the end, as on the GPU.
+		if (!(d.maxSpeed < 40) || (divergence && !(d.divergence < 0.05))) return n + 1;
 	}
 	return 0;
 }
@@ -53,17 +54,17 @@ async function verdict(world: World, names: readonly string[]) {
 }
 
 /** robustness.spec.ts, first test: random openings and weather, openings changed after 40 steps, 60 more. */
-async function randomOpenings(planId: string, seed: number, h: number, backend: 'gpu' | 'cpu') {
+async function randomOpenings(planId: string, seed: number, h: number, backend: 'gpu' | 'cpu', divergence = true) {
 	const plan = planOf(planId);
 	const rand = random(seed);
 	const setup = setupFor(plan, rand);
 	const world = await World.create(setup, { plans: [plan], models: new Map(), make: makers[backend], h });
 	const watch = backend === 'cpu';
-	let stoppedAt = await stepAll(world, 40, watch);
+	let stoppedAt = await stepAll(world, 40, watch, () => {}, divergence);
 	const changed = { ...setup, openings: openingsFor(plan, rand) };
 	if (!stoppedAt) {
 		world.apply(changed, 40 * DT);
-		const later = await stepAll(world, 60, watch);
+		const later = await stepAll(world, 60, watch, () => {}, divergence);
 		stoppedAt = later ? 40 + later : 0;
 	}
 	const result = { ...(await verdict(world, ['u', 'v', 'w', 'p', 'theta'])), stoppedAt };
@@ -74,7 +75,7 @@ async function randomOpenings(planId: string, seed: number, h: number, backend: 
 }
 
 /** robustness.spec.ts, second test: random fans and purifiers, power, aim and openings changed after 40 steps, 60 more. */
-async function randomDevices(planId: string, seed: number, h: number, backend: 'gpu' | 'cpu') {
+async function randomDevices(planId: string, seed: number, h: number, backend: 'gpu' | 'cpu', divergence = true) {
 	const plan = planOf(planId);
 	const rand = random(seed);
 	const setup: Setup = { ...setupFor(plan, rand), devices: devicesFor(plan, rand) };
@@ -85,7 +86,7 @@ async function randomDevices(planId: string, seed: number, h: number, backend: '
 		world.updateOscillation(time);
 		time += DT;
 	};
-	let stoppedAt = await stepAll(world, 40, watch, oscillate);
+	let stoppedAt = await stepAll(world, 40, watch, oscillate, divergence);
 	const changed: Setup = {
 		...setup,
 		openings: openingsFor(plan, rand),
@@ -93,7 +94,7 @@ async function randomDevices(planId: string, seed: number, h: number, backend: '
 	};
 	if (!stoppedAt) {
 		world.apply(changed, time);
-		const later = await stepAll(world, 60, watch, oscillate);
+		const later = await stepAll(world, 60, watch, oscillate, divergence);
 		stoppedAt = later ? 40 + later : 0;
 	}
 	const result = { ...(await verdict(world, ['u', 'v', 'w', 'p', 'theta', 'particulates'])), stoppedAt };

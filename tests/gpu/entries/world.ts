@@ -132,22 +132,36 @@ async function crossVentilation(seconds: number, h: number) {
 	return out;
 }
 
-/** Wall time per step of the house plan on the GPU backend, after a warm-up. */
-async function houseStepTime(h: number, steps: number) {
+/**
+ * Wall time per step of the house plan on the GPU backend, after a warm-up. `tight`: steps submitted back to back with
+ * nothing awaited, so no CFL reading arrives and every step takes the most scalar substeps (64). `paced`: batches of
+ * `batch` steps with the queue awaited after each batch, as a page does between frames, so the substep count follows
+ * the flow; this includes the wait for each batch, so it slightly overstates the GPU time.
+ */
+async function houseStepTime(h: number, steps: number, mode: 'tight' | 'paced' = 'tight', batch = 4) {
 	const setup = blankSetup('house');
 	setup.conditions = { ...setup.conditions, windFrom: 270, windSpeed: 4 };
 	const world = await World.create(setup, { plans, models, make: gpu, h });
 	const backend = world.backend as FlowBackend & { solver: any };
 	const device = backend.solver.device;
 	const dt = 0.05;
-	for (let s = 0; s < 5; s++) backend.step(dt);
-	await device.queue.onSubmittedWorkDone();
+	const run = async (count: number) => {
+		for (let s = 0; s < count; s++) {
+			backend.step(dt);
+			if (mode === 'paced' && (s + 1) % batch === 0) {
+				await device.queue.onSubmittedWorkDone();
+				// Let the CFL read-back's callback run.
+				await new Promise((resolve) => setTimeout(resolve, 0));
+			}
+		}
+		await device.queue.onSubmittedWorkDone();
+	};
+	await run(8);
 	const start = performance.now();
-	for (let s = 0; s < steps; s++) backend.step(dt);
-	await device.queue.onSubmittedWorkDone();
+	await run(steps);
 	const ms = (performance.now() - start) / steps;
 	const { nx, ny, nz } = backend.grid;
-	const result = { h, nx, ny, nz, cells: backend.grid.cells, fluidCells: backend.fluidCells, ms };
+	const result = { h, mode, nx, ny, nz, cells: backend.grid.cells, fluidCells: backend.fluidCells, ms };
 	world.dispose();
 	return result;
 }
