@@ -50,3 +50,10 @@ test('step time of the house plan on the GPU backend', async () => {
 		console.log(`house h ${h} m: ${r.nx}x${r.ny}x${r.nz} = ${r.cells} cells (${r.fluidCells} air): ${r.ms.toFixed(2)} ms per step`);
 	}
 });
+
+test('GpuBackend profiling readout on the house plan (timestamp queries, 256-byte slots)', async () => {
+	const r = await call('houseProfile', 0.1);
+	console.log(`house h 0.1 m profile: ${r.groups ? Object.entries(r.groups).map(([g, ms]) => `${g} ${(ms as number).toFixed(3)} ms`).join(', ') : 'timestamp-query not offered'}`);
+	expect(r.validation).toBe('');
+	if (r.groups) for (const ms of Object.values(r.groups)) expect(ms as number).toBeGreaterThanOrEqual(0);
+});

@@ -153,5 +153,20 @@ async function houseStepTime(h: number, steps: number) {
 	return result;
 }
 
-(window as any).world = { windyHome, crossVentilation, houseStepTime };
+/** GpuBackend's profiling readout on the house plan: per kernel group, ms, averaged over the profiled steps. */
+async function houseProfile(h: number) {
+	const setup = blankSetup('house');
+	setup.conditions = { ...setup.conditions, windFrom: 270, windSpeed: 4 };
+	const make: BackendFactory = (config, initial) => GpuBackend.create({ ...config, scalarSubsteps: undefined }, initial, undefined, { profile: true });
+	const world = await World.create(setup, { plans, models, make, h });
+	const backend = world.backend as GpuBackend;
+	backend.solver.device.pushErrorScope('validation');
+	for (let s = 0; s < 40; s++) backend.step(0.05);
+	const error = await backend.solver.device.popErrorScope();
+	const groups = await backend.profile();
+	world.dispose();
+	return { validation: error ? error.message : '', groups };
+}
+
+(window as any).world = { windyHome, crossVentilation, houseStepTime, houseProfile };
 (window as any).harnessReady = true;
