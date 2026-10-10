@@ -35,7 +35,8 @@ const make: BackendFactory = (config, initial) => new CpuBackend({ ...config, sc
 /** Seeds per plan. A wider sweep for hunting instabilities: `ROBUST_TRIALS=40 yarn test:solver tests/solver/robustness.spec.ts`. Every failing seed is reported, not only the first. */
 const TRIALS = Number(process.env.ROBUST_TRIALS ?? 5);
 const DT = 1 / 20;
-const H = 0.2;
+/** Cell size, m. A finer one for hunting instabilities: `ROBUST_H=0.1`. The page's CPU fallback uses about 0.2 and the GPU path 0.05 to 0.1. */
+const H = Number(process.env.ROBUST_H ?? 0.2);
 
 /** A small seeded generator (mulberry32), so a failure can be reproduced from its seed. */
 function random(seed: number) {
@@ -115,7 +116,7 @@ const KNOWN_UNSTABLE = new Set<string>([]);
 for (const plan of plans) {
 	test(`${plan.name}: random openings and weather, changed mid-run, keep the solver finite and divergence-free`, async () => {
 		test.fixme(KNOWN_UNSTABLE.has(plan.id), 'known issue 1 in docs/plans/2026-10-07-airflow-status.md');
-		test.setTimeout(60000 + TRIALS * 20000);
+		test.setTimeout((60000 + TRIALS * 20000) * Math.max(1, (0.2 / H) ** 3));
 		for (let trial = 0; trial < TRIALS; trial++) {
 			const seed = plans.indexOf(plan) * 1000 + trial + 1;
 			const rand = random(seed);
@@ -142,7 +143,7 @@ for (const plan of plans) {
 for (const plan of plans) {
 	test(`${plan.name}: random fans and purifiers, turned and re-aimed mid-run, keep the solver finite and divergence-free`, async () => {
 		test.fixme(KNOWN_UNSTABLE.has(plan.id), 'known issue 1 in docs/plans/2026-10-07-airflow-status.md');
-		test.setTimeout(60000 + TRIALS * 20000);
+		test.setTimeout((60000 + TRIALS * 20000) * Math.max(1, (0.2 / H) ** 3));
 		for (let trial = 0; trial < TRIALS; trial++) {
 			const seed = 50000 + plans.indexOf(plan) * 1000 + trial;
 			const rand = random(seed);
