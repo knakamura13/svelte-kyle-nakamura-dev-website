@@ -32,7 +32,8 @@ const deviceModels: DeviceModel[] = [
 const deviceMap = new Map(deviceModels.map((m) => [m.id, m]));
 
 const make: BackendFactory = (config, initial) => new CpuBackend({ ...config, scalarSubsteps: undefined }, initial);
-const TRIALS = 5;
+/** Seeds per plan. A wider sweep for hunting instabilities: `ROBUST_TRIALS=40 yarn test:solver tests/solver/robustness.spec.ts`. Every failing seed is reported, not only the first. */
+const TRIALS = Number(process.env.ROBUST_TRIALS ?? 5);
 const DT = 1 / 20;
 const H = 0.2;
 
@@ -114,7 +115,7 @@ const KNOWN_UNSTABLE = new Set<string>([]);
 for (const plan of plans) {
 	test(`${plan.name}: random openings and weather, changed mid-run, keep the solver finite and divergence-free`, async () => {
 		test.fixme(KNOWN_UNSTABLE.has(plan.id), 'known issue 1 in docs/plans/2026-10-07-airflow-status.md');
-		test.setTimeout(240000);
+		test.setTimeout(60000 + TRIALS * 20000);
 		for (let trial = 0; trial < TRIALS; trial++) {
 			const seed = plans.indexOf(plan) * 1000 + trial + 1;
 			const rand = random(seed);
@@ -129,9 +130,9 @@ for (const plan of plans) {
 			const fields = await world.backend.readFields();
 			const where = `${plan.id}, seed ${seed}, wind ${setup.conditions.windSpeed} m/s from ${setup.conditions.windFrom}°, ${setup.conditions.outdoorTemp} °C outside`;
 			expect(fields.u.length, where).toBeGreaterThan(0);
-			for (const name of ['u', 'v', 'w', 'p', 'theta'] as const) expect(finite(fields[name]), `${where}: ${name} is finite`).toBe(true);
-			expect(diagnostics.maxSpeed, `${where}: fastest air`).toBeLessThan(40);
-			expect(diagnostics.divergence, `${where}: divergence`).toBeLessThan(0.05);
+			for (const name of ['u', 'v', 'w', 'p', 'theta'] as const) expect.soft(finite(fields[name]), `${where}: ${name} is finite`).toBe(true);
+			expect.soft(diagnostics.maxSpeed, `${where}: fastest air`).toBeLessThan(40);
+			expect.soft(diagnostics.divergence, `${where}: divergence`).toBeLessThan(0.05);
 			world.dispose();
 		}
 	});
@@ -140,7 +141,7 @@ for (const plan of plans) {
 for (const plan of plans) {
 	test(`${plan.name}: random fans and purifiers, turned and re-aimed mid-run, keep the solver finite and divergence-free`, async () => {
 		test.fixme(KNOWN_UNSTABLE.has(plan.id), 'known issue 1 in docs/plans/2026-10-07-airflow-status.md');
-		test.setTimeout(240000);
+		test.setTimeout(60000 + TRIALS * 20000);
 		for (let trial = 0; trial < TRIALS; trial++) {
 			const seed = 50000 + plans.indexOf(plan) * 1000 + trial;
 			const rand = random(seed);
@@ -167,9 +168,9 @@ for (const plan of plans) {
 			const fields = await world.backend.readFields();
 			const list = setup.devices.map((d) => `${d.model}${d.opening ? ` in ${d.opening}` : ` at ${d.x.toFixed(1)},${d.z.toFixed(1)}`}`).join('; ');
 			const where = `${plan.id}, seed ${seed}, wind ${setup.conditions.windSpeed} m/s, devices: ${list}`;
-			for (const name of ['u', 'v', 'w', 'p', 'theta', 'particulates'] as const) expect(finite(fields[name]), `${where}: ${name} is finite`).toBe(true);
-			expect(diagnostics.maxSpeed, `${where}: fastest air`).toBeLessThan(40);
-			expect(diagnostics.divergence, `${where}: divergence`).toBeLessThan(0.05);
+			for (const name of ['u', 'v', 'w', 'p', 'theta', 'particulates'] as const) expect.soft(finite(fields[name]), `${where}: ${name} is finite`).toBe(true);
+			expect.soft(diagnostics.maxSpeed, `${where}: fastest air`).toBeLessThan(40);
+			expect.soft(diagnostics.divergence, `${where}: divergence`).toBeLessThan(0.05);
 			world.dispose();
 		}
 	});

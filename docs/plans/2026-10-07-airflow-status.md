@@ -61,9 +61,9 @@ CPU step cost, one 0.05 s step on this Mac while other jobs ran:
 
 GPU step cost on the house plan, windows closed: 0.2 m 0.64 ms (41k cells), 0.15 m 0.86 ms (98k), 0.1 m 1.98 ms (332k), 0.075 m 4.89 ms (786k). So a 0.2 m CPU grid runs faster than real time for every plan, the house at 0.1 m on the CPU runs about 8 times slower than real time, and fine grids need the GPU.
 
-GPU against CPU, through `World`: the slice at 1.1 m within 2.5e-5, the fan flow within 4e-8, and the cross-ventilation window flows within 3e-6. Every kernel stage matches to about 2e-5 or better.
+GPU against CPU, after the stability fix, through `World` on the two-bedroom home: the slice at 1.1 m within 5.6e-5, and the fan flow and the cross-ventilation window flows equal to six digits. The lid-driven cavity over 20 steps differs by 1.5e-7 in velocity and 1.9e-6 in pressure. Every kernel stage and the full-room case match to about 1.5e-5 or better.
 
-Checks at the end of the session (2026-10-09, 17:12 PDT): `yarn test:solver` 138 passed and 2 skipped (the dollhouse T and L junction test and the purifier-catalog test, both `fixme`); `yarn test:gpu` 19 passed; the type check (`yarn run check`) at its baseline of one error in `tests/resume.spec.ts` and one warning in `PortfolioShell.svelte`, both older than this work. The existing e2e suite: 611 passed, 3 skipped and 1 failed, a phone Menu and Contact motion test in `tests/shell.spec.ts` that passes alone on all three browsers (it ran while solver tests were loading the machine). No route or catalog entry loads the airflow code.
+Checks at the end of the session (2026-10-09, 17:17 PDT): `yarn test:solver` 138 passed and 2 skipped (the dollhouse T and L junction test and the purifier-catalog test, both `fixme`); `yarn test:gpu` 19 passed; the type check (`yarn run check`) at its baseline of one error in `tests/resume.spec.ts` and one warning in `PortfolioShell.svelte`, both older than this work. The existing e2e suite: 611 passed, 3 skipped and 1 failed, a phone Menu and Contact motion test in `tests/shell.spec.ts` that passes alone on all three browsers (it ran while solver tests were loading the machine). No route or catalog entry loads the airflow code.
 
 ## Not started
 
@@ -96,7 +96,7 @@ Scene assembly, the engine loader, the dock and page UI, the route and catalog e
 9. WebKit shows random colored speckle over the kit's ground pool (`studio()` in `engine/kit.ts`) in Playwright's WebKit. The relativity scenes use the same pool, so Safari may show it on the live site. Check a relativity Stage in WebKit.
 10. GPU, open items: the window-fan-only room differs from the CPU by 1.5e-4 in pressure after 10 steps (tolerance 1e-4; probably amplified rounding, moderate confidence), the particulate mass balance through `World` was not exercised, the temperature and particulate substep count is estimated from an older reading, and a snapshot must be taken at least every 8,192 steps.
 11. A stored memory note (hmem, project `svelte-kylenakamura-website`, "airflow-experiment-worktree-completion") says a 2026-10-08 session added a rendering spec and a catalog entry and pushed. Neither is in git history, so that note is wrong or refers to work that was lost.
-12. A second agent worktree can start from an old base commit. Put `git merge knakamura/funny-bassi-7c3d37` first in an isolated agent's prompt. Agent worktrees under `.claude/worktrees/agent-*` are locked, and each holds its branch's commits; everything useful from them is merged here, and they can be removed once this branch is pushed.
+12. An isolated agent worktree can start from an old base commit. Put `git merge knakamura/funny-bassi-7c3d37` first in an isolated agent's prompt. Agent worktrees under `.claude/worktrees/agent-*` are locked, and each holds its branch's commits; everything useful from them is merged here, and they can be removed once this branch is pushed.
 
 ## Re-running the harnesses
 
