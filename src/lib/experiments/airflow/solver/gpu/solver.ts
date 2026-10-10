@@ -25,6 +25,11 @@ import { BufferUsage, type GpuBindGroup, type GpuBuffer, type GpuCommandEncoder,
 /** cpu/solver.ts SCALAR_CFL and DIFFUSION_LIMIT. */
 export const SCALAR_CFL = 0.45;
 export const DIFFUSION_LIMIT = 0.9;
+/**
+ * Most scalar substeps in a step. The CPU has no cap; 16 was too few at fine cells (a 12 m/s wind at 0.075 m is a
+ * cell CFL of 8, which needs 18 substeps before the 1.5 safety factor), and the transport blew up.
+ */
+export const MAX_SCALAR_SUBSTEPS = 64;
 /** Steps of tally the log holds before it wraps. The backend reads it back long before that (see backend.ts). */
 export const LOG_CAPACITY = 8192;
 /** The kernel groups a profiled step times, in step order. */
@@ -605,14 +610,14 @@ export class GpuSolver {
 	/**
 	 * Scalar substeps. The CPU counts them from this step's largest cell CFL, which on the GPU would mean waiting for
 	 * a read-back; instead the estimate `cflSpeed` (the largest per-cell CFL speed sum read back lately, m/s) is
-	 * enlarged by `safety` and the count clamped to [1, 16]. `scalarSubsteps` in the config overrides both.
+	 * enlarged by `safety` and the count clamped to [1, MAX_SCALAR_SUBSTEPS]. `scalarSubsteps` in the config overrides both.
 	 */
 	scalarSubsteps(dt: number, cflSpeed: number, safety = 1.5) {
 		if (this.scalarSubstepsOverride !== undefined) return this.scalarSubstepsOverride;
 		const { fluid, grid } = this;
 		const cfl = (safety * cflSpeed * dt) / grid.h;
 		const diffusive = (6 * (Math.max(fluid.alpha, fluid.particleDiffusivity, this.nuMax / Math.min(fluid.prT, fluid.scT)) + fluid.mixing) * dt) / (grid.h * grid.h);
-		return Math.min(16, Math.max(1, Math.ceil(Math.max(cfl / SCALAR_CFL, diffusive / DIFFUSION_LIMIT))));
+		return Math.min(MAX_SCALAR_SUBSTEPS, Math.max(1, Math.ceil(Math.max(cfl / SCALAR_CFL, diffusive / DIFFUSION_LIMIT))));
 	}
 
 	/** Writes the step uniform: the coefficients every kernel of a step of `dt` uses, and the tally slot. */
