@@ -14,13 +14,8 @@ const U_REGULAR = 0.05;
  * constant is removed explicitly instead (see `solve`).
  */
 const SHIFT = 1e-7;
-/**
- * Floor of the fan-curve square root in the slope a window fan's boundary is linearised with. The curve's slope grows
- * without limit as the fan stalls, and a linearisation that steep overshoots from one step to the next: two intake fans
- * pushing against one small opening ran away this way at cell sizes of 0.15 m and finer. The flow itself still follows
- * the true curve, so the settled answer is unchanged and only the approach to it is damped. The GPU has the same value.
- */
-const STALL = 0.3;
+/** Floor of the fan-curve square root, so a stalled window fan stays bounded. */
+const STALL = 0.01;
 
 interface Level {
 	nx: number;
@@ -65,9 +60,12 @@ function makeLevel(nx: number, ny: number, nz: number, fx = 1, fy = 1, fz = 1): 
  * term in the cell next to it. The resulting system is symmetric and, with any opening in the box, positive
  * definite; with none it is singular, and the small shift in the diagonal fixes the constant.
  *
- * The multigrid coarsens by aggregating 2×2×2 cells with piecewise-constant transfer. The coarse operator is
- * rebuilt from the fine conductances: faces across a coarse interface are summed, and an interior face is
- * halved because the coarse cells are twice as far apart.
+ * The multigrid coarsens by aggregating 2×2×2 cells with piecewise-constant transfer. The coarse operator is the
+ * Galerkin one, PᵀAP: faces across a coarse interface are summed, and nothing more. Halving an interior face
+ * "because the coarse cells are twice as far apart" gives the rediscretised operator, which is wrong for this
+ * transfer: the coarse correction came out about twice too large, smooth pressure errors flipped sign every cycle,
+ * and an odd number of cycles fed a sign-flipping pressure into the next step. That ran away on some grids (the
+ * one-bedroom plan at 0.15 m with three or five cycles, and not with four or six).
  */
 export class PressureSolver {
 	readonly levels: Level[] = [];
@@ -237,10 +235,10 @@ export class PressureSolver {
 	}
 
 	/**
-	 * The operator one level up: faces across a coarse interface are summed, interior ones divided by the
-	 * coarsening factor for the larger distance, and opening conductances (which do not depend on distance) are
-	 * not. A coarse cell or face past the end of an odd-sized fine level sums only the fine cells and faces that
-	 * exist; a coarse face on the far side of the box maps to the fine box face.
+	 * The operator one level up, PᵀAP for the piecewise-constant transfer: faces across a coarse interface are summed,
+	 * interior ones too (see the class comment for why they are not divided by the coarsening factor), and so are the
+	 * opening conductances. A coarse cell or face past the end of an odd-sized fine level sums only the fine cells and
+	 * faces that exist; a coarse face on the far side of the box maps to the fine box face.
 	 */
 	private coarsen(fine: Level, coarse: Level) {
 		const { fx, fy, fz } = fine;
@@ -254,23 +252,20 @@ export class PressureSolver {
 		for (let k = 0; k < coarse.nz; k++)
 			for (let j = 0; j < coarse.ny; j++)
 				for (let i = 0; i <= coarse.nx; i++) {
-					const interior = i > 0 && i < coarse.nx;
 					const face = Math.min(i * fx, fine.nx);
-					coarse.cx[i + sx * j + sxy * k] = sum(fine.cx, face, j * fy, k * fz, 1, fy, fz, fine.nx + 1, fine.ny, fine.nz) / (interior ? fx : 1);
+					coarse.cx[i + sx * j + sxy * k] = sum(fine.cx, face, j * fy, k * fz, 1, fy, fz, fine.nx + 1, fine.ny, fine.nz);
 				}
 		for (let k = 0; k < coarse.nz; k++)
 			for (let j = 0; j <= coarse.ny; j++)
 				for (let i = 0; i < coarse.nx; i++) {
-					const interior = j > 0 && j < coarse.ny;
 					const face = Math.min(j * fy, fine.ny);
-					coarse.cy[i + sx * j + sxy * k] = sum(fine.cy, i * fx, face, k * fz, fx, 1, fz, fine.nx, fine.ny + 1, fine.nz) / (interior ? fy : 1);
+					coarse.cy[i + sx * j + sxy * k] = sum(fine.cy, i * fx, face, k * fz, fx, 1, fz, fine.nx, fine.ny + 1, fine.nz);
 				}
 		for (let k = 0; k <= coarse.nz; k++)
 			for (let j = 0; j < coarse.ny; j++)
 				for (let i = 0; i < coarse.nx; i++) {
-					const interior = k > 0 && k < coarse.nz;
 					const face = Math.min(k * fz, fine.nz);
-					coarse.cz[i + sx * j + sxy * k] = sum(fine.cz, i * fx, j * fy, face, fx, fy, 1, fine.nx, fine.ny, fine.nz + 1) / (interior ? fz : 1);
+					coarse.cz[i + sx * j + sxy * k] = sum(fine.cz, i * fx, j * fy, face, fx, fy, 1, fine.nx, fine.ny, fine.nz + 1);
 				}
 		coarse.dg.fill(0);
 		this.diagonal(coarse);
