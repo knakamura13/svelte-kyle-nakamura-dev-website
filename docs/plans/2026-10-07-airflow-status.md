@@ -52,6 +52,8 @@ Scenarios, in the CPU solver at 0.2 m cells (`tests/solver/scenario-presets.spec
 
 Stability at other cell sizes (checked once, not a test): with the stability fix, all four plans stay finite over 5 s at 0.3, 0.2, 0.15 and 0.1 m cells, with three windows open, both in a 3 m/s wind and with no wind at −5 °C. The fastest air is at most 1.2 m/s and the divergence at most 1.7e-4.
 
+Wider robustness sweep: not finished. The suite runs five seeds per plan. A 30-seed run of both random tests was stopped after 11 minutes while the machine was loaded (its output only prints at the end, so no per-seed results survived). A verbose run of eight house seeds passed at about 5 s each, with the fastest air at most 3.3 m/s and divergence at most 3.2e-3 (limit 0.05), so the slowness looks like load, but that is not proven. Run `ROBUST_VERBOSE=1 ROBUST_TRIALS=30 yarn test:solver tests/solver/robustness.spec.ts` on an idle machine.
+
 CPU step cost, one 0.05 s step on this Mac while other jobs ran:
 
 | Plan | 0.2 m cells | 0.15 m | 0.1 m |
