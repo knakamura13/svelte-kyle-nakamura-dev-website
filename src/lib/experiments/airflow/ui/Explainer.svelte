@@ -154,8 +154,8 @@
 				openings in series. Read on the scanned report.
 			</li>
 			<li>
-				<i>EnergyPlus Engineering Reference</i>, version 9.6, sections “AirflowNetwork Model” and “Outside Surface Heat Balance”: the same pressure coefficient formula as
-				implemented there, and the law for wind speed with height, with its terrain values. Read as web pages. The ASHRAE Handbook it cites for the terrain values was not
+				<i>EnergyPlus Engineering Reference</i>, version 9.6, sections “AirflowNetwork Model” and “Outside Surface Heat Balance”: the pressure coefficient formula as
+				EnergyPlus documents it, and the law for wind speed with height, with its terrain values. Read as web pages. The ASHRAE Handbook it cites for the terrain values was not
 				read.
 			</li>
 			<li>
@@ -166,7 +166,7 @@
 			</li>
 			<li>
 				Orme, Liddament and Wilson, “Numerical Data for Air Infiltration and Natural Ventilation Calculations,” Technical Note 44, Air Infiltration and Ventilation Centre (1998
-				printing): pressure coefficients for exposed, semi-sheltered and sheltered sites as a cross-check, and three of the four wind-speed tables behind the 44 to 55&nbsp;%. Read by
+				printing): pressure coefficients for exposed, semi-sheltered and sheltered sites, compared with the fit, and three of the four wind-speed tables behind the 44 to 55&nbsp;%. Read by
 				eye on scanned pages.
 			</li>
 			<li>
