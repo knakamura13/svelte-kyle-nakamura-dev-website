@@ -18,8 +18,10 @@ import type { LayerId } from '../state';
 import { LUT_SIZE, PALETTES, PALETTE_GLSL, isCyclic, scaleMapping, type ScaleOptions } from '../viz/palettes';
 
 /**
- * Draw order among transparent objects. The dollhouse draws at 0, so its fading walls come first; then the slice, which
- * writes depth so particles behind it are hidden rather than drawn over it; then the arrows; then the particles.
+ * Draw order among transparent objects: the slice, which writes depth so particles behind it are hidden rather than
+ * drawn over it; then the arrows; then the particles. The dollhouse's opaque pieces draw at 0 and its faded walls at
+ * `FADED_ORDER` (20 in `dollhouse.ts`), after all of these, so a wall between the camera and the slice tints what is
+ * behind it. Keep any new layer below 20.
  */
 export const RENDER_ORDER = { slice: 10, arrows: 11, tracers: 12, smoke: 13 } as const;
 
