@@ -14,8 +14,13 @@ const U_REGULAR = 0.05;
  * constant is removed explicitly instead (see `solve`).
  */
 const SHIFT = 1e-7;
-/** Floor of the fan-curve square root, so a stalled window fan stays bounded. */
-const STALL = 0.01;
+/**
+ * Floor of the fan-curve square root in the slope a window fan's boundary is linearised with. The curve's slope grows
+ * without limit as the fan stalls, and a linearisation that steep overshoots from one step to the next: two intake fans
+ * pushing against one small opening ran away this way at cell sizes of 0.15 m and finer. The flow itself still follows
+ * the true curve, so the settled answer is unchanged and only the approach to it is damped. The GPU has the same value.
+ */
+const STALL = 0.3;
 
 interface Level {
 	nx: number;

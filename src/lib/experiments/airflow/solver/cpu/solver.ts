@@ -30,6 +30,11 @@ import { eddyViscosity } from './turbulence';
 const SCALAR_CFL = 0.45;
 /** Fraction of the explicit diffusion stability limit a substep may use. */
 const DIFFUSION_LIMIT = 0.9;
+/**
+ * Most scalar substeps one step may take. A real room needs a handful. Past this the flow has run away, and more
+ * substeps would only make each step take minutes and freeze the page. The GPU solver has the same cap.
+ */
+const MAX_SCALAR_SUBSTEPS = 64;
 
 const velocity = (size: number): Velocity => ({ u: new Float32Array(size), v: new Float32Array(size), w: new Float32Array(size) });
 
@@ -276,7 +281,7 @@ export class CpuSolver {
 		};
 		const cfl = maxCfl(grid, geometry, this.vel, dt, fluid.settling);
 		const diffusive = (6 * (Math.max(fluid.alpha, fluid.particleDiffusivity, this.nuMax() / Math.min(fluid.prT, fluid.scT)) + fluid.mixing) * dt) / (grid.h * grid.h);
-		this.substeps = this.scalarSubstepsOverride ?? Math.max(1, Math.ceil(Math.max(cfl / SCALAR_CFL, diffusive / DIFFUSION_LIMIT)));
+		this.substeps = this.scalarSubstepsOverride ?? Math.min(MAX_SCALAR_SUBSTEPS, Math.max(1, Math.ceil(Math.max(cfl / SCALAR_CFL, diffusive / DIFFUSION_LIMIT))));
 		const dtau = dt / this.substeps;
 		diffusivities(grid, geometry, this.nut, heat, this.heatDiffusivity);
 		diffusivities(grid, geometry, this.nut, smoke, this.diffusivity);

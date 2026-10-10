@@ -233,7 +233,12 @@ export interface SolverConfig {
 	maxEddyViscosity?: number;
 }
 
-export const DEFAULT_PRESSURE: PressureSettings = { cycles: 3, pre: 2, post: 2, coarse: 24 };
+/**
+ * Six V-cycles, not three: the aggregation multigrid converges slowly on some grids (0.57 to 0.95 per cycle on the
+ * plans), and three cycles left the one-bedroom plan to run away at a cell size of 0.15 m and 0.075 m while it passed
+ * at 0.2 m and 0.1 m. A cheaper way to the same safety (a stronger smoother, or cycles until a residual is met) is open.
+ */
+export const DEFAULT_PRESSURE: PressureSettings = { cycles: 6, pre: 2, post: 2, coarse: 24 };
 
 /** Fills in the sides a caller left out: still, no-slip, adiabatic. */
 export function sideConditions(partial: (SideCondition | undefined)[] = []): SideConditions {
