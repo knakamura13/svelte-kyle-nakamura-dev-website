@@ -13,6 +13,8 @@ const PLANS = (process.env.STRESS_PLANS ?? 'studio,one-bedroom').split(',');
 const TRIALS = Number(process.env.STRESS_TRIALS ?? 5);
 const SIZES: Record<string, number[]> = { studio: [0.15, 0.1, 0.075, 0.05] };
 const sizesFor = (plan: string) => SIZES[plan] ?? [0.15, 0.1, 0.075];
+/** Failing cases are rerun on CpuBackend at this cell size and coarser (`STRESS_CPU_RERUN_BELOW=0.05` for all of them). */
+const CPU_RERUN_BELOW = Number(process.env.STRESS_CPU_RERUN_BELOW ?? 0.1);
 
 test.describe.configure({ mode: 'serial' });
 
@@ -29,9 +31,10 @@ const line = (r: any) => `fastest ${Number(r.maxSpeed).toFixed(2)} m/s, divergen
 async function check(kind: 'randomOpenings' | 'randomDevices', plan: string, seed: number, h: number) {
 	const r = await call(kind, plan, seed, h, 'gpu');
 	console.log(`${failed(r) ? 'FAIL' : 'ok  '} gpu ${kind} ${r.where} (${r.cells}): ${line(r)}`);
-	if (failed(r)) {
+	if (failed(r) && h < CPU_RERUN_BELOW) console.log(`     cpu rerun skipped: below ${CPU_RERUN_BELOW} m the CPU takes too long for this sweep; rerun this seed on CpuBackend by hand before blaming the GPU`);
+	if (failed(r) && h >= CPU_RERUN_BELOW) {
 		const c = await call(kind, plan, seed, h, 'cpu');
-		console.log(`     cpu ${kind} same case: ${line(c)}`);
+		console.log(`     cpu ${kind} same case: ${c.stoppedAt ? `also fails, past the thresholds at step ${c.stoppedAt} of 100 (stopped there): ` : ''}${line(c)}`);
 	}
 	expect.soft(r.nonFinite, `${r.where}: non-finite fields`).toEqual([]);
 	expect.soft(r.maxSpeed, `${r.where}: fastest air`).toBeLessThan(40);

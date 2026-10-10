@@ -111,6 +111,22 @@ const makers: Record<'gpu' | 'cpu', BackendFactory> = {
 
 const planOf = (id: string) => plans.find((p) => p.id === id)!;
 
+/**
+ * Steps `world`, and on the CPU (`watch`) checks the diagnostics after every step and stops at the first step past the
+ * thresholds: the CPU's scalar substep count is uncapped, so once the flow blows up a step can take minutes. Returns
+ * the step that failed, or 0.
+ */
+async function stepAll(world: World, steps: number, watch: boolean, each: (n: number) => void = () => {}) {
+	for (let n = 0; n < steps; n++) {
+		each(n);
+		world.backend.step(DT);
+		if (!watch) continue;
+		const { diagnostics: d } = await world.backend.snapshot({});
+		if (!(d.maxSpeed < 40) || !(d.divergence < 0.05)) return n + 1;
+	}
+	return 0;
+}
+
 async function verdict(world: World, names: readonly string[]) {
 	const { diagnostics } = await world.backend.snapshot({});
 	const fields = (await world.backend.readFields()) as any;
@@ -125,11 +141,15 @@ async function randomOpenings(planId: string, seed: number, h: number, backend: 
 	const rand = random(seed);
 	const setup = setupFor(plan, rand);
 	const world = await World.create(setup, { plans: [plan], models: new Map(), make: makers[backend], h });
-	for (let step = 0; step < 40; step++) world.backend.step(DT);
+	const watch = backend === 'cpu';
+	let stoppedAt = await stepAll(world, 40, watch);
 	const changed = { ...setup, openings: openingsFor(plan, rand) };
-	world.apply(changed, 40 * DT);
-	for (let step = 0; step < 60; step++) world.backend.step(DT);
-	const result = await verdict(world, ['u', 'v', 'w', 'p', 'theta']);
+	if (!stoppedAt) {
+		world.apply(changed, 40 * DT);
+		const later = await stepAll(world, 60, watch);
+		stoppedAt = later ? 40 + later : 0;
+	}
+	const result = { ...(await verdict(world, ['u', 'v', 'w', 'p', 'theta'])), stoppedAt };
 	world.dispose();
 	const c = setup.conditions;
 	const open = (o: Record<string, number>) => Object.entries(o).filter(([, v]) => v > 0).map(([k, v]) => `${k}=${v}`).join(' ');
@@ -143,22 +163,23 @@ async function randomDevices(planId: string, seed: number, h: number, backend: '
 	const setup: Setup = { ...setupFor(plan, rand), devices: devicesFor(plan, rand) };
 	const world = await World.create(setup, { plans: [plan], models: deviceMap, make: makers[backend], h });
 	let time = 0;
-	const advance = (steps: number) => {
-		for (let n = 0; n < steps; n++) {
-			world.updateOscillation(time);
-			world.backend.step(DT);
-			time += DT;
-		}
+	const watch = backend === 'cpu';
+	const oscillate = () => {
+		world.updateOscillation(time);
+		time += DT;
 	};
-	advance(40);
+	let stoppedAt = await stepAll(world, 40, watch, oscillate);
 	const changed: Setup = {
 		...setup,
 		openings: openingsFor(plan, rand),
 		devices: setup.devices.map((d) => ({ ...d, power: rand(), yaw: d.opening || rand() < 0.5 ? d.yaw : Math.floor(rand() * 360) }))
 	};
-	world.apply(changed, time);
-	advance(60);
-	const result = await verdict(world, ['u', 'v', 'w', 'p', 'theta', 'particulates']);
+	if (!stoppedAt) {
+		world.apply(changed, time);
+		const later = await stepAll(world, 60, watch, oscillate);
+		stoppedAt = later ? 40 + later : 0;
+	}
+	const result = { ...(await verdict(world, ['u', 'v', 'w', 'p', 'theta', 'particulates'])), stoppedAt };
 	world.dispose();
 	const list = setup.devices.map((d) => `${d.model}${d.opening ? ` in ${d.opening}` : ` at ${d.x.toFixed(1)},${d.z.toFixed(1)}`} power ${d.power.toFixed(2)}`).join('; ');
 	return { ...result, where: `${planId}, seed ${seed}, h ${h} m, wind ${setup.conditions.windSpeed} m/s from ${setup.conditions.windFrom}°, ${setup.conditions.outdoorTemp} °C out, devices: ${list}` };
@@ -189,5 +210,32 @@ async function longRun(planId: string, h: number, kind: 'wind' | 'cold', backend
 	return { ...result, series, where: `${planId}, h ${h} m, ${kind}: wind ${c.windSpeed} m/s from ${c.windFrom}°, ${c.outdoorTemp} °C out / ${c.indoorTemp} °C in, open [${windows.map((o) => o.id).join(' ')}]` };
 }
 
-(window as any).stress = { randomOpenings, randomDevices, longRun, planIndex: (id: string) => plans.findIndex((p) => p.id === id) };
+/** randomDevices step by step on one backend: the diagnostics after every step until something is not finite. For debugging a failure. */
+async function traceDevices(planId: string, seed: number, h: number, backend: 'gpu' | 'cpu', limit = 100) {
+	const plan = planOf(planId);
+	const rand = random(seed);
+	const setup: Setup = { ...setupFor(plan, rand), devices: devicesFor(plan, rand) };
+	const world = await World.create(setup, { plans: [plan], models: deviceMap, make: makers[backend], h });
+	const trace: string[] = [];
+	let time = 0;
+	const changed: Setup = {
+		...setup,
+		openings: openingsFor(plan, rand),
+		devices: setup.devices.map((d) => ({ ...d, power: rand(), yaw: d.opening || rand() < 0.5 ? d.yaw : Math.floor(rand() * 360) }))
+	};
+	for (let n = 0; n < limit; n++) {
+		if (n === 40) world.apply(changed, time);
+		world.updateOscillation(time);
+		world.backend.step(DT);
+		time += DT;
+		const snap = await world.backend.snapshot({});
+		const d = snap.diagnostics;
+		trace.push(`${n + 1}: ${d.maxSpeed.toFixed(3)} m/s div ${d.divergence.toExponential(1)} cfl ${d.cfl.toFixed(2)} fans [${Array.from(snap.fanFlow).map((q) => q.toFixed(3)).join(' ')}]`);
+		if (!Number.isFinite(d.maxSpeed) || !Number.isFinite(d.divergence)) break;
+	}
+	world.dispose();
+	return trace;
+}
+
+(window as any).stress = { traceDevices, randomOpenings, randomDevices, longRun, planIndex: (id: string) => plans.findIndex((p) => p.id === id) };
 (window as any).harnessReady = true;
