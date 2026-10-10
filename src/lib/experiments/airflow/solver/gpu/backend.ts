@@ -6,6 +6,8 @@ import { ROOMS_PER_PASS } from './shaders/readouts';
 import { BufferUsage, MapMode, type GpuBuffer, type GpuCommandEncoder } from './webgpu';
 
 const READBACK = BufferUsage.MAP_READ | BufferUsage.COPY_DST;
+/** Steps after which a CFL reading no longer sets the scalar substep count (see `step`). */
+const STALE_STEPS = 4;
 const UNIFORM = BufferUsage.UNIFORM | BufferUsage.COPY_DST;
 
 /** A copy from a device buffer into a fresh mappable buffer, read once the queue has caught up. */
@@ -29,6 +31,8 @@ export class GpuBackend implements FlowBackend {
 	steps = 0;
 	private lastDt = 0;
 	private cflSpeed = 0;
+	/** The step the CFL speed in `cflSpeed` was measured at; −∞ until the first reading arrives. */
+	private cflMeasuredAt = -Infinity;
 	private cflPending = false;
 	private readonly cflStaging: GpuBuffer;
 	/** Steps whose tally slots have been read back and added to `tally`. */
@@ -73,12 +77,17 @@ export class GpuBackend implements FlowBackend {
 	step(dt: number) {
 		const s = this.solver;
 		const device = s.device;
-		const substeps = s.scalarSubsteps(dt, this.cflSpeed);
+		// The CFL speed arrives asynchronously, and not at all while the caller steps in a loop without awaiting
+		// anything. A reading more than a few steps old says nothing about a flow that is speeding up, and too few
+		// substeps make the explicit scalar transport blow up, so without a recent reading take the most (the cap).
+		const recent = this.steps - this.cflMeasuredAt <= STALE_STEPS;
+		const substeps = s.scalarSubsteps(dt, recent ? this.cflSpeed : Infinity);
 		const slot = this.steps % LOG_CAPACITY;
 		s.writeStep(dt, substeps, s.diffusionSubsteps(dt), slot);
 		const encoder = device.createCommandEncoder({ label: 'step' });
 		s.encodeStep(encoder, dt, substeps, slot, s.querySet ? this.steps % PROFILE_STEPS : -1);
 		const readCfl = !this.cflPending;
+		const measuredAt = this.steps + 1;
 		if (readCfl) {
 			const pass = encoder.beginComputePass({ label: 'cfl' });
 			s.measure(pass);
@@ -90,9 +99,13 @@ export class GpuBackend implements FlowBackend {
 		if (readCfl)
 			this.cflStaging.mapAsync(MapMode.READ).then(
 				() => {
-					this.cflSpeed = new Float32Array(this.cflStaging.getMappedRange())[0];
+					const speed = new Float32Array(this.cflStaging.getMappedRange())[0];
 					this.cflStaging.unmap();
 					this.cflPending = false;
+					if (measuredAt > this.cflMeasuredAt) {
+						this.cflSpeed = speed;
+						this.cflMeasuredAt = measuredAt;
+					}
 				},
 				() => (this.cflPending = false)
 			);
@@ -303,6 +316,7 @@ export class GpuBackend implements FlowBackend {
 			particulates += partials[8 * g + 5];
 		}
 		this.cflSpeed = cflSpeed;
+		this.cflMeasuredAt = this.steps;
 		const reference = Math.max(Math.sqrt(squares / Math.max(cells, 1)), 0.01);
 		const rho = fluid.rho;
 		return {

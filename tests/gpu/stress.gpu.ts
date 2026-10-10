@@ -16,10 +16,9 @@ const sizesFor = (plan: string) => SIZES[plan] ?? [0.15, 0.1, 0.075];
 /** Failing cases are rerun on CpuBackend at this cell size and coarser (`STRESS_CPU_RERUN_BELOW=0.05` for all of them). */
 const CPU_RERUN_BELOW = Number(process.env.STRESS_CPU_RERUN_BELOW ?? 0.1);
 
-test.describe.configure({ mode: 'serial' });
-
+// Not serial: a failing plan and size must not skip the others. Each test opens its own page.
 let page: Page;
-test.beforeAll(async ({ browser }) => {
+test.beforeEach(async ({ browser }) => {
 	page = await browser.newPage();
 	await openHarness(page, 'stress.ts');
 });
