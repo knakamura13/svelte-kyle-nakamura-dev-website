@@ -12,7 +12,7 @@ About 40% by the measure "0% is not started, 100% is a fully functional, physica
 | --- | --- |
 | 0. Catalog-driven landing page (#29) | Done |
 | 1. CPU solver and benchmarks | Done. A stability fix for the one-bedroom and studio plans is in (issue 1 below) |
-| 2. WebGPU solver, CPU worker fallback, parity tests, auto-tune, 30 fps | The 29 kernels and `GpuBackend` are done and match the CPU solver (GPU status: see issue 1). The worker fallback and the auto-tuner are not started |
+| 2. WebGPU solver, CPU worker fallback, parity tests, auto-tune, 30 fps | The 29 kernels and `GpuBackend` are done and match the CPU solver, including the stability fix. The worker fallback and the auto-tuner are not started |
 | 3. Homes | Done. The four plans, and a dollhouse scene rendered in Chromium, Firefox and WebKit in a harness |
 | 4. Devices | Models, solver coupling, placement and turning math done. The catalog has four fans from maker spec sheets and no purifiers. Device meshes not started |
 | 5. Particulates and probing | Solver, session probes and hover readings done. The probe and smoke controls are not started |
@@ -36,13 +36,13 @@ All committed. `yarn test:solver` runs the Node suite (`playwright.solver.config
 
 ## Results
 
-Benchmarks on the CPU solver (before the stability fix in issue 1):
+Benchmarks on the CPU solver. Per the agent that made the stability fix, only the free jet moved (issue 1); the cavity, heated cavity and decay numbers below are unchanged:
 
 - Lid-driven cavity at 128²: 1.77% max and 1.18% rms against Ghia, 2.45% and 1.64% against Botella–Peyret.
 - Heated cavity: average Nu within 1% of de Vahl Davis at Ra 1e3, 1e4 and 1e5.
 - Openings: wind through-flow 96–99% of the orifice formula. Stack effect 96% of the formula in a uniform room.
 - Well-mixed decay 99.8% of the analytic rate, and the particulate mass balance closes to 1e-5.
-- Window fan: matches the analytic series solution. Free jet: delivered flow 98.3%, decay exponent −1.05, constant K 5.85.
+- Window fan: matches the analytic series solution. Free jet, after the stability fix: delivered flow 100.2%, decay exponent −0.88, constant K 6.23 (98.3%, −1.05 and 5.85 before it).
 
 Scenarios, in the CPU solver at 0.2 m cells (`tests/solver/scenario-presets.spec.ts`):
 
@@ -63,7 +63,7 @@ GPU step cost on the house plan, windows closed: 0.2 m 0.64 ms (41k cells), 0.15
 
 GPU against CPU, through `World`: the slice at 1.1 m within 2.5e-5, the fan flow within 4e-8, and the cross-ventilation window flows within 3e-6. Every kernel stage matches to about 2e-5 or better.
 
-Checks at the end of the session are in the final message of the session that wrote this. The type check (`yarn run check`) stays at its baseline of one error in `tests/resume.spec.ts` and one warning in `PortfolioShell.svelte`, both older than this work. The e2e suite was not re-run this session: no route or catalog entry loads the airflow code.
+Checks at the end of the session (2026-10-09, 17:12 PDT): `yarn test:solver` 138 passed and 2 skipped (the dollhouse T and L junction test and the purifier-catalog test, both `fixme`); `yarn test:gpu` 19 passed; the type check (`yarn run check`) at its baseline of one error in `tests/resume.spec.ts` and one warning in `PortfolioShell.svelte`, both older than this work. The existing e2e suite: 611 passed, 3 skipped and 1 failed, a phone Menu and Contact motion test in `tests/shell.spec.ts` that passes alone on all three browsers (it ran while solver tests were loading the machine). No route or catalog entry loads the airflow code.
 
 ## Not started
 
@@ -85,7 +85,7 @@ Scene assembly, the engine loader, the dock and page UI, the route and catalog e
 
 ## Known issues and open decisions
 
-1. Stability fix and the GPU. The studio and one-bedroom plans blew up or converged poorly in the CPU solver. Cause, at about 85% confidence: the half step of pressure gradient applied before advection uses the pressure from the last solve, which allows a pressure pattern that flips sign every step and is not damped. It grows 1.65 times per step on the one-bedroom (61 Pa at step 10, 3,130 Pa at step 18) and 1.08 times on the studio. Zeroing the pressure before each step, or dropping that half step, both stop the growth. The fix uses the mean of the last two pressure solves for that half step (`CpuSolver.step` in `solver/cpu/solver.ts`); it removed the two `fixme` stepping tests and the `KNOWN_UNSTABLE` list in the robustness spec. Raising the multigrid cycles to 6 also passes but only hides it. The fix moved the free-jet benchmark: delivered flow 98.3% to 100.2%, decay exponent −1.05 to −0.88, constant K 5.85 to 6.23. That is inside the test's band (exponent −1.2 to −0.85, K 5.4 to 6.4) but outside the published 5.7 to 6.1. Next: try the filter `(3·p[n] + 2·p[n−1] − p[n−2]) / 4` (a third stored pressure), recheck the jet, and retune `shearCoefficient` (now 0.015) only if the exponent recovers. The GPU step follows the CPU step, so it must mirror the change: GPU STATUS PENDING.
+1. Stability fix and the GPU. The studio and one-bedroom plans blew up or converged poorly in the CPU solver. Cause, at about 85% confidence: the half step of pressure gradient applied before advection uses the pressure from the last solve, which allows a pressure pattern that flips sign every step and is not damped. It grows 1.65 times per step on the one-bedroom (61 Pa at step 10, 3,130 Pa at step 18) and 1.08 times on the studio. Zeroing the pressure before each step, or dropping that half step, both stop the growth. The fix uses the mean of the last two pressure solves for that half step (`CpuSolver.step` in `solver/cpu/solver.ts`); it removed the two `fixme` stepping tests and the `KNOWN_UNSTABLE` list in the robustness spec. Raising the multigrid cycles to 6 also passes but only hides it. The fix moved the free-jet benchmark: delivered flow 98.3% to 100.2%, decay exponent −1.05 to −0.88, constant K 5.85 to 6.23. That is inside the test's band (exponent −1.2 to −0.85, K 5.4 to 6.4) but outside the published 5.7 to 6.1. The filter `(3·p[n] + 2·p[n−1] − p[n−2]) / 4` (a third stored pressure, exact for a linear trend) was tried at the end of this session and not adopted: it gave jet K 6.13 and exponent −0.91 and all four plans stepped, but the random-devices robustness case studio seed 50002 (two purifiers and a window fan in an 8 m/s wind) ran away past 40 m/s, which the plain mean passes. Next: find why that case is sensitive (a damped version of the mean, or solving for the pressure change from the previous step, which is the cleaner formulation), then recheck the jet and retune `shearCoefficient` (now 0.015) only if the exponent recovers. The GPU step follows the CPU step, so it mirrors the change (a `pressureMean` kernel and two extra pressure buffers) and `yarn test:gpu` passes again with no tolerance loosened. The commit is still labelled `wip` for the jet regression.
 2. Purifiers. No maker or listing read publishes a purifier's CADR at each speed, and `PurifierModel.cadr` needs four. Top-speed figures seen: Coway AP-1512HH 233 cfm for smoke, Coway Airmega 400 328 cfm for smoke (an ENERGY STAR record may say 376, not opened), Levoit Core 300-P 143 cfm (particle not stated). None gave AHAM listing, body size, or where air goes in and out. Smart Air publishes 65, 180 and 315 m³/h for its Sqair, but with no test standard. Options: store the top speed and scale the lower speeds by a stated assumption; find a lab that measured named models at each speed; or leave purifiers out.
 3. Share link: out-of-range numbers are clamped (bearings wrap), so a link still loads if a slider range is narrowed later. Rejecting them (null) is a small change in `read()` in `link.ts`.
 4. Opening limits: the research gives a single casement sash a free area of 0.78 to 0.80 of its frame, but `OPENING_LIMITS` in `homes/types.ts` allows 1, and the explainer says so. Double-hung and sliding at 0.5 match the research.

@@ -69,9 +69,11 @@ Tolerances and what limits them are next to each assertion.
 
 - [x] Landing page driven by a catalog (#29)
 - [x] 1. Solver core on the CPU, benchmarks 1, 4 and the two-height part of 3
-- [ ] 2. WebGPU solver, CPU worker fallback, parity tests, auto-tune, the 30 fps budget
-- [ ] 3. Homes
-- [ ] 4. Devices, benchmark 2
-- [ ] 5. Particulates and probing
-- [ ] 6. Visualization
-- [ ] 7. Page
+- [ ] 2. WebGPU solver, CPU worker fallback, parity tests, auto-tune, the 30 fps budget (the GPU solver and `GpuBackend` are done with parity tests; the worker fallback and auto-tune are not)
+- [x] 3. Homes
+- [ ] 4. Devices, benchmark 2 (the catalog has fans only; no purifiers and no device meshes yet)
+- [ ] 5. Particulates and probing (solver side done; the controls are not)
+- [ ] 6. Visualization (the layers render in a harness and are not on a page yet)
+- [ ] 7. Page (state, session, share link, three scenarios and the explainer exist; the page itself does not)
+
+What is left and in what order: [2026-10-07-airflow-status.md](2026-10-07-airflow-status.md).
