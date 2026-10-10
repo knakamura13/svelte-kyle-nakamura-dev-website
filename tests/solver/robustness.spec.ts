@@ -178,3 +178,30 @@ for (const plan of plans) {
 		}
 	});
 }
+
+/**
+ * The instability this guards against grew by a fixed factor each step (1.65 on the one-bedroom, 1.08 on the studio) from
+ * a tiny start, so a short run can look fine. Thirty simulated seconds in a steady wind, and in still cold air where only
+ * buoyancy pushes, must stay bounded.
+ */
+for (const plan of plans) {
+	test(`${plan.name}: thirty simulated seconds in a steady wind, and in still cold air, stay bounded`, async () => {
+		test.setTimeout(150000 * Math.max(1, (0.2 / H) ** 3));
+		for (const [name, wind, outside] of [['wind 3 m/s', 3, 15], ['still, -5 C', 0, -5]] as const) {
+			const setup: Setup = { ...blankSetup(plan.id), conditions: { windFrom: 270, windSpeed: wind, outdoorTemp: outside, indoorTemp: 21, outdoorPm25: 0 } };
+			for (const opening of plan.openings.filter((o) => o.kind !== 'door').slice(0, 3)) setup.openings[opening.id] = 1;
+			const world = await World.create(setup, { plans: [plan], models: new Map(), make, h: H });
+			const trace: string[] = [];
+			for (let step = 1; step <= 600; step++) {
+				world.backend.step(DT);
+				if (step % 100 !== 0) continue;
+				const { diagnostics } = await world.backend.snapshot({});
+				trace.push(`${step}: ${diagnostics.maxSpeed.toFixed(2)} m/s, ${diagnostics.divergence.toExponential(1)}`);
+				expect.soft(Number.isFinite(diagnostics.maxSpeed) && diagnostics.maxSpeed < 10, `${plan.id}, ${name}, h ${H}, step ${step}: fastest air ${diagnostics.maxSpeed}`).toBe(true);
+				expect.soft(diagnostics.divergence, `${plan.id}, ${name}, h ${H}, step ${step}: divergence`).toBeLessThan(0.01);
+			}
+			if (process.env.ROBUST_VERBOSE) console.log(`${plan.id}, ${name}, h ${H}: ${trace.join('  ')}`);
+			world.dispose();
+		}
+	});
+}
