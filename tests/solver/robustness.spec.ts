@@ -19,6 +19,13 @@ const make: BackendFactory = (config, initial) => new CpuBackend({ ...config, sc
 const TRIALS = Number(process.env.ROBUST_TRIALS ?? 5);
 const DT = 1 / 20;
 const H = Number(process.env.ROBUST_H ?? 0.2);
+/** Specific seeds to run instead of the first `ROBUST_TRIALS`, for reproducing a failure: `ROBUST_SEEDS=1004,52004`. */
+const ONLY = process.env.ROBUST_SEEDS?.split(',').map(Number);
+/** The seeds a plan's test runs: `base + 1000 × plan + trial + offset`, or those of `ROBUST_SEEDS` that fall in its range. */
+const seeds = (base: number, planIndex: number, offset: number) => {
+	const first = base + planIndex * 1000;
+	return ONLY ? ONLY.filter((seed) => seed >= first && seed < first + 1000) : Array.from({ length: TRIALS }, (_, trial) => first + trial + offset);
+};
 /** Time allowed for a test, scaled with the cost of a finer grid. */
 const allowed = (ms: number) => ms * Math.max(1, (0.2 / H) ** 3);
 
@@ -57,8 +64,7 @@ async function check(world: World, where: string, names: readonly ('u' | 'v' | '
 for (const plan of plans) {
 	test(`${plan.name}: random openings and weather, changed mid-run, keep the solver finite and divergence-free`, async () => {
 		test.setTimeout(allowed(60000 + TRIALS * 20000));
-		for (let trial = 0; trial < TRIALS; trial++) {
-			const seed = plans.indexOf(plan) * 1000 + trial + 1;
+		for (const seed of seeds(0, plans.indexOf(plan), 1)) {
 			const rand = random(seed);
 			const setup = setupFor(plan, rand);
 			const where = `${plan.id}, seed ${seed}, h ${H}, wind ${setup.conditions.windSpeed} m/s from ${setup.conditions.windFrom}°, ${setup.conditions.outdoorTemp} °C outside`;
@@ -79,8 +85,7 @@ for (const plan of plans) {
 for (const plan of plans) {
 	test(`${plan.name}: random fans and purifiers, turned and re-aimed mid-run, keep the solver finite and divergence-free`, async () => {
 		test.setTimeout(allowed(60000 + TRIALS * 20000));
-		for (let trial = 0; trial < TRIALS; trial++) {
-			const seed = 50000 + plans.indexOf(plan) * 1000 + trial;
+		for (const seed of seeds(50000, plans.indexOf(plan), 0)) {
 			const rand = random(seed);
 			const setup: Setup = { ...setupFor(plan, rand), devices: devicesFor(plan, rand) };
 			const list = setup.devices.map((d) => `${d.model}${d.opening ? ` in ${d.opening}` : ` at ${d.x.toFixed(1)},${d.z.toFixed(1)}`}`).join('; ');
