@@ -100,7 +100,10 @@ async function crossVentilation(seconds: number, h: number) {
 	] as const) {
 		const world = await run(structuredClone(scenario.setup), make, h, steps, dt);
 		const fields = await world.backend.readFields();
-		out[name] = { west: facadeFlow(world, fields, 'west'), east: facadeFlow(world, fields, 'east') };
+		const snap = await world.backend.snapshot({});
+		let maxU = 0;
+		for (const x of fields.u) maxU = Math.max(maxU, Math.abs(x));
+		out[name] = { west: facadeFlow(world, fields, 'west'), east: facadeFlow(world, fields, 'east'), maxU, maxSpeed: snap.diagnostics.maxSpeed, steps: snap.diagnostics.steps, windows: world.raster.openings.filter((o) => o.facade === 'west' || o.facade === 'east').map((o) => o.spec.id + ':' + o.faces.length).join(',') } as any;
 		world.dispose();
 	}
 	return out;
