@@ -39,10 +39,7 @@ const CROSS_VENTILATION: Record<PlanId, [string, string]> = {
 };
 const SIDE_OF: Record<Facade, SideIndex> = { west: SIDE.X0, east: SIDE.X1, north: SIDE.Z0, south: SIDE.Z1 };
 /** Solver runs that fail and are not yet diagnosed (the bounds below stay as they are). */
-const NOT_YET_STEPPING: Partial<Record<PlanId, string>> = {
-	studio: 'pressure residual 1.5e-2 after 5 s at h = 0.3, over the 1e-2 bound; not yet diagnosed',
-	'one-bedroom': 'flow blows up at h = 0.3 (residual 0.36, divergence 0.42, 18 m³/s in, 75 out); not yet diagnosed'
-};
+const NOT_YET_STEPPING: Partial<Record<PlanId, string>> = {};
 
 const EPSILON = 1e-6;
 const multipleOf = (value: number, unit: number) => Math.abs(value / unit - Math.round(value / unit)) < 1e-9;

@@ -109,7 +109,7 @@ const finite = (array: Float32Array) => {
 };
 
 /** Plans known to fail this run: remove a plan here when its failure is fixed. The one-bedroom fails at seed 1004 (no wind, −5 °C outside, divergence 0.18). */
-const KNOWN_UNSTABLE = new Set(['one-bedroom']);
+const KNOWN_UNSTABLE = new Set<string>([]);
 
 for (const plan of plans) {
 	test(`${plan.name}: random openings and weather, changed mid-run, keep the solver finite and divergence-free`, async () => {

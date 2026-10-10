@@ -94,6 +94,9 @@ export class CpuSolver {
 	private readonly heatDiffusivity: Float32Array;
 	private readonly source: Float32Array;
 	private readonly sink: Float32Array;
+	/** The pressure the previous step started from, and the mean of it and this step's, which the first half-step applies (see `step`). */
+	private readonly previousPressure: Float32Array;
+	private readonly startPressure: Float32Array;
 	private readonly tally = emptyTally();
 	private initialMass = 0;
 	private lastCfl = 0;
@@ -129,6 +132,8 @@ export class CpuSolver {
 		this.heatDiffusivity = array();
 		this.source = array();
 		this.sink = array();
+		this.previousPressure = array();
+		this.startPressure = array();
 		this.pressure = new PressureSolver(this.grid, this.pressureSettings);
 		this.exterior = emptyExterior(this.grid);
 	}
@@ -202,7 +207,15 @@ export class CpuSolver {
 		quantity.u.set(this.vel.u);
 		quantity.v.set(this.vel.v);
 		quantity.w.set(this.vel.w);
-		applyPressureGradient(grid, geometry, this.pressure.pressure, quantity, half / (fluid.rho * grid.h));
+		// The pressure for this first half is the mean of the last two solves, not the last one alone. Half old,
+		// half new pressure has a mode that alternates sign every step and cancels in the velocity, so nothing damps
+		// it; with a solve cut off after a few V-cycles it grows (the one-bedroom plan blew up this way). The mean
+		// cancels it, and a steady pressure is unchanged.
+		const latest = this.pressure.pressure;
+		if (this.steps === 0) this.previousPressure.set(latest);
+		for (let i = 0; i < latest.length; i++) this.startPressure[i] = 0.5 * (latest[i] + this.previousPressure[i]);
+		this.previousPressure.set(latest);
+		applyPressureGradient(grid, geometry, this.startPressure, quantity, half / (fluid.rho * grid.h));
 		applyBuoyancy(grid, geometry, this.theta, quantity.v, half, fluid.g, fluid.beta);
 		if (this.fans.length) {
 			fanAcceleration(grid, this.fans, this.vel, fluid.rho, this.fanFlow, this.fanPush);
