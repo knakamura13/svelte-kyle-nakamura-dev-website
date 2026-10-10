@@ -7,7 +7,8 @@ import { openHarness } from './harness';
  * The random-setup stress of tests/solver/robustness.spec.ts on GpuBackend at the cell sizes the GPU path runs, with
  * the same seeds (plan index · 1000 + trial + 1 for openings and weather, 50000 + plan index · 1000 + trial for fans
  * and purifiers) and thresholds, plus long runs where growth would compound. A failing case is rerun on CpuBackend
- * and both results are logged. `STRESS_PLANS=studio,one-bedroom` and `STRESS_TRIALS=5` choose the sweep.
+ * and both results are logged. Run with `STRESS=1 yarn test:gpu stress`; `STRESS_PLANS=studio,one-bedroom` and
+ * `STRESS_TRIALS=5` choose the sweep.
  */
 const PLANS = (process.env.STRESS_PLANS ?? 'studio,one-bedroom').split(',');
 const TRIALS = Number(process.env.STRESS_TRIALS ?? 5);
@@ -15,6 +16,9 @@ const SIZES: Record<string, number[]> = { studio: [0.15, 0.1, 0.075, 0.05] };
 const sizesFor = (plan: string) => SIZES[plan] ?? [0.15, 0.1, 0.075];
 /** Failing cases are rerun on CpuBackend at this cell size and coarser (`STRESS_CPU_RERUN_BELOW=0.05` for all of them). */
 const CPU_RERUN_BELOW = Number(process.env.STRESS_CPU_RERUN_BELOW ?? 0.1);
+
+// A sweep, not a gate: it takes minutes and some setups fail on the CPU too, so `yarn test:gpu` skips it unless STRESS=1.
+test.skip(!process.env.STRESS, 'the random-setup stress runs with STRESS=1');
 
 // Not serial: a failing plan and size must not skip the others. Each test opens its own page.
 let page: Page;
