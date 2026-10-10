@@ -10,7 +10,9 @@ import { DECODE, ENTRY, F32, LINEAR, VEC2, VEC4, read, uniform, write, type Kern
 const SHIFT = '1e-7';
 /** cpu/pressure.ts U_REGULAR and STALL. */
 const U_REGULAR = '0.05';
-const STALL = '0.01';
+// The root's floor in a window fan's linearised slope (not in its flow): 0.3, as cpu/pressure.ts. Steeper slopes near
+// stall overshoot from one step to the next.
+const STALL = '0.3';
 
 /** The diagonal of cell c of a level, and whether the cell is in the system at all (`dg > 0` in the CPU). */
 const DIAGONAL = (coef: string, sx: string, sxy: string) => `fn diagonal(c: i32) -> f32 {
