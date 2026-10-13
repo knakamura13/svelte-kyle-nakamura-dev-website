@@ -15,7 +15,6 @@ import {
 	MeshStandardMaterial,
 	PlaneGeometry,
 	Quaternion,
-	SRGBColorSpace,
 	Sprite,
 	SpriteMaterial,
 	Vector3,
@@ -31,7 +30,14 @@ import {
 
 const textures = new Map<string, CanvasTexture>();
 
-function radial(key: string, stops: [number, string][]) {
+/**
+ * A round falloff as an alpha map: a grey canvas, white where the thing is solid and black where it is gone, which a
+ * material reads with `alphaMap`; `stops` are the opacity at each distance from the middle, 0 to 1. The colour of the glow
+ * or the shadow is the material's own. It is not drawn with a canvas alpha channel because a canvas stores its pixels
+ * premultiplied and WebKit un-premultiplies them on upload, and with the rounding that does to a faint fringe the floor
+ * pool came out as a random speckle of magenta, green and yellow. A canvas with no alpha has nothing to un-premultiply.
+ */
+function falloff(key: string, stops: [number, number][]) {
 	const cached = textures.get(key);
 	if (cached) return cached;
 	const size = 128;
@@ -39,11 +45,14 @@ function radial(key: string, stops: [number, string][]) {
 	canvas.width = canvas.height = size;
 	const context = canvas.getContext('2d')!;
 	const gradient = context.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-	for (const [at, color] of stops) gradient.addColorStop(at, color);
+	for (const [at, opacity] of stops) {
+		const grey = Math.round(255 * opacity);
+		gradient.addColorStop(at, `rgb(${grey},${grey},${grey})`);
+	}
 	context.fillStyle = gradient;
 	context.fillRect(0, 0, size, size);
+	// The data is a plain number per pixel, not a colour, so it is left in no colour space.
 	const texture = new CanvasTexture(canvas);
-	texture.colorSpace = SRGBColorSpace;
 	textures.set(key, texture);
 	return texture;
 }
@@ -63,13 +72,13 @@ export const flat = (color: ColorRepresentation, extra: ConstructorParameters<ty
 
 /** A soft round glow, for light and stars. Blends normally so it also works on the pale Stage tints. */
 export function glow(color: ColorRepresentation, size: number, opacity = 0.6) {
-	const texture = radial('glow', [
-		[0, 'rgba(255,255,255,1)'],
-		[0.3, 'rgba(255,255,255,.55)'],
-		[1, 'rgba(255,255,255,0)']
+	const texture = falloff('glow', [
+		[0, 1],
+		[0.3, 0.55],
+		[1, 0]
 	]);
 	const sprite = new Sprite(
-		new SpriteMaterial({ map: texture, color, transparent: true, depthWrite: false, opacity })
+		new SpriteMaterial({ alphaMap: texture, color, transparent: true, depthWrite: false, opacity })
 	);
 	sprite.scale.setScalar(size);
 	sprite.renderOrder = 5;
@@ -78,14 +87,14 @@ export function glow(color: ColorRepresentation, size: number, opacity = 0.6) {
 
 /** A soft dark blob on the floor under something, so it looks grounded without shadow maps. */
 export function blobShadow(radius: number, strength = 0.32) {
-	const texture = radial('blob', [
-		[0, 'rgba(24,36,28,1)'],
-		[0.55, 'rgba(24,36,28,.55)'],
-		[1, 'rgba(24,36,28,0)']
+	const texture = falloff('blob', [
+		[0, 1],
+		[0.55, 0.55],
+		[1, 0]
 	]);
 	const mesh = new Mesh(
 		new CircleGeometry(1, 40),
-		new MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false, opacity: strength })
+		new MeshBasicMaterial({ color: 0x18241c, alphaMap: texture, transparent: true, depthWrite: false, opacity: strength })
 	);
 	mesh.rotation.x = -Math.PI / 2;
 	mesh.scale.setScalar(radius);
@@ -114,10 +123,11 @@ export function studio(scene: Scene, tint: number, options: { pool?: number; poo
 	const pool = new Mesh(
 		new CircleGeometry(1, 72),
 		new MeshBasicMaterial({
-			map: radial('pool', [
-				[0, 'rgba(255,255,255,.85)'],
-				[0.6, 'rgba(255,255,255,.4)'],
-				[1, 'rgba(255,255,255,0)']
+			color: 0xffffff,
+			alphaMap: falloff('pool', [
+				[0, 0.85],
+				[0.6, 0.4],
+				[1, 0]
 			]),
 			transparent: true,
 			depthWrite: false
