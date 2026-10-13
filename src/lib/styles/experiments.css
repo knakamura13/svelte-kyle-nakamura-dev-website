@@ -22,7 +22,9 @@
 
 /* Stage: the tinted frame that holds one live 3D scene. */
 .stage-view { position:relative; height:clamp(260px,calc(100vh - 96px - var(--dock,300px) - 56px),520px); background-color:var(--tint); background-image:var(--poster,none); background-size:cover; background-position:center; }
-.stage-view:focus-visible { outline:3px solid var(--focus); outline-offset:-3px; }
+/* The ring is drawn over the canvas: an outline of the Stage itself is painted underneath the absolutely positioned canvas and never shows. */
+.stage-view:focus-visible { outline:none; }
+.stage-view:focus-visible::after { content:''; position:absolute; inset:0; z-index:2; border:3px solid var(--focus); pointer-events:none; }
 .stage-view canvas { position:absolute; inset:0; width:100%; height:100%; display:block; touch-action:pan-y; cursor:grab; }
 .stage-view[data-dragging] canvas { cursor:grabbing; }
 .stage-labels { position:absolute; inset:0; overflow:hidden; pointer-events:none; }

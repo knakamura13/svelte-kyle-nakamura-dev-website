@@ -92,10 +92,13 @@ export class Experience {
 		this.controller?.invalidate();
 	}
 
-	/** Says something to a screen reader after the visitor stops changing a control. */
+	/**
+	 * Says something to a screen reader after the visitor stops changing a control. A live region is read when its text
+	 * changes, so the same words said twice in a row (a second refusal) get a no-break space to count as a change.
+	 */
 	announce(text: string) {
 		clearTimeout(this.announceTimer);
-		this.announceTimer = setTimeout(() => (this.announcement = text), 600);
+		this.announceTimer = setTimeout(() => (this.announcement = text && this.announcement === text ? `${text}\u00a0` : text), 600);
 	}
 }
 

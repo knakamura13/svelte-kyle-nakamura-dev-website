@@ -339,7 +339,10 @@ export class StageController {
 	private onResize = (entries: ResizeObserverEntry[]) => {
 		for (const entry of entries) {
 			const slot = this.slots.get(entry.target as HTMLElement);
-			if (slot && slot === this.active && this.fit(slot)) this.invalidate();
+			if (!slot || slot !== this.active || !this.fit(slot)) continue;
+			// Resizing the canvas clears it, so draw before the browser paints rather than leave a blank Stage for a frame.
+			this.render(slot);
+			this.invalidate();
 		}
 	};
 
@@ -396,7 +399,10 @@ export class StageController {
 
 	private onPointerLeave = (event: PointerEvent) => {
 		const slot = this.active;
-		if (slot?.claimed === null) slot.inst?.input?.pointer('leave', event, this.ndc(event));
+		if (slot?.claimed !== null) return;
+		slot.inst?.input?.pointer('leave', event, this.ndc(event));
+		// What the scene drew for the pointer (a ring) is gone now, so draw again even if nothing else is moving.
+		this.invalidate();
 	};
 
 	private onDoubleClick = () => {
