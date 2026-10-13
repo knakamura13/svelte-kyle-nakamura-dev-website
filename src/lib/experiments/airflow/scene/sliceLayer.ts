@@ -19,11 +19,11 @@ import { LUT_SIZE, PALETTES, PALETTE_GLSL, isCyclic, scaleMapping, type ScaleOpt
 
 /**
  * Draw order among transparent objects: the slice, which writes depth so particles behind it are hidden rather than
- * drawn over it; then the arrows; then the particles. The dollhouse's opaque pieces draw at 0 and its faded walls at
- * `FADED_ORDER` (20 in `dollhouse.ts`), after all of these, so a wall between the camera and the slice tints what is
- * behind it. Keep any new layer below 20.
+ * drawn over it; then the arrows; then the particles; then the markers and the airflow cones of the devices. The
+ * dollhouse's opaque pieces draw at 0 and its faded walls at `FADED_ORDER` (20 in `dollhouse.ts`), after all of these,
+ * so a wall between the camera and the slice tints what is behind it. Keep any new layer below 20.
  */
-export const RENDER_ORDER = { slice: 10, arrows: 11, tracers: 12, smoke: 13 } as const;
+export const RENDER_ORDER = { slice: 10, arrows: 11, tracers: 12, smoke: 13, markers: 14 } as const;
 
 /** Overall opacity of the slice, so the dollhouse reads through it. */
 export const SLICE_OPACITY = 0.82;

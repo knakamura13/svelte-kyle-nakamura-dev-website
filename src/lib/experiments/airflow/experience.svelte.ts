@@ -251,6 +251,18 @@ export class AirflowExperience extends Experience {
 		this.adoptScenario(id, true);
 	}
 
+	/** Starts from a setup a share link carried: a fresh run of it, with the view and the clock left as the visitor has them. */
+	adoptSetup(setup: Setup) {
+		this.setup = clone(setup);
+		this.starting = clone(setup);
+		this.startingSmoke = 0;
+		this.probes = [];
+		this.selected = null;
+		this.scenario = null;
+		this.restarts++;
+		this.wake();
+	}
+
 	private afterChange(message: string, restart = false) {
 		if (restart) {
 			this.probes = [];
