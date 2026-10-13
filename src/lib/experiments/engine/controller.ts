@@ -87,18 +87,26 @@ export class StageController {
 			slot.pinnedUntil = performance.now() + PIN_MS;
 			this.activate(slot);
 		};
+		// The scene gets a key first, presses and releases alike; one it does not use goes on to the orbit rig, which takes presses only.
 		const keydown = (event: KeyboardEvent) => {
-			if (event.target !== view || !slot.rig?.key(event)) return;
+			if (event.target !== view || !(slot.inst?.input?.key?.(event) || slot.rig?.key(event))) return;
+			event.preventDefault();
+			this.invalidate();
+		};
+		const keyup = (event: KeyboardEvent) => {
+			if (event.target !== view || !slot.inst?.input?.key?.(event)) return;
 			event.preventDefault();
 			this.invalidate();
 		};
 		region.addEventListener('pointerdown', pin, true);
 		region.addEventListener('focusin', pin);
 		view.addEventListener('keydown', keydown);
+		view.addEventListener('keyup', keyup);
 		slot.undo.push(
 			() => region.removeEventListener('pointerdown', pin, true),
 			() => region.removeEventListener('focusin', pin),
-			() => view.removeEventListener('keydown', keydown)
+			() => view.removeEventListener('keydown', keydown),
+			() => view.removeEventListener('keyup', keyup)
 		);
 
 		this.seen.observe(view);
@@ -156,6 +164,7 @@ export class StageController {
 			canvas.addEventListener('pointerup', this.onPointerEnd);
 			canvas.addEventListener('pointercancel', this.onPointerEnd);
 			canvas.addEventListener('lostpointercapture', this.onPointerEnd);
+			canvas.addEventListener('pointerleave', this.onPointerLeave);
 			canvas.addEventListener('dblclick', this.onDoubleClick);
 			canvas.addEventListener('wheel', this.onWheel, { passive: false });
 			canvas.addEventListener('webglcontextrestored', () => this.invalidate());

@@ -97,8 +97,11 @@ export function blobShadow(radius: number, strength = 0.32) {
 /** Multiplies a color's channels: <1 darkens toward black, useful for a floor a little deeper than the Stage tint. */
 export const shade = (color: number, factor: number) => new Color(color).multiplyScalar(factor);
 
-/** Sets the Stage tint as background and fog, lights the scene softly, and lays down a floor pool and a grid. */
-export function studio(scene: Scene, tint: number, options: { pool?: number; grid?: number; fog?: [number, number] } = {}) {
+/**
+ * Sets the Stage tint as background and fog, lights the scene softly, and lays down a floor pool and a grid. The pool sits
+ * at `poolY` (just under the floor by default), for a scene whose own floor is not at 0.
+ */
+export function studio(scene: Scene, tint: number, options: { pool?: number; poolY?: number; grid?: number; fog?: [number, number] } = {}) {
 	scene.background = new Color(tint);
 	const [near, far] = options.fog ?? [24, 60];
 	scene.fog = new Fog(tint, near, far);
@@ -121,7 +124,7 @@ export function studio(scene: Scene, tint: number, options: { pool?: number; gri
 		})
 	);
 	pool.rotation.x = -Math.PI / 2;
-	pool.position.y = -0.004;
+	pool.position.y = options.poolY ?? -0.004;
 	pool.scale.setScalar(options.pool ?? 14);
 	pool.renderOrder = -3;
 	scene.add(pool);
