@@ -29,6 +29,21 @@ export function fluidFor(setup: Setup): FluidProperties {
 }
 
 /**
+ * How far open each opening of `plan` is, 0 to 1 of its travel, by id: what the visitor set, or the plan's own position.
+ * A window fan fills its window, so the window is open as far as it goes while the fan runs and shut by the fan when it
+ * is off. The solver and the dollhouse both draw from this, so they never disagree about a window.
+ */
+export function effectiveOpenings(plan: Pick<HomePlan, 'openings'>, setup: Setup, models: ReadonlyMap<string, DeviceModel>): Map<string, number> {
+	const amounts = new Map<string, number>();
+	for (const spec of plan.openings) amounts.set(spec.id, setup.openings[spec.id] ?? spec.open ?? 0);
+	for (const device of setup.devices) {
+		const model = models.get(device.model);
+		if (model?.kind === 'window-fan' && device.opening && amounts.has(device.opening)) amounts.set(device.opening, device.power > 0.005 ? 1 : 0);
+	}
+	return amounts;
+}
+
+/**
  * A plan, a grid and a running backend, kept in step with the visitor's setup. Changes that the solver can take
  * while it runs (opening a window, moving a fan, new weather) are applied in place; changes to what the box is (the
  * plan, the furniture, the starting indoor temperature, which resets the air) need a new world: `apply` says so.
@@ -80,19 +95,8 @@ export class World {
 		this.applyAll(time);
 	}
 
-	private effectiveOpenings(): Map<string, number> {
-		const amounts = new Map<string, number>();
-		for (const o of this.raster.openings) amounts.set(o.spec.id, this.setup.openings[o.spec.id] ?? o.spec.open ?? 0);
-		// A window fan fills its window: the window is open as far as it goes while the fan runs, and shut by the fan when it is off.
-		for (const device of this.setup.devices) {
-			const model = this.options.models.get(device.model);
-			if (model?.kind === 'window-fan' && device.opening && amounts.has(device.opening)) amounts.set(device.opening, device.power > 0.005 ? 1 : 0);
-		}
-		return amounts;
-	}
-
 	private applyAll(time: number) {
-		const amounts = this.effectiveOpenings();
+		const amounts = effectiveOpenings(this.raster.plan, this.setup, this.options.models);
 		const faces: FaceUpdate[] = this.raster.openings.map((o) => o.update(amounts.get(o.spec.id) ?? 0));
 		const exterior = exteriorState(this.raster, this.setup.conditions, this.setup.conditions.indoorTemp, this.fluid);
 		this.inputs = deviceInputs({ devices: this.setup.devices, models: this.options.models, raster: this.raster, fluid: this.fluid, time });
