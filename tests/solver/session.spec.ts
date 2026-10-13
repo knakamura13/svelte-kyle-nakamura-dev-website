@@ -4,6 +4,7 @@ import { emptyReadout } from '../../src/lib/experiments/airflow/readouts';
 import { SimulationSession, type SessionParams } from '../../src/lib/experiments/airflow/sim/session';
 import type { BackendFactory } from '../../src/lib/experiments/airflow/sim/world';
 import { CpuBackend } from '../../src/lib/experiments/airflow/solver/cpu/backend';
+import { GpuSolverError } from '../../src/lib/experiments/airflow/solver/gpu/errors';
 import { blankSetup, DEFAULT_CLOCK, DEFAULT_VIEW } from '../../src/lib/experiments/airflow/state';
 
 /** The page's runtime driver, run with a fake clock: each `update(dt)` is one drawn frame of `dt` real seconds. */
@@ -12,7 +13,7 @@ const make: BackendFactory = (config, initial) => new CpuBackend({ ...config, sc
 const studio = planById('studio')!;
 const FRAME = 1 / 60;
 
-const makeSession = (tweak?: (params: SessionParams) => void) => {
+const makeSession = (tweak?: (params: SessionParams) => void, factory: BackendFactory = make) => {
 	const params: SessionParams = {
 		setup: blankSetup('studio'),
 		view: { ...DEFAULT_VIEW, units: 'metric' },
@@ -25,7 +26,7 @@ const makeSession = (tweak?: (params: SessionParams) => void) => {
 	tweak?.(params);
 	const readout = emptyReadout();
 	const invalidated = { count: 0 };
-	const session = new SimulationSession({ params, plans, models: [], make, cellSize: () => 0.2, readout, invalidate: () => invalidated.count++, reducedMotion: () => false });
+	const session = new SimulationSession({ params, plans, models: [], make: factory, cellSize: () => 0.2, readout, invalidate: () => invalidated.count++, reducedMotion: () => false });
 	return { session, params, readout, invalidated };
 };
 
@@ -171,5 +172,104 @@ test.describe('simulation session', () => {
 		expect(session.simTime).toBeLessThan(1);
 		expect(session.latest.version).toBeGreaterThan(version);
 		session.dispose();
+	});
+
+	test.describe('when no backend can start', () => {
+		/** A factory that always fails, and how often it was asked. */
+		const failing = (error: Error) => {
+			const calls = { count: 0 };
+			const factory: BackendFactory = async () => {
+				calls.count++;
+				throw error;
+			};
+			return { calls, factory };
+		};
+
+		test('it tries once, says so, and stops asking for frames instead of retrying every frame', async () => {
+			const { calls, factory } = failing(new Error('the device would not open'));
+			const { session, readout } = makeSession(undefined, factory);
+			const quiet = console.error;
+			console.error = () => {};
+			try {
+				for (let n = 0; n < 30; n++) {
+					session.update(FRAME);
+					await pause(5);
+				}
+				expect(calls.count, 'one attempt, not one per frame').toBe(1);
+				expect(readout.status).toBe('error');
+				expect(readout.note).toContain('could not start');
+				expect(session.world).toBeNull();
+				expect(session.update(FRAME), 'nothing more will happen until the setup changes').toBe(false);
+			} finally {
+				console.error = quiet;
+				session.dispose();
+			}
+		});
+
+		test('a restart, or another home, is a new reason to try again', async () => {
+			const { calls, factory } = failing(new Error('no'));
+			const { session, params } = makeSession(undefined, factory);
+			const quiet = console.error;
+			console.error = () => {};
+			try {
+				for (let n = 0; n < 10; n++) {
+					session.update(FRAME);
+					await pause(5);
+				}
+				expect(calls.count).toBe(1);
+				params.restarts++;
+				for (let n = 0; n < 10; n++) {
+					session.update(FRAME);
+					await pause(5);
+				}
+				expect(calls.count).toBe(2);
+				params.setup = blankSetup('one-bedroom');
+				for (let n = 0; n < 10; n++) {
+					session.update(FRAME);
+					await pause(5);
+				}
+				expect(calls.count).toBe(3);
+			} finally {
+				console.error = quiet;
+				session.dispose();
+			}
+		});
+
+		test('a browser with no WebGPU, or no adapter, reads as unsupported rather than as a fault', async () => {
+			for (const reason of ['no-webgpu', 'no-adapter'] as const) {
+				const { factory } = failing(new GpuSolverError(reason, 'nothing to run on'));
+				const { session, readout } = makeSession(undefined, factory);
+				const quiet = console.error;
+				console.error = () => {};
+				try {
+					for (let n = 0; n < 6; n++) {
+						session.update(FRAME);
+						await pause(5);
+					}
+					expect(readout.status, reason).toBe('unsupported');
+					expect(readout.note).toContain('WebGPU');
+				} finally {
+					console.error = quiet;
+					session.dispose();
+				}
+			}
+		});
+
+		test('a device that fails some other way is still an error', async () => {
+			const { factory } = failing(new GpuSolverError('shader', 'a kernel did not compile'));
+			const { session, readout } = makeSession(undefined, factory);
+			const quiet = console.error;
+			console.error = () => {};
+			try {
+				for (let n = 0; n < 6; n++) {
+					session.update(FRAME);
+					await pause(5);
+				}
+				expect(readout.status).toBe('error');
+			} finally {
+				console.error = quiet;
+				session.dispose();
+			}
+		});
 	});
 });

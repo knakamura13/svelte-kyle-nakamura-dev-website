@@ -3,6 +3,7 @@ import type { HomePlan } from '../homes/types';
 import { emissionRate } from '../emission';
 import type { AirflowReadout, HoverReading, ProbeReading, RoomReading } from '../readouts';
 import type { FlowBackend, Snapshot } from '../solver/backend';
+import { isGpuSolverError } from '../solver/gpu/errors';
 import { POINT_FIELDS, type Slice } from '../solver/types';
 import type { Clock, Pin, Setup, View } from '../state';
 import { RollingMean, SliceHistory } from './history';
@@ -43,8 +44,11 @@ const ROOM_INTERVAL = 0.5;
 /** Real seconds between writes of the numbers the Dock shows, so a reactive page is not rewritten every frame. */
 const READOUT_INTERVAL = 0.12;
 
-const TRACERS = 12_000;
-const SMOKE = 6_000;
+/** Particles the backend keeps: tracers that drift with the air, and smoke puffs that carry the particulate concentration. */
+export const TRACERS = 12_000;
+export const SMOKE = 6_000;
+/** Particulate concentration, ppm by mass, that counts as dense smoke: the backend seeds toward it and the scene's smoke fades up to it. */
+export const SMOKE_DENSE = 1;
 
 /**
  * Owns the running simulation for the page: builds a world for the setup, keeps it in step with changes, steps it
@@ -60,6 +64,8 @@ export class SimulationSession {
 
 	private building: Promise<void> | null = null;
 	private worldKey = '';
+	/** The key of a build that failed: it is not tried again until the key changes (a restart, another home), or every frame would retry it. */
+	private failedKey = '';
 	private appliedSignature = '';
 	private generation = 0;
 	private pending = false;
@@ -110,6 +116,7 @@ export class SimulationSession {
 				const old = this.world;
 				this.world = world;
 				this.worldKey = key;
+				this.failedKey = '';
 				this.appliedSignature = JSON.stringify(setup);
 				this.simTime = 0;
 				this.history.clear();
@@ -119,15 +126,20 @@ export class SimulationSession {
 				const { readout } = this.options;
 				readout.physics = { ...readout.physics, backend: world.backend.kind, cellSize: world.raster.spec.h, cells: world.backend.fluidCells, time: 0, mass: null, reducedDetail: world.backend.kind === 'cpu' };
 				readout.status = this.params.clock.paused ? 'paused' : 'running';
-				world.backend.configureParticles({ tracers: TRACERS, smoke: SMOKE, scale: 1, seed: 1 });
+				world.backend.configureParticles({ tracers: TRACERS, smoke: SMOKE, scale: SMOKE_DENSE, seed: 1 });
 				old?.dispose();
 				this.pending = false;
 				this.options.invalidate();
 			})
 			.catch((error) => {
 				console.error('The simulation could not start.', error);
-				this.options.readout.status = 'error';
-				this.options.readout.note = 'The simulation could not start. The controls and numbers still work.';
+				this.failedKey = key;
+				// No WebGPU is not a fault: the browser or the machine just cannot run the solver this way.
+				const unavailable = isGpuSolverError(error) && (error.reason === 'no-webgpu' || error.reason === 'no-adapter');
+				this.options.readout.status = unavailable ? 'unsupported' : 'error';
+				this.options.readout.note = unavailable
+					? 'This browser cannot run the simulation yet because it has no WebGPU. The home is still shown.'
+					: 'The simulation could not start. The controls and numbers still work.';
 			})
 			.finally(() => {
 				this.building = null;
@@ -143,9 +155,11 @@ export class SimulationSession {
 	/** Advances the simulation for one drawn frame of `dtReal` real seconds. Returns true while it needs more frames. */
 	update(dtReal: number): boolean {
 		const { params } = this;
-		if (!this.building && (!this.world || this.worldKey !== this.keyFor(params))) this.build();
+		const wanted = this.keyFor(params);
+		if (!this.building && this.failedKey !== wanted && (!this.world || this.worldKey !== wanted)) this.build();
 		const world = this.world;
-		if (!world) return true;
+		// With no world yet, more frames are wanted only while one is being built; after a failure nothing changes until the setup does.
+		if (!world) return this.building !== null;
 		const { readout } = this.options;
 
 		// Changes the solver can take while it runs.
