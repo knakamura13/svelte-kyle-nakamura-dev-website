@@ -174,6 +174,96 @@ test.describe('simulation session', () => {
 		session.dispose();
 	});
 
+	test('while paused, a probe pinned or a slice height changed is read at once, not at the next tick of a clock that has stopped', async () => {
+		const { session, params, readout, invalidated } = makeSession((p) => (p.clock.paused = true));
+		/** Draws frames the way the Stage does: one more only while the session asks for it. Returns how many it took. */
+		const untilIdle = async () => {
+			for (let n = 1; n <= 60; n++) {
+				const more = session.update(FRAME);
+				await settle();
+				if (!more) return n;
+			}
+			throw new Error('the session never stopped asking for frames');
+		};
+		await start(session);
+		await untilIdle();
+		expect(session.latest.slice, 'the first picture arrives while paused').not.toBeNull();
+		const asked = invalidated.count;
+		params.probes = [{ id: 'p1', x: 2, y: 1.1, z: 2 }];
+		await untilIdle();
+		expect(readout.probes.map((r) => r.id), 'the pinned probe has a reading').toEqual(['p1']);
+		expect(invalidated.count, 'and the Stage was told there is something new to draw').toBeGreaterThan(asked);
+		expect(Number.isFinite(readout.probes[0].speed)).toBe(true);
+		const before = session.latest.slice!.y;
+		params.view.sliceHeight = 2.0;
+		await untilIdle();
+		expect(Math.abs(session.latest.slice!.y - 2.0), 'cut at the new height').toBeLessThan(0.11);
+		expect(session.latest.slice!.y).not.toBe(before);
+		session.dispose();
+	});
+
+	test('while paused, a restart still ends with a picture of the new world', async () => {
+		const { session, params } = makeSession((p) => (p.clock.paused = true));
+		await start(session);
+		await draw(session, 8);
+		const first = session.world;
+		const version = session.latest.version;
+		params.restarts++;
+		// Frames so short that the read throttle (which counts frame time) cannot be what asks for the first picture.
+		const deadline = Date.now() + 30000;
+		while (session.world === first && Date.now() < deadline) {
+			session.update(0.0001);
+			await pause(5);
+		}
+		expect(session.world, 'a new world was built').not.toBe(first);
+		for (let n = 0; n < 4; n++) {
+			session.update(0.0001);
+			await settle();
+		}
+		expect(session.latest.slice, 'and it has been drawn').not.toBeNull();
+		expect(session.latest.version).toBeGreaterThan(version);
+		session.dispose();
+	});
+
+	test('a read or a start that fails after the session was disposed says nothing: the page is already leaving', async () => {
+		const logged: unknown[][] = [];
+		const quiet = console.error;
+		console.error = (...args: unknown[]) => logged.push(args);
+		try {
+			// A backend whose reads fail late, as a buffer that is unmapped when the page leaves does.
+			let leaving = false;
+			class Late extends CpuBackend {
+				override async snapshot(request: Parameters<CpuBackend['snapshot']>[0]) {
+					if (!leaving) return super.snapshot(request);
+					await pause(25);
+					throw new Error('Buffer was unmapped');
+				}
+			}
+			const first = makeSession(undefined, (config, initial) => new Late({ ...config, scalarSubsteps: undefined }, initial));
+			await start(first.session);
+			await settle();
+			leaving = true;
+			first.session.update(0.1);
+			first.session.dispose();
+			await pause(80);
+			expect(logged, 'a read that fails after dispose').toEqual([]);
+
+			// And a build that rejects after it.
+			const slow: BackendFactory = async () => {
+				await pause(25);
+				throw new GpuSolverError('lost', 'The graphics device was lost while the solver started.');
+			};
+			const second = makeSession(undefined, slow);
+			second.session.update(FRAME);
+			second.session.dispose();
+			await pause(80);
+			expect(logged, 'a build that fails after dispose').toEqual([]);
+			expect(second.readout.status, 'a disposed session leaves its readout alone').toBe('loading');
+		} finally {
+			console.error = quiet;
+		}
+	});
+
 	test.describe('when no backend can start', () => {
 		/** A factory that always fails, and how often it was asked. */
 		const failing = (error: Error) => {

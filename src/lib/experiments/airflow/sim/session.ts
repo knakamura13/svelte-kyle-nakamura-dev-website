@@ -47,8 +47,12 @@ const READOUT_INTERVAL = 0.12;
 /** Particles the backend keeps: tracers that drift with the air, and smoke puffs that carry the particulate concentration. */
 export const TRACERS = 12_000;
 export const SMOKE = 6_000;
-/** Particulate concentration, ppm by mass, that counts as dense smoke: the backend seeds toward it and the scene's smoke fades up to it. */
-export const SMOKE_DENSE = 1;
+/**
+ * Particulate concentration, ppm by mass, that counts as dense smoke: the backend seeds puffs toward it and the scene's
+ * smoke fades up to it from 2.5 decades below. At 0.3 the smoke shows down to 0.001 ppm, where the particulates layer's
+ * scale begins, so a cloud thinning out in a draught stays visible for as long as the layer would show it.
+ */
+export const SMOKE_DENSE = 0.3;
 
 /**
  * Owns the running simulation for the page: builds a world for the setup, keeps it in step with changes, steps it
@@ -66,6 +70,8 @@ export class SimulationSession {
 	private worldKey = '';
 	/** The key of a build that failed: it is not tried again until the key changes (a restart, another home), or every frame would retry it. */
 	private failedKey = '';
+	/** What the last snapshot request was made for (the slice height and the probes), so a change asks for another at once. */
+	private requestKey = '';
 	private appliedSignature = '';
 	private generation = 0;
 	private pending = false;
@@ -117,6 +123,8 @@ export class SimulationSession {
 				this.world = world;
 				this.worldKey = key;
 				this.failedKey = '';
+				// A new world has no picture yet: ask for one at once, paused or not.
+				this.requestKey = '';
 				this.appliedSignature = JSON.stringify(setup);
 				this.simTime = 0;
 				this.history.clear();
@@ -132,6 +140,8 @@ export class SimulationSession {
 				this.options.invalidate();
 			})
 			.catch((error) => {
+				// A start that fails because the page is already leaving (the device goes with it) is not news.
+				if (this.disposed) return;
 				console.error('The simulation could not start.', error);
 				this.failedKey = key;
 				// No WebGPU is not a fault: the browser or the machine just cannot run the solver this way.
@@ -143,7 +153,7 @@ export class SimulationSession {
 			})
 			.finally(() => {
 				this.building = null;
-				this.options.invalidate();
+				if (!this.disposed) this.options.invalidate();
 			});
 	}
 
@@ -213,12 +223,17 @@ export class SimulationSession {
 	private requestSnapshot(world: World, dtReal: number) {
 		this.sinceSnapshot += dtReal;
 		this.sinceRooms += dtReal;
-		if (this.pending || this.sinceSnapshot < SNAPSHOT_INTERVAL) return;
+		const { params } = this;
+		// What the visitor has just asked to see (a probe pinned, the slice moved, a new world's first picture) is read at
+		// once. The throttle below counts drawn frames, and a paused page draws none, so it would never get there.
+		const wants = `${params.view.sliceHeight}|${params.probes.map((p) => `${p.id}@${p.x},${p.y},${p.z}`).join(';')}`;
+		const asked = wants !== this.requestKey;
+		if (this.pending || (!asked && this.sinceSnapshot < SNAPSHOT_INTERVAL)) return;
+		this.requestKey = wants;
 		this.sinceSnapshot = 0;
 		const wantRooms = this.sinceRooms >= ROOM_INTERVAL;
 		if (wantRooms) this.sinceRooms = 0;
 		const generation = this.generation;
-		const { params } = this;
 		const probes = params.probes.map((p) => ({ ...p }));
 		const points = new Float32Array(probes.flatMap((p) => [p.x, p.y, p.z]));
 		this.pending = true;
@@ -227,16 +242,22 @@ export class SimulationSession {
 		void Promise.all([snapshot, sampled])
 			.then(([shot, values]) => {
 				if (this.disposed || generation !== this.generation || world !== this.world) return;
-				this.take(world, shot, probes, values);
+				// Readouts are throttled while frames come; a paused page asks for few reads, so each one is shown.
+				this.take(world, shot, probes, values, asked || params.clock.paused);
+				// A paused page draws a frame only when told something changed, and a new reading is a change.
+				this.options.invalidate();
 			})
-			.catch((error) => console.error('Reading the simulation failed.', error))
+			.catch((error) => {
+				// A read that fails because the page is leaving (a buffer unmapped under it) is not news.
+				if (!this.disposed && generation === this.generation) console.error('Reading the simulation failed.', error);
+			})
 			.finally(() => {
 				this.pending = false;
 			});
 	}
 
 	/** Turns a snapshot into what the scene draws and what the page shows. */
-	private take(world: World, shot: Snapshot, probes: Pin[], values: Float32Array) {
+	private take(world: World, shot: Snapshot, probes: Pin[], values: Float32Array, show: boolean) {
 		const { readout } = this.options;
 		const reference = world.current.conditions.indoorTemp;
 		if (shot.slice) {
@@ -274,7 +295,7 @@ export class SimulationSession {
 		for (const id of [...this.probeHistory.keys()]) if (!probes.some((p) => p.id === id)) this.probeHistory.delete(id);
 
 		this.sinceReadout += SNAPSHOT_INTERVAL;
-		if (this.sinceReadout < READOUT_INTERVAL && !shot.rooms) return;
+		if (!show && this.sinceReadout < READOUT_INTERVAL && !shot.rooms) return;
 		this.sinceReadout = 0;
 		const d = shot.diagnostics;
 		readout.probes = readings;
