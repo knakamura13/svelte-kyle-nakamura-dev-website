@@ -345,6 +345,36 @@ test.describe('simulation session', () => {
 			}
 		});
 
+		test('no WebGPU is tried once for the page: another home or a restart does not try again, and it is a warning, not an error', async () => {
+			const { calls, factory } = failing(new GpuSolverError('no-webgpu', 'This browser does not support WebGPU.'));
+			const { session, params, readout } = makeSession(undefined, factory);
+			const errors: unknown[][] = [];
+			const warnings: unknown[][] = [];
+			const [quietError, quietWarn] = [console.error, console.warn];
+			console.error = (...args: unknown[]) => errors.push(args);
+			console.warn = (...args: unknown[]) => warnings.push(args);
+			try {
+				for (let n = 0; n < 6; n++) {
+					session.update(FRAME);
+					await pause(5);
+				}
+				params.restarts++;
+				params.setup = blankSetup('one-bedroom');
+				for (let n = 0; n < 6; n++) {
+					session.update(FRAME);
+					await pause(5);
+				}
+				expect(calls.count).toBe(1);
+				expect(readout.status).toBe('unsupported');
+				expect(errors, 'not a fault').toEqual([]);
+				expect(warnings).toHaveLength(1);
+			} finally {
+				console.error = quietError;
+				console.warn = quietWarn;
+				session.dispose();
+			}
+		});
+
 		test('a device that fails some other way is still an error', async () => {
 			const { factory } = failing(new GpuSolverError('shader', 'a kernel did not compile'));
 			const { session, readout } = makeSession(undefined, factory);

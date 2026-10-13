@@ -146,6 +146,25 @@ test.describe('a device’s symbol on the slice', () => {
 		expect(symbolOf(meshes, fan.id).symbol.getWorldPosition(new Vector3()).y, 'the plane defaults to 1.1 m').toBeCloseTo(1.13, 6);
 	});
 
+	test('sits inside the home for a window fan, which stands on the wall line where the wall would hide the ring, and on the fan for every other', () => {
+		const meshes = new DeviceMeshes(models);
+		const window = plan.openings.find((o) => o.id === 'bedroom-1-window')!;
+		const seat = windowSeat(plan, window);
+		const windowFan = placed(FAN_MODELS.find((m) => m.kind === 'window-fan')!.id, { x: seat.x, y: seat.y, z: seat.z, yaw: seat.yaw, opening: window.id, intake: true });
+		const box = placed('air-king-9723', { x: 3, z: 3, yaw: 90 });
+		meshes.update([windowFan, box], 0);
+		const place = (id: string) => symbolOf(meshes, id).symbol.getWorldPosition(new Vector3());
+		const inward = aimVector(seat.yaw, 0);
+		expect(place(windowFan.id).x).toBeCloseTo(seat.x + 0.32 * inward[0], 6);
+		expect(place(windowFan.id).z).toBeCloseTo(seat.z + 0.32 * inward[2], 6);
+		expect(place(box.id).x).toBeCloseTo(3, 6);
+		expect(place(box.id).z).toBeCloseTo(3, 6);
+		// An exhaust fan faces out, but it still stands in the same window, so its symbol stays inside the home.
+		meshes.update([{ ...windowFan, intake: false }, box], 0);
+		expect(place(windowFan.id).x).toBeCloseTo(seat.x + 0.32 * inward[0], 6);
+		expect(place(windowFan.id).z).toBeCloseTo(seat.z + 0.32 * inward[2], 6);
+	});
+
 	test('has an arrow that points the way the fan blows in the plan, and follows an oscillating head', () => {
 		const meshes = new DeviceMeshes(models);
 		const pedestal = placed('air-king-9119', { yaw: 90, oscillation: { on: true, sweep: 80, period: 8 } });

@@ -1,7 +1,7 @@
 import { BufferGeometry, ConeGeometry, CylinderGeometry, DoubleSide, Float32BufferAttribute, Group, Mesh, MeshBasicMaterial, RingGeometry, Vector3, type MeshStandardMaterial } from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { clay, disposeTree } from '$lib/experiments/engine/kit';
-import { oscillatedYaw } from '../devices/model';
+import { aimVector, oscillatedYaw } from '../devices/model';
 import type { DeviceModel, FanModel } from '../devices/types';
 import type { DeviceState } from '../state';
 import { RENDER_ORDER } from './sliceLayer';
@@ -16,6 +16,8 @@ const IDLE = 0x8a948f;
 /** The slice plane's default height, m, and how far its symbols float above the plane so they never fight it for depth. */
 const PLANE = 1.1;
 const SYMBOL_LIFT = 0.03;
+/** How far inside the home a window fan's symbol sits, m: the fan stands on the wall line, where the wall would hide most of its ring. */
+const SYMBOL_INSET = 0.32;
 
 const DEGREES = Math.PI / 180;
 
@@ -156,6 +158,12 @@ export class DeviceMeshes {
 		const on = device.power > 0.005;
 		// The symbol rides the slice plane, whatever the device stands on.
 		symbol.position.y = planeY - device.y + SYMBOL_LIFT;
+		if (model.kind === 'window-fan') {
+			// A window fan's yaw faces into the home, so inward is where that points.
+			const inward = aimVector(device.yaw, 0);
+			symbol.position.x = SYMBOL_INSET * inward[0];
+			symbol.position.z = SYMBOL_INSET * inward[2];
+		}
 		item.ring.material.color.set(on ? INK : IDLE);
 		if (model.kind === 'air-purifier') {
 			// A purifier stands upright and blows up whatever its yaw, so its symbol has no arrow.

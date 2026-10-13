@@ -70,6 +70,8 @@ export class SimulationSession {
 	private worldKey = '';
 	/** The key of a build that failed: it is not tried again until the key changes (a restart, another home), or every frame would retry it. */
 	private failedKey = '';
+	/** Set when the browser or the machine offers no WebGPU: nothing changes that while the page is open, so no later start is tried. */
+	private unavailable = false;
 	/** What the last snapshot request was made for (the slice height and the probes), so a change asks for another at once. */
 	private requestKey = '';
 	private appliedSignature = '';
@@ -142,10 +144,13 @@ export class SimulationSession {
 			.catch((error) => {
 				// A start that fails because the page is already leaving (the device goes with it) is not news.
 				if (this.disposed) return;
-				console.error('The simulation could not start.', error);
 				this.failedKey = key;
-				// No WebGPU is not a fault: the browser or the machine just cannot run the solver this way.
+				// No WebGPU is not a fault: the browser or the machine just cannot run the solver this way, so it is a warning, said once.
 				const unavailable = isGpuSolverError(error) && (error.reason === 'no-webgpu' || error.reason === 'no-adapter');
+				if (unavailable) {
+					this.unavailable = true;
+					console.warn(`The simulation cannot run in this browser: ${error.message}`);
+				} else console.error('The simulation could not start.', error);
 				this.options.readout.status = unavailable ? 'unsupported' : 'error';
 				this.options.readout.note = unavailable
 					? 'This browser cannot run the simulation yet because it has no WebGPU. The home is still shown.'
@@ -166,7 +171,7 @@ export class SimulationSession {
 	update(dtReal: number): boolean {
 		const { params } = this;
 		const wanted = this.keyFor(params);
-		if (!this.building && this.failedKey !== wanted && (!this.world || this.worldKey !== wanted)) this.build();
+		if (!this.building && !this.unavailable && this.failedKey !== wanted && (!this.world || this.worldKey !== wanted)) this.build();
 		const world = this.world;
 		// With no world yet, more frames are wanted only while one is being built; after a failure nothing changes until the setup does.
 		if (!world) return this.building !== null;
