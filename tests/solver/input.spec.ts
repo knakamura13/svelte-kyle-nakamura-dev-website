@@ -175,6 +175,16 @@ test.describe('a double click', () => {
 		expect(h.log.unpins).toEqual(['p1']);
 	});
 
+	test('two clicks 450 ms apart, a slow double click on macOS, are still one', () => {
+		const h = harness();
+		const event = h.pointer('mouse');
+		click(h, event);
+		h.advance(450);
+		click(h, event);
+		expect(h.log.pins).toHaveLength(1);
+		expect(h.log.unpins).toEqual(['p1']);
+	});
+
 	test('two clicks well apart in time are two probes', () => {
 		const h = harness();
 		const event = h.pointer('mouse');

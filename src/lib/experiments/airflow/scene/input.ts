@@ -9,8 +9,12 @@ export const SLOP_PX = 7;
 /** The keyboard cursor's step over the slice, m, and its step with Shift held. */
 export const CURSOR_STEP = 0.25;
 export const CURSOR_STEP_FAST = 1;
-/** Two taps this close in time and place are a double click, which resets the camera and is not two probes: how close, ms and px (a finger needs more room). */
-export const DOUBLE_MS = 350;
+/**
+ * Two taps this close in time and place are a double click, which resets the camera and is not two probes: how close, ms
+ * and px (a finger needs more room). The time is the longest the operating systems allow between the clicks of one
+ * (macOS and Windows both default to 500 ms), or a click the browser calls a double click would still pin a second probe.
+ */
+export const DOUBLE_MS = 500;
 export const DOUBLE_PX = 12;
 export const DOUBLE_TOUCH_PX = 30;
 

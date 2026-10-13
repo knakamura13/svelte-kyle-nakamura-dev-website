@@ -366,6 +366,8 @@ export class StageController {
 			this.invalidate();
 			return;
 		}
+		// A press the scene did not take may still turn into something it times (a hold), and a paused scene draws no frames of its own, so start them.
+		if (input) this.invalidate();
 		slot.rig.pointerDown(event);
 		(event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
 		slot.view.dataset.dragging = 'true';
