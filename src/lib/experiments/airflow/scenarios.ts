@@ -64,7 +64,7 @@ export const SCENARIOS: Scenario[] = [
 		name: 'A fan in the window',
 		blurb: 'No wind at all: one window fan pulls the air through the whole home.',
 		notice:
-			'The fan in the dining room window draws cool air in and pushes it across the living room and down the hall. It leaves by the open window in bedroom 1. Turn the fan off and the air stops moving.',
+			'The fan in the dining room window draws cool air in and pushes it toward the hall and bedroom 1, where it leaves by the open window. The living room and the closed rooms see little of it. Turn the fan off and the air slows to a drift within a minute.',
 		setup: {
 			...blankSetup('two-bedroom'),
 			devices: [windowFanIn('two-bedroom')],

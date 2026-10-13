@@ -98,12 +98,17 @@ test.describe('scenario presets', () => {
 		world.dispose();
 	});
 
-	test('a fan in the window: with no wind, the fan draws air in at about its rating and it leaves by the open bedroom window, and turned off it stops', async () => {
+	test('a fan in the window: with no wind, the fan draws air in at about its rating, it goes toward the hall and bedroom 1 and leaves by the open window there, and turned off the air slows to a drift within a minute', async () => {
 		const preset = scenario('window-fan');
 		expect(preset.setup.conditions.windSpeed).toBe(0);
 		const fan = preset.setup.devices[0];
 		const rated = FAN_MODELS.find((m) => m.id === fan.model)!.flow.high;
 		const world = await create(preset.setup);
+		/** Each room's mean air speed, m/s, by room id. */
+		const speeds = async () => {
+			const shot = await world.backend.snapshot({ rooms: true });
+			return Object.fromEntries(world.raster.plan.rooms.map((room, n) => [room.id, shot.rooms![n].speed]));
+		};
 		run(world, 30);
 		const drawn = await inflow(world, fan.opening!);
 		const out = await inflow(world, 'bedroom-1-window');
@@ -112,9 +117,25 @@ test.describe('scenario presets', () => {
 		expect(drawn).toBeLessThan(1.05 * rated);
 		expect(Math.abs(drawn + out) / drawn).toBeLessThan(0.1);
 
+		// The notice says where the air goes: toward the hall and bedroom 1, with the living room and the closed rooms seeing little.
+		const moving = await speeds();
+		console.log(`window fan, room speeds (m/s): ${Object.entries(moving).map(([id, v]) => `${id} ${v.toFixed(3)}`).join(', ')}`);
+		expect(moving.dining).toBeGreaterThan(moving.living);
+		expect(moving.hall).toBeGreaterThan(0.1);
+		expect(moving['bedroom-1']).toBeGreaterThan(0.1);
+		expect(moving['bedroom-2']).toBeLessThan(0.01);
+		expect(moving.bathroom).toBeLessThan(0.01);
+
+		// And turned off, the air slows to a drift: a minute later no room is above 10 cm/s and the moving rooms average under 30 % of their running speed.
 		world.apply({ ...preset.setup, devices: [{ ...fan, power: 0 }] }, 30);
-		run(world, 15);
+		run(world, 60);
 		expect(Math.abs(await inflow(world, fan.opening!))).toBeLessThan(0.02 * rated);
+		const resting = await speeds();
+		console.log(`window fan, a minute after it stopped (m/s): ${Object.entries(resting).map(([id, v]) => `${id} ${v.toFixed(3)}`).join(', ')}`);
+		const stirred = Object.keys(moving).filter((id) => moving[id] > 0.1);
+		const average = (by: Record<string, number>) => stirred.reduce((sum, id) => sum + by[id], 0) / stirred.length;
+		for (const [id, speed] of Object.entries(resting)) expect(speed, `${id} a minute after the fan stopped`).toBeLessThan(0.1);
+		expect(average(resting) / average(moving)).toBeLessThan(0.3);
 		world.dispose();
 	});
 });
