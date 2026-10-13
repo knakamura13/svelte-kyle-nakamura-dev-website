@@ -1,4 +1,4 @@
-import { ConeGeometry, CylinderGeometry, Group, Mesh, MeshBasicMaterial, Vector3, type MeshStandardMaterial } from 'three';
+import { BufferGeometry, ConeGeometry, CylinderGeometry, DoubleSide, Float32BufferAttribute, Group, Mesh, MeshBasicMaterial, RingGeometry, Vector3, type MeshStandardMaterial } from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { clay, disposeTree } from '$lib/experiments/engine/kit';
 import { oscillatedYaw } from '../devices/model';
@@ -11,6 +11,11 @@ const BODY = 0x4a5651;
 const FACE_ON = 0xe9eee7;
 const FACE_OFF = 0xaeb6ae;
 const FLOW = 0xd9822b;
+const INK = 0x202a24;
+const IDLE = 0x8a948f;
+/** The slice plane's default height, m, and how far its symbols float above the plane so they never fight it for depth. */
+const PLANE = 1.1;
+const SYMBOL_LIFT = 0.03;
 
 const DEGREES = Math.PI / 180;
 
@@ -26,6 +31,10 @@ interface Item {
 	head: Group;
 	face: Mesh<CylinderGeometry, MeshStandardMaterial> | null;
 	flow: Mesh<ConeGeometry, MeshBasicMaterial> | null;
+	/** Where the device is, drawn on the slice plane, because the plane (82% opaque) hides a fan that stands below it: a ring, and an arrow the way it blows. */
+	symbol: Group;
+	ring: Mesh<RingGeometry, MeshBasicMaterial>;
+	arrow: Mesh<BufferGeometry, MeshBasicMaterial>;
 	/** Where the head's centre is above the device's base, m, and how far its front (where the air leaves) is from that centre. */
 	rise: number;
 	front: number;
@@ -45,8 +54,11 @@ export class DeviceMeshes {
 
 	constructor(private readonly models: ReadonlyMap<string, DeviceModel>) {}
 
-	/** Adds, removes and moves the meshes to match `devices`, with `time` the simulated seconds that oscillating fans turn by. */
-	update(devices: readonly DeviceState[], time: number) {
+	/**
+	 * Adds, removes and moves the meshes to match `devices`, with `time` the simulated seconds that oscillating fans turn
+	 * by, and `planeY` the height of the slice plane, m, where each device's symbol is drawn.
+	 */
+	update(devices: readonly DeviceState[], time: number, planeY = PLANE) {
 		const present = new Set<string>();
 		for (const device of devices) {
 			const model = this.models.get(device.model);
@@ -63,7 +75,7 @@ export class DeviceMeshes {
 				this.items.set(device.id, item);
 				this.group.add(item.group);
 			}
-			this.pose(item, device, model, time);
+			this.pose(item, device, model, time, planeY);
 		}
 		for (const id of [...this.items.keys()]) if (!present.has(id)) this.drop(id);
 	}
@@ -119,24 +131,45 @@ export class DeviceMeshes {
 			flow.position.y = height / 2;
 		} else flow.position.z = -front;
 		head.add(flow);
-		return { group, shape, head, face, flow, rise, front };
+
+		// The symbol on the slice: a ring round the device with a white halo, and an arrow that points the way it blows.
+		const symbol = new Group();
+		symbol.userData.symbol = true;
+		const translucent = (color: number, opacity: number) => new MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, side: DoubleSide });
+		const halo = new Mesh(new RingGeometry(0.2, 0.28, 32), translucent(0xffffff, 0.8));
+		const ring = new Mesh(new RingGeometry(0.22, 0.26, 32), translucent(INK, 0.95));
+		halo.rotation.x = ring.rotation.x = -Math.PI / 2;
+		const wedge = new BufferGeometry();
+		// Flat in the plan, its tip toward the front (-z), outside the ring.
+		wedge.setAttribute('position', new Float32BufferAttribute([-0.08, 0, -0.3, 0.08, 0, -0.3, 0, 0, -0.48], 3));
+		const arrow = new Mesh(wedge, translucent(FLOW, 0.95));
+		for (const mesh of [halo, ring, arrow]) mesh.renderOrder = RENDER_ORDER.markers;
+		symbol.add(halo, ring, arrow);
+		group.add(symbol);
+		return { group, shape, head, face, flow, rise, front, symbol, ring, arrow };
 	}
 
-	private pose(item: Item, device: DeviceState, model: DeviceModel, time: number) {
-		const { group, head, face, flow } = item;
+	private pose(item: Item, device: DeviceState, model: DeviceModel, time: number, planeY: number) {
+		const { group, head, face, flow, symbol } = item;
 		group.position.set(device.x, device.y, device.z);
 		head.position.y = item.rise;
 		const on = device.power > 0.005;
+		// The symbol rides the slice plane, whatever the device stands on.
+		symbol.position.y = planeY - device.y + SYMBOL_LIFT;
+		item.ring.material.color.set(on ? INK : IDLE);
 		if (model.kind === 'air-purifier') {
-			// A purifier stands upright and blows up whatever its yaw.
+			// A purifier stands upright and blows up whatever its yaw, so its symbol has no arrow.
 			group.rotation.y = -device.yaw * DEGREES;
 			head.rotation.set(0, 0, 0);
+			item.arrow.visible = false;
 		} else {
 			// Yaw about the vertical, then tilt up about the head's own side-to-side axis. A window fan's yaw faces into the home,
 			// so one set to blow out turns its front the other way.
 			const yaw = oscillatedYaw(device, time) + (model.kind === 'window-fan' && device.intake === false ? 180 : 0);
 			head.rotation.order = 'YXZ';
 			head.rotation.set(device.tilt * DEGREES, -yaw * DEGREES, 0);
+			symbol.rotation.y = -yaw * DEGREES;
+			item.arrow.visible = on;
 		}
 		face?.material.color.set(on ? FACE_ON : FACE_OFF);
 		if (flow) {

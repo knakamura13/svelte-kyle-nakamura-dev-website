@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { Vector3, type Object3D } from 'three';
 import { DEVICE_MODELS, FAN_MODELS } from '../../src/lib/experiments/airflow/devices/catalog';
 import { aimVector, headPosition, oscillatedYaw } from '../../src/lib/experiments/airflow/devices/model';
 import { newDevice } from '../../src/lib/experiments/airflow/devices/placement';
@@ -120,5 +121,54 @@ test.describe('the set of stand-ins', () => {
 		expect(cone().scale.y).toBeGreaterThan(low);
 		meshes.dispose();
 		expect(meshes.group.children).toHaveLength(0);
+	});
+});
+
+test.describe('a device’s symbol on the slice', () => {
+	/** The symbol group of a device and its arrow, as drawn. */
+	const symbolOf = (meshes: DeviceMeshes, id: string) => {
+		const item = meshes.group.children.find((c) => c.userData.deviceId === id)!;
+		const symbol = item.children.find((c) => c.userData.symbol)!;
+		const arrow = symbol.children[2] as Object3D;
+		item.updateMatrixWorld(true);
+		return { symbol, arrow };
+	};
+
+	test('rides the slice plane wherever the plane is, whatever the device stands on', () => {
+		const meshes = new DeviceMeshes(models);
+		const fan = placed('air-king-9723', { y: 0.4 });
+		for (const plane of [0.3, 1.1, 2.0]) {
+			meshes.update([fan], 0, plane);
+			const { symbol } = symbolOf(meshes, fan.id);
+			expect(symbol.getWorldPosition(new Vector3()).y, `plane at ${plane} m`).toBeCloseTo(plane + 0.03, 6);
+		}
+		meshes.update([fan], 0);
+		expect(symbolOf(meshes, fan.id).symbol.getWorldPosition(new Vector3()).y, 'the plane defaults to 1.1 m').toBeCloseTo(1.13, 6);
+	});
+
+	test('has an arrow that points the way the fan blows in the plan, and follows an oscillating head', () => {
+		const meshes = new DeviceMeshes(models);
+		const pedestal = placed('air-king-9119', { yaw: 90, oscillation: { on: true, sweep: 80, period: 8 } });
+		for (const time of [0, 2, 5]) {
+			meshes.update([pedestal], time);
+			const { arrow } = symbolOf(meshes, pedestal.id);
+			// The arrow's tip is toward its local -z, so the tip's direction in the plan is the heading.
+			const tip = new Vector3(0, 0, -1).transformDirection(arrow.parent!.matrixWorld);
+			const heading = aimVector(oscillatedYaw(pedestal, time), 0);
+			expect(tip.x, `x at ${time} s`).toBeCloseTo(heading[0], 6);
+			expect(tip.z, `z at ${time} s`).toBeCloseTo(heading[2], 6);
+		}
+	});
+
+	test('shows the arrow only while the fan runs, and greys the ring while it is off', () => {
+		const meshes = new DeviceMeshes(models);
+		const fan = placed('air-king-9723', { power: 0 });
+		meshes.update([fan], 0);
+		expect(symbolOf(meshes, fan.id).arrow.visible).toBe(false);
+		const ring = () => (symbolOf(meshes, fan.id).symbol.children[1] as unknown as { material: { color: { getHex(): number } } }).material.color.getHex();
+		const off = ring();
+		meshes.update([{ ...fan, power: 1 }], 0);
+		expect(symbolOf(meshes, fan.id).arrow.visible).toBe(true);
+		expect(ring(), 'the ring is a different colour once it runs').not.toBe(off);
 	});
 });

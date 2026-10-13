@@ -12,7 +12,8 @@ const SMOKE = 0xd9822b;
 /** A marker floats this far above the slice so it never fights it for depth, m. */
 const LIFT = 0.02;
 
-const flat = (color: number, opacity = 1) => new MeshBasicMaterial({ color, transparent: opacity < 1, opacity, depthWrite: false, side: DoubleSide });
+/** Always transparent, even at full opacity: an opaque material is drawn before every transparent one whatever its render order, so the slice would tint it. */
+const flat = (color: number, opacity = 1) => new MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, side: DoubleSide });
 
 /** A ring lying flat in the plan. */
 function ring(inner: number, outer: number, material: MeshBasicMaterial) {

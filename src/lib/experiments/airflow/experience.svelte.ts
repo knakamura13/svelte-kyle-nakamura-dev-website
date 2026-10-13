@@ -167,11 +167,11 @@ export class AirflowExperience extends Experience {
 
 	// ---- probes and smoke ----
 
-	/** Pins a Probe at a point of the Slice. Returns false when the Home already has the most it allows. */
-	pin(point: { x: number; y: number; z: number }) {
+	/** Pins a Probe at a point of the Slice. Returns its id, or null when the Home already has the most it allows. */
+	pin(point: { x: number; y: number; z: number }): string | null {
 		if (this.probes.length >= MAX_PINS) {
 			this.announce(`A home holds at most ${MAX_PINS} probes. Remove one to add another.`);
-			return false;
+			return null;
 		}
 		const used = new Set(this.probes.map((p) => p.id));
 		let n = 1;
@@ -179,11 +179,14 @@ export class AirflowExperience extends Experience {
 		this.probes.push({ id: `p${n}`, ...point });
 		this.announce(`Probe ${n} pinned.`);
 		this.wake();
-		return true;
+		return `p${n}`;
 	}
 
-	unpin(id: string) {
+	/** Takes a Probe away. `quiet` is for one that was never meant to be there, so no "pinned" announcement is left waiting and nothing says "removed". */
+	unpin(id: string, quiet = false) {
+		if (!this.probes.some((p) => p.id === id)) return;
 		this.probes = this.probes.filter((p) => p.id !== id);
+		this.announce(quiet ? '' : `Probe ${id.slice(1)} removed.`);
 		this.wake();
 	}
 

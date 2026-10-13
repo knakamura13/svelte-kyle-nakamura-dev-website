@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { PerspectiveCamera } from 'three';
+import { BoxGeometry, Mesh, MeshBasicMaterial, PerspectiveCamera } from 'three';
 import type { Point3 } from '../../src/lib/experiments/airflow/scene/deviceMath';
 import { AirflowInput, CURSOR_STEP, HOLD_MS, SLOP_PX, type InputHost } from '../../src/lib/experiments/airflow/scene/input';
 import { pointOnPlane } from '../../src/lib/experiments/airflow/scene/pick';
@@ -15,8 +15,9 @@ const AIR: HoverReading = { x: 0, y: 1.1, z: 0, u: 0, v: 0, w: 0, speed: 0, aver
 
 /** A host over a 6 × 4 m home whose slice is air everywhere except a piece of furniture at x 4 to 5. */
 function harness(mode: PointerMode = 'look') {
-	const log = { pins: [] as Point3[], emits: [] as (Point3 | null)[], hovers: [] as (Point3 | null)[] };
+	const log = { pins: [] as Point3[], unpins: [] as string[], emits: [] as (Point3 | null)[], hovers: [] as (Point3 | null)[] };
 	let clock = 0;
+	let full = false;
 	let picked: Point3 | null = { x: 1, y: 1.1, z: 1 };
 	const host: InputHost = {
 		mode: () => mode,
@@ -24,7 +25,12 @@ function harness(mode: PointerMode = 'look') {
 		plane: () => ({ width: 6, depth: 4, y: 1.1 }),
 		read: (point) => ({ ...AIR, x: point.x, y: point.y, z: point.z, inAir: !(point.x >= 4 && point.x <= 5) }),
 		hover: (point) => log.hovers.push(point),
-		pin: (point) => log.pins.push(point),
+		pin: (point) => {
+			if (full) return null;
+			log.pins.push(point);
+			return `p${log.pins.length}`;
+		},
+		unpin: (id) => log.unpins.push(id),
 		emit: (point) => log.emits.push(point),
 		now: () => clock
 	};
@@ -39,6 +45,7 @@ function harness(mode: PointerMode = 'look') {
 		pointer,
 		key,
 		setMode: (next: PointerMode) => (mode = next),
+		fill: () => (full = true),
 		pick: (point: Point3 | null) => (picked = point),
 		advance: (ms: number) => (clock += ms),
 		moved: (event: PointerEvent, dx: number, dy = 0) => ({ ...event, pointerType: event.pointerType, pointerId: event.pointerId, clientX: event.clientX + dx, clientY: event.clientY + dy }) as PointerEvent
@@ -137,6 +144,78 @@ test.describe('a mouse', () => {
 		h.input.pointer('up', h.pointer('mouse'), h.ndc);
 		h.input.pointer('up', h.pointer('mouse'), h.ndc);
 		expect(h.log.pins).toHaveLength(1);
+	});
+});
+
+test.describe('a double click', () => {
+	const click = (h: ReturnType<typeof harness>, event: PointerEvent) => {
+		h.input.pointer('down', event, h.ndc);
+		h.input.pointer('up', event, h.ndc);
+	};
+
+	test('is the camera reset, not two probes: the second quick click takes the first one back', () => {
+		const h = harness();
+		const event = h.pointer('mouse');
+		click(h, event);
+		h.advance(120);
+		click(h, event);
+		expect(h.log.pins).toHaveLength(1);
+		expect(h.log.unpins).toEqual(['p1']);
+	});
+
+	test('a third click after it starts over and pins', () => {
+		const h = harness();
+		const event = h.pointer('mouse');
+		click(h, event);
+		h.advance(100);
+		click(h, event);
+		h.advance(100);
+		click(h, event);
+		expect(h.log.pins).toHaveLength(2);
+		expect(h.log.unpins).toEqual(['p1']);
+	});
+
+	test('two clicks well apart in time are two probes', () => {
+		const h = harness();
+		const event = h.pointer('mouse');
+		click(h, event);
+		h.advance(600);
+		click(h, event);
+		expect(h.log.pins).toHaveLength(2);
+		expect(h.log.unpins).toEqual([]);
+	});
+
+	test('two quick clicks in different places are two probes', () => {
+		const h = harness();
+		const event = h.pointer('mouse');
+		click(h, event);
+		h.advance(100);
+		click(h, h.moved(event, 40));
+		expect(h.log.pins).toHaveLength(2);
+		expect(h.log.unpins).toEqual([]);
+	});
+
+	test('does not take back a probe that was never pinned because the home was full', () => {
+		const h = harness();
+		h.fill();
+		const event = h.pointer('mouse');
+		click(h, event);
+		h.advance(100);
+		click(h, event);
+		expect(h.log.unpins).toEqual([]);
+	});
+
+	test('a finger in probe mode that taps twice in one place pins once', () => {
+		const h = harness('probe');
+		const tap = h.pointer('touch');
+		click(h, tap);
+		h.advance(150);
+		click(h, h.moved(tap, 20));
+		expect(h.log.pins).toHaveLength(1);
+		expect(h.log.unpins).toEqual(['p1']);
+		h.advance(150);
+		click(h, tap);
+		expect(h.log.pins, 'and the next tap pins again').toHaveLength(2);
 	});
 });
 
@@ -291,6 +370,29 @@ test.describe('picking the slice plane', () => {
 		sky.lookAt(3, 8, 0);
 		sky.updateMatrixWorld(true);
 		expect(pointOnPlane(sky, { x: 0, y: 0 }, 1.1, home)).toBeNull();
+	});
+
+	test('furniture standing above the plane between the camera and the point hides it, and furniture below the plane does not', () => {
+		// From the south and above, looking at the middle of the home: the ray meets the plane at about (3, 1.1, 3.5).
+		const c = new PerspectiveCamera(40, 1.5, 0.1, 100);
+		c.position.set(3, 6, 10);
+		c.lookAt(3, 0, 2);
+		c.updateMatrixWorld(true);
+		const stand = (height: number, z: number) => {
+			const box = new Mesh(new BoxGeometry(0.6, height, 0.6), new MeshBasicMaterial());
+			box.position.set(3, height / 2, z);
+			box.updateMatrixWorld(true);
+			return box;
+		};
+		const open = pointOnPlane(c, { x: 0, y: 0 }, 1.1, home)!;
+		expect(open.z).toBeGreaterThan(3.3);
+		expect(open.z).toBeLessThan(3.7);
+		expect(pointOnPlane(c, { x: 0, y: 0 }, 1.1, home, [stand(2.4, 4.2)]), 'a wardrobe in front').toBeNull();
+		expect(pointOnPlane(c, { x: 0, y: 0 }, 1.1, home, [stand(0.5, 4.2)]), 'a low table in front').toEqual(open);
+		expect(pointOnPlane(c, { x: 0, y: 0 }, 1.1, home, [stand(2.4, 1)]), 'a wardrobe behind the point').toEqual(open);
+		// The ray goes on past the plane and meets this table top (at about z = 2.67), which is farther away than the plane: not a blocker.
+		expect(pointOnPlane(c, { x: 0, y: 0 }, 1.1, home, [stand(0.5, 2.6)]), 'a low table the ray reaches only after the plane').toEqual(open);
+		expect(pointOnPlane(c, { x: 0, y: 0 }, 1.1, home, []), 'nothing to hide it').toEqual(open);
 	});
 
 	test('the plane height moves the point the same ray reaches', () => {

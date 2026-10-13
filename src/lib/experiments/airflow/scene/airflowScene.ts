@@ -34,8 +34,10 @@ const COMPASS_OFFSET = 0.7;
 export interface AirflowSceneParams extends SessionParams {
 	plans: readonly HomePlan[];
 	models: readonly DeviceModel[];
-	/** Pins a probe at a point of the slice. Returns false when the home already holds the most it allows. */
-	pin(point: Point3): boolean;
+	/** Pins a probe at a point of the slice. Returns its id, or null when the home already holds the most it allows. */
+	pin(point: Point3): string | null;
+	/** Takes back a probe that was pinned by mistake, without a word. */
+	unpin(id: string, quiet?: boolean): void;
 	/** Says whether smoke is being released; the point it comes from goes to the session. */
 	setEmitting(on: boolean): void;
 }
@@ -131,7 +133,7 @@ export const createAirflowScene: SceneFactory<AirflowSceneParams, AirflowReadout
 
 	const input = new AirflowInput({
 		mode: () => params.view.mode,
-		pick: (at) => pointOnPlane(camera, at, planeY(), house.plan),
+		pick: (at) => pointOnPlane(camera, at, planeY(), house.plan, house.dollhouse.pickables),
 		plane: () => ({ width: house.plan.width, depth: house.plan.depth, y: planeY() }),
 		read: (point) => session.hover(point.x, point.z),
 		hover: (point, reading) => {
@@ -139,6 +141,7 @@ export const createAirflowScene: SceneFactory<AirflowSceneParams, AirflowReadout
 			readout.hover = reading;
 		},
 		pin: (point) => params.pin(point),
+		unpin: (id) => params.unpin(id, true),
 		emit: (point) => {
 			session.setEmitPoint(point);
 			params.setEmitting(point !== null);
@@ -216,7 +219,7 @@ export const createAirflowScene: SceneFactory<AirflowSceneParams, AirflowReadout
 				}
 			}
 
-			devices.update(setup.devices, session.simTime);
+			devices.update(setup.devices, session.simTime, planeY());
 			markers.syncProbes(params.probes, readout.probes, view.units);
 			markers.update(dt, reduced);
 

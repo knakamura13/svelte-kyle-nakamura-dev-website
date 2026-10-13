@@ -9,6 +9,10 @@ export const SLOP_PX = 7;
 /** The keyboard cursor's step over the slice, m, and its step with Shift held. */
 export const CURSOR_STEP = 0.25;
 export const CURSOR_STEP_FAST = 1;
+/** Two taps this close in time and place are a double click, which resets the camera and is not two probes: how close, ms and px (a finger needs more room). */
+export const DOUBLE_MS = 350;
+export const DOUBLE_PX = 12;
+export const DOUBLE_TOUCH_PX = 30;
 
 /** What the input needs from the scene and the page. Everything here is plain data and callbacks, so the input runs in Node. */
 export interface InputHost {
@@ -22,7 +26,10 @@ export interface InputHost {
 	read(point: Point3): HoverReading | null;
 	/** Shows where the visitor is looking (the marker and the Dock's readout), or clears it. */
 	hover(point: Point3 | null, reading: HoverReading | null): void;
-	pin(point: Point3): void;
+	/** Pins a probe. Returns its id, or null when the home already holds the most it allows. */
+	pin(point: Point3): string | null;
+	/** Takes a probe back, as when a pin turns out to have been the first click of a double click. */
+	unpin(id: string): void;
 	/** Starts releasing smoke at a point, moves the source, or stops it (null). */
 	emit(point: Point3 | null): void;
 	now(): number;
@@ -59,6 +66,8 @@ export class AirflowInput implements SceneInput {
 	private press: Press | null = null;
 	private cursor: { x: number; z: number } | null = null;
 	private cursorEmitting = false;
+	/** The probe the last tap pinned, and where and when. */
+	private lastPin: { id: string; at: number; x: number; y: number } | null = null;
 
 	constructor(private readonly host: InputHost) {}
 
@@ -86,7 +95,7 @@ export class AirflowInput implements SceneInput {
 			else if (!touch) this.show(this.host.pick(ndc));
 			return false;
 		}
-		if (press) this.up(press);
+		if (press) this.up(press, event);
 		return false;
 	}
 
@@ -118,14 +127,30 @@ export class AirflowInput implements SceneInput {
 		if (!press.emitting) this.show(point);
 	}
 
-	private up(press: Press) {
+	private up(press: Press, event: PointerEvent) {
 		this.press = null;
 		if (press.emitting) this.host.emit(null);
 		else if (press.owned) {
 			// A finger in probe mode pins where it lifted.
-			if (this.host.mode() === 'probe' && press.last && this.host.read(press.last)?.inAir) this.host.pin(press.last);
-		} else if (!press.dragged && press.air && press.point && this.host.now() - press.at < HOLD_MS) this.host.pin(press.point);
+			if (this.host.mode() === 'probe' && press.last && this.host.read(press.last)?.inAir) this.tap(press.last, event.clientX, event.clientY, true);
+		} else if (!press.dragged && press.air && press.point && this.host.now() - press.at < HOLD_MS) this.tap(press.point, press.x, press.y, false);
 		if (press.touch) this.show(null);
+	}
+
+	/**
+	 * Pins a probe at `point` for a tap that ended at screen (x, y). The second tap of a double click takes the first probe
+	 * back instead and pins nothing: the camera resets on a double click, and that is all it was meant to do.
+	 */
+	private tap(point: Point3, x: number, y: number, touch: boolean) {
+		const now = this.host.now();
+		const last = this.lastPin;
+		if (last && now - last.at < DOUBLE_MS && Math.hypot(x - last.x, y - last.y) < (touch ? DOUBLE_TOUCH_PX : DOUBLE_PX)) {
+			this.host.unpin(last.id);
+			this.lastPin = null;
+			return;
+		}
+		const id = this.host.pin(point);
+		this.lastPin = id ? { id, at: now, x, y } : null;
 	}
 
 	/** Drops a press without acting on it, as when a second finger arrives before the first lifts. */
