@@ -1,0 +1,21 @@
+/* Airflow: the page's own Stage frame and label tones, loaded after experiments.css by routes/experiments/airflow/+layout.svelte. */
+.experiment.airflow { --tint:var(--mist); }
+
+/* The Stage: one live 3D view of the home, in a card. */
+.airflow-figure { margin:0 0 56px; border-radius:22px; background:var(--surface); box-shadow:var(--shadow-card); overflow:clip; }
+/* The shared Stage rules give it an aspect ratio below 1000px, and with a fixed height that sets its width, so it would overflow its card. */
+.airflow-figure .stage-view { --dock:0px; aspect-ratio:auto; height:clamp(340px,calc(100vh - 190px),660px); }
+.airflow-figure figcaption { padding:0 20px 18px; }
+@media(max-width:700px) {
+ .airflow-figure .stage-view { height:min(74vh,560px); }
+}
+
+/* Room names and compass letters are plain text over the picture, so they carry no dot; a probe's label keeps one. */
+.airflow .stage-label[data-tone="room"],.airflow .stage-label[data-tone="compass"] { padding:2px 8px; background:#ffffffb8; border-color:transparent; box-shadow:none; font-weight:650; }
+.airflow .stage-label[data-tone="room"]::before,.airflow .stage-label[data-tone="compass"]::before { display:none; }
+.airflow .stage-label[data-tone="compass"] { padding:1px 7px; color:var(--muted); font-size:10px; letter-spacing:.06em; }
+.airflow .stage-label[data-tone="probe"] { --tone:var(--ink); }
+
+/* Where the simulation is, under the Stage. */
+.sim-status { margin:0; padding:12px 20px 14px; font-size:12px; line-height:1.6; color:var(--muted); font-variant-numeric:tabular-nums; }
+.sim-status[data-status="unsupported"],.sim-status[data-status="error"] { color:var(--ink); }
