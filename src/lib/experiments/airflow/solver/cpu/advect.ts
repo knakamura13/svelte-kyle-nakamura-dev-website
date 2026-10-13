@@ -1,5 +1,5 @@
 import type { Grid } from '../grid';
-import type { Geometry } from '../types';
+import { ADVECTION_LIMIT, type Geometry } from '../types';
 
 export interface Velocity {
 	u: Float32Array;
@@ -70,8 +70,9 @@ function sampleLimited(a: Float32Array, sx: number, sxy: number, mx: number, my:
  * came from (a midpoint backtrace through the current, divergence-free field) and take the velocity there.
  * Plain semi-Lagrangian advection is stable at any time step but smears the flow, which would flatten a fan's
  * jet, so this adds the MacCormack correction (Selle et al. 2008): advect forward again, halve the error the
- * round trip reveals, and clamp the result to the range of the values it was interpolated from so it never
- * overshoots. Faces that are walls stay zero.
+ * round trip reveals, and bound the result to a share `ADVECTION_LIMIT` of the way from the semi-Lagrangian value to
+ * the extremes of the values it was interpolated from, so it never overshoots and cannot feed noise at the grid scale.
+ * Faces that are walls stay zero.
  *
  * `carrier` is the flow that does the carrying (divergence-free, from the last step); `quantity` is what is carried,
  * which is the same velocity plus half a step of the forces on it. `pred` is scratch space the size of `quantity`;
@@ -133,7 +134,9 @@ export function advectVelocity(grid: Grid, dt: number, carrier: Velocity, quanti
 						const forward = sample(p1, sx, sxy, f.mx, f.my, f.mz, wx + dtg * mu - ox, wy + dtg * mv - oy, wz + dtg * mw - oz);
 						// `stepBack` equals p1[at]; the stored copy and the limited one are the same interpolation.
 						const corrected = stepBack + 0.5 * (phi[at] - forward);
-						f.out[at] = corrected < lowest ? lowest : corrected > highest ? highest : corrected;
+						const floor = stepBack - ADVECTION_LIMIT * (stepBack - lowest);
+						const ceiling = stepBack + ADVECTION_LIMIT * (highest - stepBack);
+						f.out[at] = corrected < floor ? floor : corrected > ceiling ? ceiling : corrected;
 					}
 				}
 		}

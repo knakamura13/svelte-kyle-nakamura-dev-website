@@ -1,3 +1,4 @@
+import { ADVECTION_LIMIT } from '../../types';
 import { AXIS, DECODE, ENTRY, F32, LIMITS, LINEAR, U32, VEC4, read, sampler, treeReduce, uniform, write, type KernelSource } from './common';
 
 /** Kernels for steps 1 to 4 of cpu/solver.ts: eddy viscosity, the force half-steps, advection and diffusion. */
@@ -299,8 +300,9 @@ ${ENTRY} {
 };
 
 /**
- * Second pass: advect the first pass's result forward again, halve the round trip's error, and clamp to the range
- * of the eight values the departure point was interpolated from (Selle et al. 2008), as cpu/advect.ts does.
+ * Second pass: advect the first pass's result forward again, halve the round trip's error, and bound the result to a
+ * share `ADVECTION_LIMIT` of the way from the semi-Lagrangian value to the extremes of the eight values the departure
+ * point was interpolated from (Selle et al. 2008), as cpu/advect.ts does.
  */
 export const advectCorrect: KernelSource = {
 	name: 'advectCorrect',
@@ -317,7 +319,9 @@ ${sampler('predW', 'pred', 'z', LIMITS.z)}
 ${BACKTRACE}
 fn corrected(back: vec3<f32>, here: f32, forward: f32) -> f32 {
 	let value = back.x + 0.5 * (here - forward);
-	return select(select(value, back.z, value > back.z), back.y, value < back.y);
+	let ceiling = back.x + ${ADVECTION_LIMIT.toFixed(6)} * (back.z - back.x);
+	let floor = back.x - ${ADVECTION_LIMIT.toFixed(6)} * (back.x - back.y);
+	return select(select(value, ceiling, value > ceiling), floor, value < floor);
 }
 ${ENTRY} {
 	${LINEAR}

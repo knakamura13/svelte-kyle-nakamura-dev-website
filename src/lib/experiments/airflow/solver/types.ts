@@ -242,6 +242,19 @@ export interface SolverConfig {
  */
 export const DEFAULT_PRESSURE: PressureSettings = { cycles: 3, pre: 2, post: 2, coarse: 24 };
 
+/**
+ * How far the MacCormack correction of the velocity advection may move a value away from the semi-Lagrangian one, as a
+ * share of the way to the extremes of the eight values it was interpolated from: 1 is the plain clamp of Selle et al.
+ * (2008), and a smaller share bounds the correction more tightly. The correction restores what the semi-Lagrangian step
+ * smears, but on noise at the scale of the grid (waves two or three cells long) its estimate of the error is large and
+ * wrong, and with the plain clamp it feeds that noise: in a sealed, isothermal room whose fan had stopped, the kinetic
+ * energy fell and then grew back to more than the running fan had given it, 97 % of it at the grid scale, which showed as
+ * an even blotchy circulation that nothing drove (`tests/solver/decay.spec.ts`). At 0.6 the room comes to rest, and the
+ * benchmarks that are smooth flows (the cavities, the particulate decay) are unchanged to a few thousandths; a jet loses
+ * a little more than before. Both backends read this: `cpu/advect.ts` and `gpu/shaders/flow.ts`.
+ */
+export const ADVECTION_LIMIT = 0.6;
+
 /** Fills in the sides a caller left out: still, no-slip, adiabatic. */
 export function sideConditions(partial: (SideCondition | undefined)[] = []): SideConditions {
 	return [0, 1, 2, 3, 4, 5].map((s): SideCondition => ({ slip: 'no-slip', ...partial[s] })) as SideConditions;

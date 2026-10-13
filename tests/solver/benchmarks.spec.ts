@@ -103,8 +103,10 @@ test.describe('flow through openings', () => {
 			advance(solver, 20, 0.1);
 			const { into, out } = openingFlows(solver, faces);
 			console.log(`wind ${windward - leeward} Pa: in ${into.toFixed(4)} out ${out.toFixed(4)} analytic ${analytic.toFixed(4)} m³/s (${((into / analytic) * 100).toFixed(1)} %)`);
-			// Within 4 % of the orifice formula: the jet entering the room loses a little more than the formula's sharp-edged orifice does.
-			expect(into / analytic).toBeGreaterThan(0.96);
+			// Within 5 % of the orifice formula: the jet entering the room loses a little more than the formula's sharp-edged orifice does,
+			// and a little more again at the lowest pressure, where the bounded advection correction (ADVECTION_LIMIT) smears it: 95.7 %
+			// there and 98.9 % at the larger pressures.
+			expect(into / analytic).toBeGreaterThan(0.95);
 			expect(into / analytic).toBeLessThan(1.02);
 			// The flow is incompressible: what enters leaves, to a tenth of a percent.
 			expect(Math.abs(into - out) / into).toBeLessThan(1e-3);
