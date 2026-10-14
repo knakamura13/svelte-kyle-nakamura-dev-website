@@ -46,10 +46,35 @@ async function edgeSpread(page: Page, png: Buffer) {
 	}, png.toString('base64'));
 }
 
+/** How much of a Stage changed between two pictures: the share of pixels where any colour channel moved by more than a little. */
+async function changedShare(page: Page, before: Buffer, after: Buffer) {
+	return page.evaluate(
+		async ([a, b]) => {
+			const pixels = async (base64: string) => {
+				const image = new Image();
+				image.src = `data:image/png;base64,${base64}`;
+				await image.decode();
+				const canvas = document.createElement('canvas');
+				canvas.width = image.width;
+				canvas.height = image.height;
+				const context = canvas.getContext('2d')!;
+				context.drawImage(image, 0, 0);
+				return context.getImageData(0, 0, canvas.width, canvas.height).data;
+			};
+			const [first, second] = [await pixels(a), await pixels(b)];
+			let changed = 0;
+			for (let i = 0; i < first.length; i += 4) if (Math.max(Math.abs(first[i] - second[i]), Math.abs(first[i + 1] - second[i + 1]), Math.abs(first[i + 2] - second[i + 2])) > 12) changed++;
+			return changed / (first.length / 4);
+		},
+		[before.toString('base64'), after.toString('base64')]
+	);
+}
+
 /**
  * The airflow page before it has a Dock: the home is drawn, the status line says honestly whether the simulation is
- * running, and nothing throws. Where the browser has WebGPU the simulation runs (paused here, for reduced motion); where it
- * does not, the page says the simulation cannot start yet and still shows the home.
+ * running, and nothing throws. Where the browser has WebGPU the simulation runs on it (paused here, for reduced motion); where it
+ * does not, it runs on the processor in a worker at reduced detail, and the page says so. Only a browser that has neither says
+ * the simulation cannot run, and still shows the home.
  */
 test.describe('the airflow page', () => {
 	test.beforeEach(async ({ page }) => {
@@ -59,9 +84,9 @@ test.describe('the airflow page', () => {
 	test('draws the home, labels its rooms, and says whether the simulation runs, without errors', async ({ page }) => {
 		const errors: string[] = [];
 		page.on('pageerror', (error) => errors.push(error.message));
-		// A browser with no WebGPU is expected to log that the simulation could not start, once.
+		// A browser with no WebGPU runs the worker and says so as a warning, so an error of any kind is a fault.
 		page.on('console', (message) => {
-			if (message.type() === 'error' && !/The simulation could not start/.test(message.text())) errors.push(message.text());
+			if (message.type() === 'error') errors.push(message.text());
 		});
 		await page.goto('/experiments/airflow');
 		await expect(page.getByRole('heading', { level: 1 })).toContainText('Airflow');
@@ -71,9 +96,8 @@ test.describe('the airflow page', () => {
 
 		await expect(view.locator('canvas')).toHaveCount(1);
 		const status = page.locator('.sim-status');
-		await expect(status).toHaveAttribute('data-status', /^(paused|running|unsupported)$/, { timeout: 30_000 });
-		if ((await status.getAttribute('data-status')) === 'unsupported') await expect(status).toContainText('WebGPU');
-		else await expect(status).toContainText(/cells, each/);
+		await expect(status).toHaveAttribute('data-status', /^(paused|running)$/, { timeout: 30_000 });
+		await expect(status).toContainText(/cells, each/);
 
 		// The two-bedroom home is the default: its rooms are named over the picture, with the compass points.
 		await expect(view.locator('.stage-label[data-tone="room"]')).toContainText(['Living room', 'Bedroom 1']);
@@ -124,6 +148,86 @@ test.describe('the airflow page', () => {
 			return { width: after.borderTopWidth, position: after.position, events: after.pointerEvents };
 		});
 		expect(ring).toEqual({ width: '3px', position: 'absolute', events: 'none' });
+	});
+
+	test.describe('in a browser with no WebGPU', () => {
+		test.beforeEach(async ({ page }) => {
+			await page.emulateMedia({ reducedMotion: 'no-preference' });
+			// The page's own test of WebGPU is for `navigator.gpu`, so this is what Firefox and many phones look like to it, in any browser.
+			await page.addInitScript(() => Object.defineProperty(navigator, 'gpu', { value: undefined, configurable: true }));
+		});
+
+		test('the simulation runs on a worker at reduced detail: the air is drawn from the solver, it moves, and a probe reads it', async ({ page }) => {
+			test.setTimeout(120_000);
+			const errors: string[] = [];
+			const warnings: string[] = [];
+			const workers: string[] = [];
+			page.on('pageerror', (error) => errors.push(error.message));
+			page.on('console', (message) => {
+				if (message.type() === 'error') errors.push(message.text());
+				if (message.type() === 'warning') warnings.push(message.text());
+			});
+			page.on('worker', (worker) => workers.push(worker.url()));
+			await page.setViewportSize({ width: 1280, height: 900 });
+			await page.goto('/experiments/airflow');
+			const view = page.getByRole('application', { name: /^The air in the/ });
+			await expect(view).toHaveAttribute('data-state', /^(live|unsupported)$/, { timeout: 15_000 });
+			test.skip((await view.getAttribute('data-state')) === 'unsupported', 'This browser has no WebGL.');
+
+			const status = page.locator('.sim-status');
+			await expect(status).toHaveAttribute('data-status', 'running', { timeout: 60_000 });
+			await expect(status).toContainText('Running on the processor at reduced detail');
+			await expect(status).toContainText(/cells, each/);
+			expect(workers, 'the solver is in a worker of its own, so no step is on the page\u2019s thread').toHaveLength(1);
+			expect(warnings.join('\n')).toContain('WebGPU is not available');
+
+			// The air develops from rest: a picture a few seconds in is not the picture a few seconds later, and neither is a flat tint.
+			await page.waitForTimeout(3000);
+			const early = await view.screenshot();
+			await page.waitForTimeout(4000);
+			const late = await view.screenshot();
+			expect(await dominantShare(page, late)).toBeLessThan(0.9);
+			expect(await changedShare(page, early, late), 'the Stage is redrawn from new solver data').toBeGreaterThan(0.002);
+
+			// A click on the home leaves a probe, and its reading comes back from the worker.
+			const box = (await view.boundingBox())!;
+			const probe = view.locator('.stage-label[data-tone="probe"]');
+			for (const [x, y] of [
+				[0.5, 0.55],
+				[0.42, 0.5],
+				[0.58, 0.5],
+				[0.4, 0.62],
+				[0.6, 0.62],
+				[0.5, 0.45]
+			]) {
+				await page.mouse.click(box.x + box.width * x, box.y + box.height * y);
+				await page.waitForTimeout(700);
+				if (await probe.count()) break;
+			}
+			await expect(probe).toHaveCount(1);
+			await expect(probe.locator('.stage-label-name')).toHaveText('Probe 1');
+			await expect(probe.locator('.stage-label-value'), 'with a speed in it').toHaveText(/\d/);
+			expect(errors).toEqual([]);
+		});
+
+		test('a browser that has no Web Worker either says the simulation cannot run, and still shows the home', async ({ page }) => {
+			await page.addInitScript(() => Object.defineProperty(window, 'Worker', { value: undefined, configurable: true }));
+			const errors: string[] = [];
+			page.on('pageerror', (error) => errors.push(error.message));
+			page.on('console', (message) => {
+				if (message.type() === 'error') errors.push(message.text());
+			});
+			await page.goto('/experiments/airflow');
+			const view = page.getByRole('application', { name: /^The air in the/ });
+			await expect(view).toHaveAttribute('data-state', /^(live|unsupported)$/, { timeout: 15_000 });
+			test.skip((await view.getAttribute('data-state')) === 'unsupported', 'This browser has no WebGL.');
+			const status = page.locator('.sim-status');
+			await expect(status).toHaveAttribute('data-status', 'unsupported', { timeout: 30_000 });
+			await expect(status).toContainText('cannot run it');
+			await expect(status).toContainText('Web Worker');
+			await expect(view.locator('.stage-label[data-tone="room"]')).toContainText(['Living room', 'Bedroom 1']);
+			expect(errors, 'not a fault').toEqual([]);
+		});
 	});
 
 	test('a share link in the address picks the home it names, and one pasted into the open page does too', async ({ page }) => {
