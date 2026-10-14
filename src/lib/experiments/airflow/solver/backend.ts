@@ -2,15 +2,30 @@ import type { Grid } from './grid';
 import type { Diagnostics, Emitter, Exterior, FanDisk, RoomStats, Slice } from './types';
 
 /**
- * What the page talks to. Two things implement it: the CPU reference (cpu/backend.ts), which can run in a Web
- * Worker, and the WebGPU solver (gpu/). The page never touches a solver's arrays; it steps the backend, tells
- * it what changed, and asks for snapshots, which arrive asynchronously because on the GPU they are reads back.
+ * What the page talks to. Three things implement it: the CPU reference (cpu/backend.ts), the same solver behind a
+ * Web Worker (cpu/proxy.ts, which the page runs where there is no WebGPU), and the WebGPU solver (gpu/). The page never
+ * touches a solver's arrays; it steps the backend, tells it what changed, and asks for snapshots, which arrive
+ * asynchronously because on the GPU they are reads back and on the worker they are replies.
  */
 export interface FlowBackend {
 	readonly kind: 'webgpu' | 'cpu';
 	readonly grid: Grid;
 	/** Fluid cells (excluding padding and furniture), for the physics panel and the auto-tuner. */
 	readonly fluidCells: number;
+
+	/**
+	 * Steps given to the backend that it has not finished, for a backend that works in the background (the worker). The
+	 * page sends no more while this is at its limit, so a backend that cannot keep up makes the simulation run slower than
+	 * real time instead of falling further behind. Absent where `step` does its work before it returns (the CPU in the page,
+	 * which the page times instead) or where the device queues the work (the GPU).
+	 */
+	readonly stepsInFlight?: number;
+
+	/**
+	 * Calls `listener` once if the backend can no longer run: the GPU device was lost, or the worker crashed. Whatever it is
+	 * asked afterwards does nothing or rejects. Returns the function that stops listening. Absent on a backend that cannot fail.
+	 */
+	onFailure?(listener: (failure: BackendFailure) => void): () => void;
 
 	/** Advances the flow, temperature and particulates by exactly `dt` seconds. May return before the work is done. */
 	step(dt: number): void;
@@ -41,6 +56,25 @@ export interface FlowBackend {
 
 	/** Releases GPU memory or the worker. */
 	dispose(): void;
+}
+
+/** Why a backend stopped. */
+export interface BackendFailure {
+	/** `lost`: the GPU device went away, and the page starts the simulation again on the worker. `crashed`: the worker stopped. */
+	reason: 'lost' | 'crashed';
+	message: string;
+}
+
+/** No solver can run here: the browser has neither WebGPU nor Web Workers. The page says so and keeps showing the Home. */
+export class BackendUnavailable extends Error {
+	constructor(
+		message: string,
+		/** The browser's own message, for the console. */
+		readonly detail?: string
+	) {
+		super(message);
+		this.name = 'BackendUnavailable';
+	}
 }
 
 /** The state that persists from step to step. */

@@ -1,4 +1,4 @@
-import type { BackendUpdate, FieldState, FlowBackend, Snapshot, SnapshotRequest } from '../backend';
+import type { BackendFailure, BackendUpdate, FieldState, FlowBackend, Snapshot, SnapshotRequest } from '../backend';
 import { POINT_FIELDS, type Diagnostics, type RoomStats, type Slice, type SolverConfig } from '../types';
 import { GpuContext } from './context';
 import { GpuSolver, LOG_CAPACITY, PROFILE_GROUPS, PROFILE_SLOT_BYTES, PROFILE_STEPS, packPair, packVelocity, unpackPair, unpackVelocity, type ProfileGroup } from './solver';
@@ -72,6 +72,17 @@ export class GpuBackend implements FlowBackend {
 
 	get fluidCells() {
 		return this.solver.fluidCells;
+	}
+
+	/** Reports the loss of the graphics device (`GpuContext.onLost`), which ends every backend built on it. A device that is already gone reports at once. */
+	onFailure(listener: (failure: BackendFailure) => void) {
+		const { context } = this.solver;
+		const report = (message: string) => listener({ reason: 'lost', message: `The graphics device was lost. ${message}`.trim() });
+		if (context.lost) {
+			queueMicrotask(() => report(context.lostReason));
+			return () => {};
+		}
+		return context.onLost(({ message, reason }) => report(message || reason));
 	}
 
 	step(dt: number) {
