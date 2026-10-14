@@ -161,8 +161,9 @@ export class SimulationSession {
 				this.options.invalidate();
 			})
 			.catch((error) => {
-				// A start that fails because the page is already leaving (the device goes with it) is not news.
-				if (this.disposed) return;
+				// A start that fails because the page is already leaving (the device goes with it) is not news, and nor is one that
+				// was overtaken: the world it was for failed or was replaced while it ran, and the next frame builds again.
+				if (this.disposed || generation !== this.generation) return;
 				this.failedKey = key;
 				// A browser that can run no solver at all is not a fault: it just cannot, so it is a warning, said once.
 				const unavailable = error instanceof BackendUnavailable;

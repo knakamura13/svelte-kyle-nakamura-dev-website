@@ -621,6 +621,45 @@ test.describe('simulation session', () => {
 			}
 		});
 
+		test('a world that was being built when the running one failed is let go, and its own failure is not the page\'s: the next frame builds again', async () => {
+			const made: CpuBackend[] = [];
+			let calls = 0;
+			const factory: BackendFactory = async (config, initial) => {
+				calls++;
+				if (calls === 2) {
+					// The build that is under way when the device is lost: it fails because the device went.
+					await pause(40);
+					throw new Error('the device was lost while the solver was being built');
+				}
+				const backend = calls === 1 ? new Fragile(config, initial) : new CpuBackend(config, initial);
+				made.push(backend);
+				return backend;
+			};
+			const { session, params, readout } = makeSession(undefined, factory);
+			const log = listen();
+			try {
+				await start(session);
+				params.restarts++;
+				session.update(FRAME);
+				await pause(5);
+				(made[0] as Fragile).fail({ reason: 'lost', message: 'The graphics device was lost.' });
+				expect(session.world).toBeNull();
+				// The overtaken build fails now. Frames go on, and it is not what the page reports.
+				const deadline = Date.now() + 30000;
+				while (!session.world && Date.now() < deadline) {
+					session.update(FRAME);
+					await pause(5);
+				}
+				expect(calls, 'built again once the failed build was out of the way').toBe(3);
+				await draw(session, 3);
+				expect(readout.status).toBe('running');
+				expect(log.said.errors, 'the overtaken build said nothing').toEqual([]);
+			} finally {
+				log.restore();
+				session.dispose();
+			}
+		});
+
 		test('a world that has been replaced, or a session that has been disposed, is not listened to any more', async () => {
 			const { made, factory } = fragileThen('fragile');
 			const { session, params, announced } = makeSession(undefined, factory);
