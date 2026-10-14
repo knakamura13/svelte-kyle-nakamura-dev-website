@@ -136,6 +136,32 @@ test.describe('the solver worker', () => {
 		local.dispose();
 	});
 
+	test('a fan beside an opening the visitor changed is placed on the same faces on the worker as in the page, now and after the next change', async () => {
+		// The bedroom door is closed in the plan, a box fan stands in its doorway, and the visitor opens the door. Fans are placed against
+		// how far each opening is open, which they read from the page's copy of the face arrays: a worker only changes its own copy.
+		const doorway = (power: number): Setup => {
+			const setup = blankSetup('two-bedroom');
+			setup.openings = { 'bedroom-1-door': 1 };
+			setup.devices = [{ id: 'f1', model: 'air-king-9723', x: 8.4, z: 2.8, y: 0, yaw: 180, tilt: 0, power, height: 0, oscillation: { on: false, sweep: 90, period: 8 } } as unknown as Setup['devices'][number]];
+			return setup;
+		};
+		const worker = inMemoryWorker();
+		const remote = await World.create(doorway(1), { plans, models, h: 0.2, make: (config, initial) => WorkerBackend.create(worker.port, config, initial) });
+		const local = await World.create(doorway(1), { plans, models, h: 0.2, make: (config, initial) => new CpuBackend(config, initial) });
+		const pushes = (world: World) => (world as unknown as { inputs: { fans: { faceIndex: Uint32Array }[] } }).inputs.fans[0].faceIndex.length;
+		expect(pushes(remote), 'placed against the door as it is now').toBe(pushes(local));
+		for (const world of [remote, local]) world.apply(doorway(0.99), 0);
+		expect(pushes(remote), 'and after the next change').toBe(pushes(local));
+		for (let n = 0; n < 20; n++) for (const world of [remote, local]) world.backend.step(0.03);
+		const [a, b] = await Promise.all([remote.backend.snapshot({ sliceY: 1.0, rooms: true }), local.backend.snapshot({ sliceY: 1.0, rooms: true })]);
+		expect(a.fanFlow[0], 'the fan moves air').toBeGreaterThan(0.1);
+		expect(gap(a.fanFlow, b.fanFlow), 'fan flow').toBe(0);
+		expect(gap(a.slice!.speed, b.slice!.speed), 'the air beside it').toBe(0);
+		expect(a.rooms, 'per-room flow').toEqual(b.rooms);
+		remote.dispose();
+		local.dispose();
+	});
+
 	test('writeFields overwrites what the worker holds, and readFields reads it back', async () => {
 		const worker = inMemoryWorker();
 		const backend = await WorkerBackend.create(worker.port, makeConfig(), { theta: 0, particulates: 0 });

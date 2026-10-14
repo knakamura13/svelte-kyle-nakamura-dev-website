@@ -98,6 +98,14 @@ export class World {
 	private applyAll(time: number) {
 		const amounts = effectiveOpenings(this.raster.plan, this.setup, this.options.models);
 		const faces: FaceUpdate[] = this.raster.openings.map((o) => o.update(amounts.get(o.spec.id) ?? 0));
+		// A fan is placed against how far each opening is open, which it reads from the page's own face arrays (the ones the solver
+		// was built from). A backend in this thread writes them as a side effect of `update`, one update late, and a worker, which
+		// has a copy, never does, so they are brought up to date here, before the fans are rasterized.
+		const { au, av, aw } = this.raster.geometry;
+		for (const { axis, indices, values } of faces) {
+			const open = axis === 0 ? au : axis === 1 ? av : aw;
+			for (let n = 0; n < indices.length; n++) open[indices[n]] = values[n];
+		}
 		const exterior = exteriorState(this.raster, this.setup.conditions, this.setup.conditions.indoorTemp, this.fluid);
 		this.inputs = deviceInputs({ devices: this.setup.devices, models: this.options.models, raster: this.raster, fluid: this.fluid, time });
 		for (const fan of this.inputs.windowFans)

@@ -178,6 +178,8 @@ test.describe('the airflow page', () => {
 			await expect(status).toHaveAttribute('data-status', 'running', { timeout: 60_000 });
 			await expect(status).toContainText('Running on the processor at reduced detail');
 			await expect(status).toContainText(/cells, each/);
+			// The Scenarios start at five times real time, which the processor cannot reach, so the status line says how fast it does run.
+			await expect(status).toContainText(/across\. Running at (under )?\d+(\.\d)?× real time\./);
 			expect(workers, 'the solver is in a worker of its own, so no step is on the page\u2019s thread').toHaveLength(1);
 			expect(warnings.join('\n')).toContain('WebGPU is not available');
 
@@ -223,7 +225,7 @@ test.describe('the airflow page', () => {
 			test.skip((await view.getAttribute('data-state')) === 'unsupported', 'This browser has no WebGL.');
 			const status = page.locator('.sim-status');
 			await expect(status).toHaveAttribute('data-status', 'unsupported', { timeout: 30_000 });
-			await expect(status).toContainText('cannot run it');
+			await expect(status).toContainText('cannot run the simulation');
 			await expect(status).toContainText('Web Worker');
 			await expect(view.locator('.stage-label[data-tone="room"]')).toContainText(['Living room', 'Bedroom 1']);
 			expect(errors, 'not a fault').toEqual([]);

@@ -93,12 +93,15 @@ export function chooseBackend({ openGpu = () => GpuContext.create(), spawn = spa
 				try {
 					return await GpuBackend.create(config, initial, context);
 				} catch (error) {
-					if (!isGpuSolverError(error)) throw error;
-					console.error('WebGPU could not build the solver, so the simulation runs on the processor at reduced detail.', error);
+					// The page leaving destroys the device under a solver that is being built, and nothing is left to run it for.
+					if (disposed || !isGpuSolverError(error)) throw error;
+					if (error.reason === 'lost') console.warn(`The graphics device was lost while the solver was built, so the simulation runs on the processor at reduced detail. ${error.message}`);
+					else console.error('WebGPU could not build the solver, so the simulation runs on the processor at reduced detail.', error);
 					// The grid was sized for the GPU, so this world is slower than it should be; the next one is built for the worker.
 					gpu = Promise.resolve(null);
 				}
 			}
+			if (disposed) throw new Error('The page has left.');
 			return WorkerBackend.create(spawn(), config, initial);
 		},
 		cellSize: async () => ((await device()) ? GPU_CELL : CPU_CELL),

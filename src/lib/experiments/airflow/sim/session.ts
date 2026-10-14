@@ -84,6 +84,8 @@ export class SimulationSession {
 	private unwatch: (() => void) | null = null;
 	/** Simulated time the clock has asked for that no step has covered yet, s: what a backend that is behind could not take, carried to the next frame. */
 	private owed = 0;
+	private wasPaused = true;
+	private lastSpeed = 0;
 	/** What the last snapshot request was made for (the slice height and the probes), so a change asks for another at once. */
 	private requestKey = '';
 	private appliedSignature = '';
@@ -124,14 +126,18 @@ export class SimulationSession {
 		this.options.readout.status = this.world ? this.options.readout.status : 'loading';
 		this.building = Promise.resolve(this.options.cellSize(plan))
 			.then((h) =>
-				World.create(setup, {
-					plans: this.options.plans,
-					models: new Map(this.options.models.map((m) => [m.id, m])),
-					make: (config, initial) => this.options.make(config, { ...initial, particulates: smoke }),
-					h
-				})
+				// Choosing the backend takes a moment, and the page may have left, or the world it was for failed, before it is done.
+				this.disposed || generation !== this.generation
+					? null
+					: World.create(setup, {
+							plans: this.options.plans,
+							models: new Map(this.options.models.map((m) => [m.id, m])),
+							make: (config, initial) => this.options.make(config, { ...initial, particulates: smoke }),
+							h
+						})
 			)
 			.then((world) => {
+				if (!world) return;
 				if (this.disposed || generation !== this.generation) {
 					world.dispose();
 					return;
@@ -173,7 +179,7 @@ export class SimulationSession {
 				} else console.error('The simulation could not start.', error);
 				this.options.readout.status = unavailable ? 'unsupported' : 'error';
 				this.options.readout.note = unavailable
-					? 'This browser can run the simulation neither with WebGPU nor in a Web Worker, so it cannot run it. The home is still shown.'
+					? 'This browser has neither WebGPU nor Web Workers, so it cannot run the simulation. The home is still shown.'
 					: 'The simulation could not start. The controls and numbers still work.';
 			})
 			.finally(() => {
@@ -238,7 +244,17 @@ export class SimulationSession {
 
 		const paused = params.clock.paused;
 		readout.status = paused ? 'paused' : 'running';
-		if (!paused) this.advance(world, Math.min(dtReal, 0.1) * params.clock.speed, Math.min(dtReal, 0.1));
+		if (!paused) {
+			// The average of the rate starts from what the clock asks when the clock starts again or its speed changes: a backend is
+			// taken to keep up until the numbers say it does not, so the page does not call a pause or a new speed "slower than real time".
+			if (this.wasPaused || params.clock.speed !== this.lastSpeed) {
+				this.rate = params.clock.speed;
+				readout.physics = { ...readout.physics, rate: this.rate };
+			}
+			this.advance(world, Math.min(dtReal, 0.1) * params.clock.speed, Math.min(dtReal, 0.1));
+		}
+		this.wasPaused = paused;
+		this.lastSpeed = params.clock.speed;
 		this.requestSnapshot(world, dtReal);
 		// A paused simulation still wants frames while its picture is catching up.
 		return !paused || this.pending || this.building !== null;
@@ -321,8 +337,9 @@ export class SimulationSession {
 				this.options.invalidate();
 			})
 			.catch((error) => {
-				// A read that fails because the page is leaving (a buffer unmapped under it) is not news.
-				if (!this.disposed && generation === this.generation) console.error('Reading the simulation failed.', error);
+				// A read that fails because the page is leaving (a buffer unmapped under it) is not news, and nor is one of a world that was
+				// replaced: it is disposed, and a worker rejects what it was still asked. Only the running world's reads count.
+				if (!this.disposed && generation === this.generation && world === this.world) console.error('Reading the simulation failed.', error);
 			})
 			.finally(() => {
 				this.pending = false;

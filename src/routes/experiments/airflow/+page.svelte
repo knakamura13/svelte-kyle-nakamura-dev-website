@@ -106,7 +106,7 @@
 			<p class="stage-note" data-when="error">The 3D view couldn’t load.</p>
 			<noscript><p class="stage-note stage-note-static">The 3D view needs JavaScript.</p></noscript>
 		</div>
-		<p class="sim-status" role="status" data-status={readout.status}>{status}{#if behind}<span aria-hidden="true" data-behind> {behind}</span>{/if}</p>
+		<p class="sim-status" role="status" data-status={readout.status}>{status}{#if behind}<span aria-hidden="true" data-behind>{' '}{behind}</span>{/if}</p>
 		<figcaption>{experience.plan.name}. {experience.plan.blurb}</figcaption>
 	</figure>
 

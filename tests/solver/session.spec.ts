@@ -6,8 +6,10 @@ import { SimulationSession, type SessionParams } from '../../src/lib/experiments
 import type { BackendFactory } from '../../src/lib/experiments/airflow/sim/world';
 import { BackendUnavailable, type BackendFailure } from '../../src/lib/experiments/airflow/solver/backend';
 import { CpuBackend } from '../../src/lib/experiments/airflow/solver/cpu/backend';
+import { WorkerBackend } from '../../src/lib/experiments/airflow/solver/cpu/proxy';
 import { GpuSolverError } from '../../src/lib/experiments/airflow/solver/gpu/errors';
 import { blankSetup, DEFAULT_CLOCK, DEFAULT_VIEW } from '../../src/lib/experiments/airflow/state';
+import { inMemoryWorker } from './channel';
 
 /** The page's runtime driver, run with a fake clock: each `update(dt)` is one drawn frame of `dt` real seconds. */
 
@@ -436,6 +438,57 @@ test.describe('simulation session', () => {
 		return { made, factory };
 	};
 	const sum = (values: number[]) => values.reduce((a, b) => a + b, 0);
+
+	test('a world on a real worker that is replaced while a read of it is waiting says nothing: the read is rejected as the old worker stops', async () => {
+		const workers: ReturnType<typeof inMemoryWorker>[] = [];
+		const factory: BackendFactory = (config, initial) => {
+			const worker = inMemoryWorker();
+			workers.push(worker);
+			return WorkerBackend.create(worker.port, config, initial);
+		};
+		const { session, params, readout } = makeSession(undefined, factory);
+		const errors: string[] = [];
+		const quiet = console.error;
+		console.error = (...args: unknown[]) => errors.push(args.join(' '));
+		try {
+			await start(session);
+			await draw(session, 4);
+			// The worker is slow: its replies are held, so a read is waiting when the visitor restarts.
+			workers[0].hold(true);
+			session.update(0.1);
+			params.restarts++;
+			const deadline = Date.now() + 30000;
+			const first = session.world;
+			while (session.world === first && Date.now() < deadline) {
+				session.update(FRAME);
+				await pause(5);
+			}
+			expect(workers, 'a second worker was started').toHaveLength(2);
+			expect(workers[0].terminated, 'and the first was stopped').toBe(true);
+			await draw(session, 3);
+			expect(readout.status).toBe('running');
+			expect(errors, 'nothing is reported for the replaced world').toEqual([]);
+		} finally {
+			console.error = quiet;
+			session.dispose();
+		}
+	});
+
+	test('after a pause, or a new speed, the rate starts from what the clock asks, so a backend that keeps up is not shown as slow', async () => {
+		const { session, params, readout } = makeSession();
+		await start(session);
+		await draw(session, 12);
+		params.clock.paused = true;
+		await draw(session, 6);
+		expect(readout.physics.rate, 'a paused clock goes at 0').toBe(0);
+		params.clock.paused = false;
+		session.update(FRAME);
+		expect(readout.physics.rate, 'and starts again from its speed').toBe(1);
+		params.clock.speed = 5;
+		session.update(FRAME);
+		expect(readout.physics.rate, 'a new speed likewise').toBe(5);
+		session.dispose();
+	});
 
 	test.describe('a backend that works in the background, as the worker does', () => {
 		test('no step is sent while two are unfinished, and what the clock asked for in the meantime is sent as one longer step, never longer than a stable one', async () => {
