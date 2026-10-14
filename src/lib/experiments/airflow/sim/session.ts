@@ -2,8 +2,7 @@ import type { DeviceModel } from '../devices/types';
 import type { HomePlan } from '../homes/types';
 import { emissionRate } from '../emission';
 import type { AirflowReadout, HoverReading, ProbeReading, RoomReading } from '../readouts';
-import type { FlowBackend, Snapshot } from '../solver/backend';
-import { isGpuSolverError } from '../solver/gpu/errors';
+import { BackendUnavailable, type BackendFailure, type Snapshot } from '../solver/backend';
 import { POINT_FIELDS, type Slice } from '../solver/types';
 import type { Clock, Pin, Setup, View } from '../state';
 import { RollingMean, SliceHistory } from './history';
@@ -25,16 +24,25 @@ export interface SessionOptions {
 	plans: readonly HomePlan[];
 	models: readonly DeviceModel[];
 	make: BackendFactory;
-	/** Picks the cell size for a plan, m. Called whenever a world is built. */
-	cellSize: (plan: HomePlan) => number;
+	/** Picks the cell size for a plan, m. Called whenever a world is built; it may take a moment, while the choice of backend is made. */
+	cellSize: (plan: HomePlan) => number | Promise<number>;
 	readout: AirflowReadout;
 	/** Asks the Stage for another frame. */
 	invalidate: () => void;
 	reducedMotion: () => boolean;
+	/** Says something to a screen reader, politely: what the session does on its own (a simulation that starts again after the graphics device was lost). */
+	announce?: (message: string) => void;
 }
 
 /** Longest real time one frame's steps may take before the session lets the simulation run slower than real time, s. */
 const FRAME_BUDGET = 0.012;
+/**
+ * Most steps a backend that works in the background (the worker) may have unfinished. Two keep it busy: the next step is
+ * already waiting when it finishes one, and a snapshot asked for now is not behind more than two steps.
+ */
+const MAX_IN_FLIGHT = 2;
+/** Real seconds over which the rate readout averages, so it does not jump between frames that sent a step and frames that did not. */
+const RATE_WINDOW = 0.5;
 /** Largest time step, s, and the cell-crossing count a step may have: semi-Lagrangian advection stays accurate to a few cells per step. */
 const MAX_STEP = 1 / 20;
 const MAX_CELLS_PER_STEP = 3;
@@ -70,8 +78,12 @@ export class SimulationSession {
 	private worldKey = '';
 	/** The key of a build that failed: it is not tried again until the key changes (a restart, another home), or every frame would retry it. */
 	private failedKey = '';
-	/** Set when the browser or the machine offers no WebGPU: nothing changes that while the page is open, so no later start is tried. */
+	/** Set when no solver can run in this browser (no WebGPU and no Web Worker): nothing changes that while the page is open, so no later start is tried. */
 	private unavailable = false;
+	/** Stops listening for the running world's backend to fail. */
+	private unwatch: (() => void) | null = null;
+	/** Simulated time the clock has asked for that no step has covered yet, s: what a backend that is behind could not take, carried to the next frame. */
+	private owed = 0;
 	/** What the last snapshot request was made for (the slice height and the probes), so a change asks for another at once. */
 	private requestKey = '';
 	private appliedSignature = '';
@@ -110,18 +122,22 @@ export class SimulationSession {
 		const plan = this.options.plans.find((p) => p.id === setup.plan);
 		if (!plan) return;
 		this.options.readout.status = this.world ? this.options.readout.status : 'loading';
-		this.building = World.create(setup, {
-			plans: this.options.plans,
-			models: new Map(this.options.models.map((m) => [m.id, m])),
-			make: (config, initial) => this.options.make(config, { ...initial, particulates: smoke }),
-			h: this.options.cellSize(plan)
-		})
+		this.building = Promise.resolve(this.options.cellSize(plan))
+			.then((h) =>
+				World.create(setup, {
+					plans: this.options.plans,
+					models: new Map(this.options.models.map((m) => [m.id, m])),
+					make: (config, initial) => this.options.make(config, { ...initial, particulates: smoke }),
+					h
+				})
+			)
 			.then((world) => {
 				if (this.disposed || generation !== this.generation) {
 					world.dispose();
 					return;
 				}
 				const old = this.world;
+				this.unwatch?.();
 				this.world = world;
 				this.worldKey = key;
 				this.failedKey = '';
@@ -129,6 +145,8 @@ export class SimulationSession {
 				this.requestKey = '';
 				this.appliedSignature = JSON.stringify(setup);
 				this.simTime = 0;
+				this.owed = 0;
+				this.rate = this.params.clock.speed;
 				this.history.clear();
 				this.probeHistory.clear();
 				this.lastEmission = '';
@@ -137,6 +155,7 @@ export class SimulationSession {
 				readout.physics = { ...readout.physics, backend: world.backend.kind, cellSize: world.raster.spec.h, cells: world.backend.fluidCells, time: 0, mass: null, reducedDetail: world.backend.kind === 'cpu' };
 				readout.status = this.params.clock.paused ? 'paused' : 'running';
 				world.backend.configureParticles({ tracers: TRACERS, smoke: SMOKE, scale: SMOKE_DENSE, seed: 1 });
+				this.unwatch = world.backend.onFailure?.((failure) => this.lose(world, failure)) ?? null;
 				old?.dispose();
 				this.pending = false;
 				this.options.invalidate();
@@ -145,21 +164,52 @@ export class SimulationSession {
 				// A start that fails because the page is already leaving (the device goes with it) is not news.
 				if (this.disposed) return;
 				this.failedKey = key;
-				// No WebGPU is not a fault: the browser or the machine just cannot run the solver this way, so it is a warning, said once.
-				const unavailable = isGpuSolverError(error) && (error.reason === 'no-webgpu' || error.reason === 'no-adapter');
+				// A browser that can run no solver at all is not a fault: it just cannot, so it is a warning, said once.
+				const unavailable = error instanceof BackendUnavailable;
 				if (unavailable) {
 					this.unavailable = true;
 					console.warn(`The simulation cannot run in this browser: ${error.message}`);
 				} else console.error('The simulation could not start.', error);
 				this.options.readout.status = unavailable ? 'unsupported' : 'error';
 				this.options.readout.note = unavailable
-					? 'This browser cannot run the simulation yet because it has no WebGPU. The home is still shown.'
+					? 'This browser can run the simulation neither with WebGPU nor in a Web Worker, so it cannot run it. The home is still shown.'
 					: 'The simulation could not start. The controls and numbers still work.';
 			})
 			.finally(() => {
 				this.building = null;
 				if (!this.disposed) this.options.invalidate();
 			});
+	}
+
+	/**
+	 * The running world's backend can no longer run: the GPU device was lost, or the worker crashed. The world is dropped at
+	 * once, so a dead backend is never stepped or read again, and what was still on its way back is ignored. A lost device
+	 * is answered by building the world again, now on the worker (the choice of backend has already moved on); the air starts
+	 * from rest, because nothing can be read back from a device that is gone. A worker that crashed is not retried until the
+	 * visitor restarts, or it would crash again every time.
+	 */
+	private lose(world: World, failure: BackendFailure) {
+		if (this.disposed || world !== this.world) return;
+		const { readout } = this.options;
+		this.generation++;
+		this.unwatch?.();
+		this.unwatch = null;
+		this.world = null;
+		this.pending = false;
+		world.dispose();
+		readout.physics = { ...readout.physics, backend: null, rate: null };
+		if (failure.reason === 'lost') {
+			console.warn(`The simulation's backend was lost: ${failure.message}`);
+			readout.status = 'loading';
+			this.options.announce?.('The graphics device was lost, so the simulation is starting again.');
+		} else {
+			console.error(`The simulation's backend failed: ${failure.message}`);
+			this.failedKey = this.worldKey;
+			readout.status = 'error';
+			readout.note = 'The simulation stopped because its worker failed. Restart it to try again.';
+			this.options.announce?.('The simulation stopped.');
+		}
+		this.options.invalidate();
 	}
 
 	/** The point on the Slice where smoke is being released, or null. Set by the scene from the pointer. */
@@ -203,26 +253,43 @@ export class SimulationSession {
 		world.emit(point, rate);
 	}
 
-	/** Steps the backend for `budget` simulated seconds, as many steps as the time allows, and records how fast it went. */
+	/**
+	 * Steps the backend for the `budget` simulated seconds the clock asks of this frame, as many steps as the backend can take,
+	 * and records how fast it went. How many that is depends on the backend. One that does its work inside `step` (the CPU in
+	 * the page, the GPU's encoding) is timed: a frame may spend `FRAME_BUDGET` on steps. One that works in the background (the
+	 * worker) says how many steps it has not finished (`stepsInFlight`), and gets no more than `MAX_IN_FLIGHT` unfinished, so
+	 * a backend that cannot keep up is not buried.
+	 *
+	 * Time the backend could not take stays owed to the next frame, which then sends a longer step, up to the stable one: a
+	 * worker that needs 30 ms a step is sent a step about every 30 ms that covers that long, not one of 17 ms every frame that it
+	 * cannot finish. Owed time beyond one stable step is dropped, so a backend that is too slow runs the simulation slower than
+	 * real time (`rate` says by how much) and does not fall further behind.
+	 */
 	private advance(world: World, budget: number, real: number) {
 		const { backend } = world;
 		const { h } = world.raster.spec;
 		const maxSpeed = Math.max(this.options.readout.physics.maxSpeed, 0.5);
 		const stable = Math.min(MAX_STEP, (MAX_CELLS_PER_STEP * h) / maxSpeed);
-		const wanted = Math.max(1, Math.ceil(budget / stable));
-		const affordable = Math.max(1, Math.floor(FRAME_BUDGET / Math.max(this.stepCost, 1e-4)));
-		const steps = Math.min(wanted, affordable);
-		const dt = Math.min(stable, budget / steps);
+		const background = backend.stepsInFlight !== undefined;
+		this.owed += budget;
+		const wanted = Math.max(1, Math.ceil(this.owed / stable));
+		const room = background ? MAX_IN_FLIGHT - backend.stepsInFlight! : Math.max(1, Math.floor(FRAME_BUDGET / Math.max(this.stepCost, 1e-4)));
+		const steps = Math.max(0, Math.min(wanted, room));
+		const dt = steps > 0 ? Math.min(stable, this.owed / steps) : 0;
 		const started = performance.now();
 		for (let n = 0; n < steps; n++) {
 			world.updateOscillation(this.simTime);
 			backend.step(dt);
 			this.simTime += dt;
 		}
-		const spent = (performance.now() - started) / 1000;
-		this.stepCost = 0.8 * this.stepCost + 0.2 * (spent / steps);
+		if (!background && steps > 0) {
+			const spent = (performance.now() - started) / 1000;
+			this.stepCost = 0.8 * this.stepCost + 0.2 * (spent / steps);
+		}
+		this.owed = Math.min(Math.max(0, this.owed - steps * dt), stable);
 		backend.stepParticles(Math.min(real, 0.05));
-		this.rate = real > 0 ? (steps * dt) / real : 0;
+		// Simulated seconds sent per real second, averaged over `RATE_WINDOW`: what the Physics panel and the clock show.
+		if (real > 0) this.rate += (1 - Math.exp(-real / RATE_WINDOW)) * ((steps * dt) / real - this.rate);
 	}
 
 	private requestSnapshot(world: World, dtReal: number) {
@@ -386,6 +453,8 @@ export class SimulationSession {
 	dispose() {
 		this.disposed = true;
 		this.generation++;
+		this.unwatch?.();
+		this.unwatch = null;
 		this.world?.dispose();
 		this.world = null;
 	}

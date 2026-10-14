@@ -47,13 +47,19 @@
 				return 'Starting the simulation…';
 			case 'running':
 			case 'paused': {
-				const where = physics.backend === 'webgpu' ? 'WebGPU' : 'the processor';
+				const where = physics.backend === 'webgpu' ? 'WebGPU' : physics.reducedDetail ? 'the processor at reduced detail' : 'the processor';
 				const grid = physics.cellSize ? `${physics.cells.toLocaleString('en-US')} cells, each ${formatLength(physics.cellSize, experience.view.units).text} across` : '';
 				return `${readout.status === 'paused' ? 'Paused' : 'Running'}${physics.backend ? ` on ${where}` : ''}${grid ? `: ${grid}` : ''}.`;
 			}
 			default:
 				return readout.note;
 		}
+	});
+	// A backend that cannot keep up runs the simulation slower than the clock asks. The rate changes as it goes, so it is kept out of the live region: a screen reader hears the status once, not every few seconds.
+	const behind = $derived.by(() => {
+		const { rate } = readout.physics;
+		if (readout.status !== 'running' || rate === null || rate >= 0.85 * experience.clock.speed) return '';
+		return rate < 0.1 ? 'Running at under 0.1× real time.' : `Running at ${rate.toFixed(1)}× real time.`;
 	});
 </script>
 
@@ -100,7 +106,7 @@
 			<p class="stage-note" data-when="error">The 3D view couldn’t load.</p>
 			<noscript><p class="stage-note stage-note-static">The 3D view needs JavaScript.</p></noscript>
 		</div>
-		<p class="sim-status" role="status" data-status={readout.status}>{status}</p>
+		<p class="sim-status" role="status" data-status={readout.status}>{status}{#if behind}<span aria-hidden="true" data-behind> {behind}</span>{/if}</p>
 		<figcaption>{experience.plan.name}. {experience.plan.blurb}</figcaption>
 	</figure>
 

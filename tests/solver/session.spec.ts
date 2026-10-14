@@ -1,8 +1,10 @@
 import { expect, test } from '@playwright/test';
 import { planById, plans } from '../../src/lib/experiments/airflow/homes/plans';
+import type { HomePlan } from '../../src/lib/experiments/airflow/homes/types';
 import { emptyReadout } from '../../src/lib/experiments/airflow/readouts';
 import { SimulationSession, type SessionParams } from '../../src/lib/experiments/airflow/sim/session';
 import type { BackendFactory } from '../../src/lib/experiments/airflow/sim/world';
+import { BackendUnavailable, type BackendFailure } from '../../src/lib/experiments/airflow/solver/backend';
 import { CpuBackend } from '../../src/lib/experiments/airflow/solver/cpu/backend';
 import { GpuSolverError } from '../../src/lib/experiments/airflow/solver/gpu/errors';
 import { blankSetup, DEFAULT_CLOCK, DEFAULT_VIEW } from '../../src/lib/experiments/airflow/state';
@@ -13,7 +15,7 @@ const make: BackendFactory = (config, initial) => new CpuBackend({ ...config, sc
 const studio = planById('studio')!;
 const FRAME = 1 / 60;
 
-const makeSession = (tweak?: (params: SessionParams) => void, factory: BackendFactory = make) => {
+const makeSession = (tweak?: (params: SessionParams) => void, factory: BackendFactory = make, cellSize: (plan: HomePlan) => number | Promise<number> = () => 0.2) => {
 	const params: SessionParams = {
 		setup: blankSetup('studio'),
 		view: { ...DEFAULT_VIEW, units: 'metric' },
@@ -26,8 +28,9 @@ const makeSession = (tweak?: (params: SessionParams) => void, factory: BackendFa
 	tweak?.(params);
 	const readout = emptyReadout();
 	const invalidated = { count: 0 };
-	const session = new SimulationSession({ params, plans, models: [], make: factory, cellSize: () => 0.2, readout, invalidate: () => invalidated.count++, reducedMotion: () => false });
-	return { session, params, readout, invalidated };
+	const announced: string[] = [];
+	const session = new SimulationSession({ params, plans, models: [], make: factory, cellSize, readout, invalidate: () => invalidated.count++, reducedMotion: () => false, announce: (message) => announced.push(message) });
+	return { session, params, readout, invalidated, announced };
 };
 
 const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -325,28 +328,30 @@ test.describe('simulation session', () => {
 			}
 		});
 
-		test('a browser with no WebGPU, or no adapter, reads as unsupported rather than as a fault', async () => {
-			for (const reason of ['no-webgpu', 'no-adapter'] as const) {
-				const { factory } = failing(new GpuSolverError(reason, 'nothing to run on'));
-				const { session, readout } = makeSession(undefined, factory);
-				const quiet = console.error;
-				console.error = () => {};
-				try {
-					for (let n = 0; n < 6; n++) {
-						session.update(FRAME);
-						await pause(5);
-					}
-					expect(readout.status, reason).toBe('unsupported');
-					expect(readout.note).toContain('WebGPU');
-				} finally {
-					console.error = quiet;
-					session.dispose();
+		test('a browser that can run no solver at all (no WebGPU and no Web Worker) reads as unsupported rather than as a fault', async () => {
+			const { factory } = failing(new BackendUnavailable('This browser cannot start a Web Worker.'));
+			const { session, readout } = makeSession(undefined, factory);
+			const quiet = console.error;
+			const quietWarn = console.warn;
+			console.error = () => {};
+			console.warn = () => {};
+			try {
+				for (let n = 0; n < 6; n++) {
+					session.update(FRAME);
+					await pause(5);
 				}
+				expect(readout.status).toBe('unsupported');
+				expect(readout.note).toContain('WebGPU');
+				expect(readout.note).toContain('Web Worker');
+			} finally {
+				console.error = quiet;
+				console.warn = quietWarn;
+				session.dispose();
 			}
 		});
 
-		test('no WebGPU is tried once for the page: another home or a restart does not try again, and it is a warning, not an error', async () => {
-			const { calls, factory } = failing(new GpuSolverError('no-webgpu', 'This browser does not support WebGPU.'));
+		test('a browser that can run no solver is tried once for the page: another home or a restart does not try again, and it is a warning, not an error', async () => {
+			const { calls, factory } = failing(new BackendUnavailable('This browser cannot start a Web Worker.'));
 			const { session, params, readout } = makeSession(undefined, factory);
 			const errors: unknown[][] = [];
 			const warnings: unknown[][] = [];
@@ -388,6 +393,259 @@ test.describe('simulation session', () => {
 				expect(readout.status).toBe('error');
 			} finally {
 				console.error = quiet;
+				session.dispose();
+			}
+		});
+	});
+
+	test('the cell size may arrive after a moment, while the choice of backend is made: the world is built once it has', async () => {
+		const asked: string[] = [];
+		const { session, readout } = makeSession(undefined, make, async (plan) => {
+			asked.push(plan.id);
+			await pause(20);
+			return 0.3;
+		});
+		await start(session);
+		expect(asked).toEqual(['studio']);
+		expect(readout.physics.cellSize).toBe(0.3);
+		session.dispose();
+	});
+
+	/** Stands in for the worker: its steps do no work and finish only when the test says so, and it keeps what it was given. */
+	class Background extends CpuBackend {
+		inFlight = 0;
+		steps: number[] = [];
+		get stepsInFlight() {
+			return this.inFlight;
+		}
+		override step(dt: number) {
+			this.steps.push(dt);
+			this.inFlight++;
+		}
+		finish(count = 1) {
+			this.inFlight = Math.max(0, this.inFlight - count);
+		}
+	}
+	const background = () => {
+		const made: Background[] = [];
+		const factory: BackendFactory = (config, initial) => {
+			const backend = new Background(config, initial);
+			made.push(backend);
+			return backend;
+		};
+		return { made, factory };
+	};
+	const sum = (values: number[]) => values.reduce((a, b) => a + b, 0);
+
+	test.describe('a backend that works in the background, as the worker does', () => {
+		test('no step is sent while two are unfinished, and what the clock asked for in the meantime is sent as one longer step, never longer than a stable one', async () => {
+			const { made, factory } = background();
+			const { session } = makeSession(undefined, factory);
+			await start(session);
+			const worker = made[0];
+			for (let n = 0; n < 40; n++) session.update(FRAME);
+			expect(worker.steps, 'two steps and then it waits').toHaveLength(2);
+			expect(worker.steps[0]).toBeCloseTo(FRAME, 9);
+			expect(worker.stepsInFlight).toBe(2);
+
+			worker.finish(1);
+			session.update(FRAME);
+			expect(worker.steps).toHaveLength(3);
+			expect(worker.stepsInFlight).toBe(2);
+			expect(worker.steps[2], 'the time that went unsent while it was stalled is in the next step').toBeGreaterThan(2 * FRAME);
+			expect(worker.steps[2], 'but not more than a stable step').toBeLessThanOrEqual(0.05 + 1e-9);
+
+			worker.finish(2);
+			session.update(FRAME);
+			expect(worker.steps.length, 'it is sent as much as there is room for').toBe(4);
+			expect(session.simTime).toBeCloseTo(sum(worker.steps), 9);
+			session.dispose();
+		});
+
+		test('a worker that cannot keep up runs the simulation slower than real time and shows the rate, instead of falling further behind', async () => {
+			const { made, factory } = background();
+			const { session, readout } = makeSession(undefined, factory);
+			await start(session);
+			const worker = made[0];
+			const frames = 300;
+			// It finishes a step every five frames, 83 ms: at most 0.05 s of simulated time each, so about 0.6 of real time.
+			for (let frame = 0; frame < frames; frame++) {
+				if (frame % 5 === 0) worker.finish(1);
+				session.update(FRAME);
+				expect(worker.stepsInFlight, 'never more than two unfinished').toBeLessThanOrEqual(2);
+			}
+			const speed = sum(worker.steps) / (frames * FRAME);
+			expect(speed).toBeGreaterThan(0.5);
+			expect(speed).toBeLessThan(0.7);
+			expect(Math.max(...worker.steps)).toBeLessThanOrEqual(0.05 + 1e-9);
+			expect(session.simTime).toBeCloseTo(sum(worker.steps), 9);
+			for (let frame = 0; frame < 12; frame++) {
+				if (frame % 5 === 0) worker.finish(1);
+				session.update(FRAME);
+				await settle();
+			}
+			expect(readout.physics.rate, 'the Physics panel and the clock show the rate').toBeGreaterThan(0.45);
+			expect(readout.physics.rate).toBeLessThan(0.75);
+			session.dispose();
+		});
+
+		test('a worker that keeps up with longer steps runs at real time, and is not held to one step a frame', async () => {
+			const { made, factory } = background();
+			const { session, readout } = makeSession(undefined, factory);
+			await start(session);
+			const worker = made[0];
+			const frames = 300;
+			// A step every two frames, 33 ms: more than a frame, less than the stable 50 ms, so the steps grow to cover it.
+			for (let frame = 0; frame < frames; frame++) {
+				if (frame % 2 === 0) worker.finish(1);
+				session.update(FRAME);
+			}
+			const speed = sum(worker.steps) / (frames * FRAME);
+			expect(speed).toBeGreaterThan(0.93);
+			expect(speed).toBeLessThanOrEqual(1 + 1e-9);
+			expect(sum(worker.steps) / worker.steps.length, 'on average steps are longer than a frame').toBeGreaterThan(1.6 * FRAME);
+			for (let frame = 0; frame < 12; frame++) {
+				if (frame % 2 === 0) worker.finish(1);
+				session.update(FRAME);
+				await settle();
+			}
+			expect(readout.physics.rate).toBeGreaterThan(0.9);
+			session.dispose();
+		});
+	});
+
+	/** A backend that can fail, the way the GPU's and the worker's can. */
+	class Fragile extends CpuBackend {
+		listeners = new Set<(failure: BackendFailure) => void>();
+		steps = 0;
+		snapshots = 0;
+		override step(dt: number) {
+			this.steps++;
+			super.step(dt);
+		}
+		override snapshot(request: Parameters<CpuBackend['snapshot']>[0]) {
+			this.snapshots++;
+			return super.snapshot(request);
+		}
+		onFailure(listener: (failure: BackendFailure) => void) {
+			this.listeners.add(listener);
+			return () => {
+				this.listeners.delete(listener);
+			};
+		}
+		fail(failure: BackendFailure) {
+			for (const listener of [...this.listeners]) listener(failure);
+		}
+	}
+	const fragileThen = (rest: 'fragile' | 'plain') => {
+		const made: CpuBackend[] = [];
+		const factory: BackendFactory = (config, initial) => {
+			const backend = made.length === 0 || rest === 'fragile' ? new Fragile(config, initial) : new CpuBackend(config, initial);
+			made.push(backend);
+			return backend;
+		};
+		return { made, factory };
+	};
+	/** Silences what the session says about a failure, and returns what it said. */
+	const listen = () => {
+		const said = { warnings: [] as string[], errors: [] as string[] };
+		const [warn, error] = [console.warn, console.error];
+		console.warn = (...args: unknown[]) => said.warnings.push(args.join(' '));
+		console.error = (...args: unknown[]) => said.errors.push(args.join(' '));
+		return { said, restore: () => ((console.warn = warn), (console.error = error)) };
+	};
+
+	test.describe('when the backend of a running world fails', () => {
+		test('a lost device: the dead backend is neither stepped nor read again, and the world is built again on what the factory gives next, with a word to the visitor', async () => {
+			const { made, factory } = fragileThen('plain');
+			const { session, readout, announced } = makeSession(undefined, factory);
+			const log = listen();
+			try {
+				await start(session);
+				const dead = made[0] as Fragile;
+				await draw(session, 10);
+				expect(dead.steps).toBeGreaterThan(0);
+				const [steps, reads] = [dead.steps, dead.snapshots];
+				const before = session.simTime;
+
+				dead.fail({ reason: 'lost', message: 'The graphics device was lost.' });
+				expect(session.world, 'the dead world is dropped at once').toBeNull();
+				expect(readout.status).toBe('loading');
+				expect(announced).toHaveLength(1);
+				expect(announced[0]).toContain('graphics device was lost');
+
+				await start(session);
+				expect(made, 'built again').toHaveLength(2);
+				expect(session.world!.backend).toBe(made[1]);
+				await draw(session, 4);
+				expect(dead.steps, 'nothing stepped the dead backend').toBe(steps);
+				expect(dead.snapshots, 'nothing read it').toBe(reads);
+				expect(readout.status).toBe('running');
+				expect(readout.physics.backend).toBe('cpu');
+				expect(session.simTime, 'the air starts from rest').toBeLessThan(before);
+				expect(session.latest.slice, 'and has its own picture').not.toBeNull();
+				expect(log.said.errors, 'a lost device is not a fault of the page').toEqual([]);
+				expect(log.said.warnings).toHaveLength(1);
+			} finally {
+				log.restore();
+				session.dispose();
+			}
+		});
+
+		test('a worker that crashed is not started again until the visitor restarts, or it would crash again every time', async () => {
+			const { made, factory } = fragileThen('plain');
+			const { session, params, readout } = makeSession(undefined, factory);
+			const log = listen();
+			try {
+				await start(session);
+				(made[0] as Fragile).fail({ reason: 'crashed', message: 'the solver blew up' });
+				expect(session.world).toBeNull();
+				expect(readout.status).toBe('error');
+				expect(readout.note).toContain('worker');
+				for (let n = 0; n < 30; n++) {
+					session.update(FRAME);
+					await pause(5);
+				}
+				expect(made, 'not built again').toHaveLength(1);
+				expect(session.update(FRAME), 'and the Stage is not asked for more frames').toBe(false);
+				expect(log.said.errors).toHaveLength(1);
+
+				params.restarts++;
+				await start(session);
+				expect(made).toHaveLength(2);
+				await draw(session, 2);
+				expect(readout.status).toBe('running');
+			} finally {
+				log.restore();
+				session.dispose();
+			}
+		});
+
+		test('a world that has been replaced, or a session that has been disposed, is not listened to any more', async () => {
+			const { made, factory } = fragileThen('fragile');
+			const { session, params, announced } = makeSession(undefined, factory);
+			const log = listen();
+			try {
+				await start(session);
+				const first = made[0] as Fragile;
+				const firstWorld = session.world;
+				expect(first.listeners.size).toBe(1);
+				params.restarts++;
+				const deadline = Date.now() + 30000;
+				while (session.world === firstWorld) {
+					session.update(FRAME);
+					await pause(5);
+					if (Date.now() > deadline) throw new Error('the restart never built a world');
+				}
+				const second = made[1] as Fragile;
+				expect(first.listeners.size, 'the old backend is let go').toBe(0);
+				first.fail({ reason: 'lost', message: 'too late to matter' });
+				expect(session.world!.backend).toBe(second);
+				expect(announced).toEqual([]);
+				session.dispose();
+				expect(second.listeners.size, 'and so is the last one when the page leaves').toBe(0);
+			} finally {
+				log.restore();
 				session.dispose();
 			}
 		});

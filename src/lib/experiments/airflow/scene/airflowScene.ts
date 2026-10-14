@@ -5,7 +5,7 @@ import type { RigSetup, SceneFactory } from '$lib/experiments/engine/types';
 import type { DeviceModel } from '../devices/types';
 import type { HomePlan } from '../homes/types';
 import type { AirflowReadout } from '../readouts';
-import { webgpuChoice } from '../sim/backends';
+import { chooseBackend } from '../sim/backends';
 import { SMOKE, SMOKE_DENSE, SimulationSession, TRACERS, type SessionParams } from '../sim/session';
 import { effectiveOpenings } from '../sim/world';
 import { ARROW_SPACING, DirectionArrows } from './arrows';
@@ -40,6 +40,8 @@ export interface AirflowSceneParams extends SessionParams {
 	unpin(id: string, quiet?: boolean): void;
 	/** Says whether smoke is being released; the point it comes from goes to the session. */
 	setEmitting(on: boolean): void;
+	/** Tells a screen reader something the simulation did on its own. */
+	announce(message: string): void;
 }
 
 /** Everything that belongs to one home, so a new plan swaps it as a piece. */
@@ -71,7 +73,7 @@ export const createAirflowScene: SceneFactory<AirflowSceneParams, AirflowReadout
 	const models = new Map(params.models.map((model) => [model.id, model]));
 	const planOf = (id: string) => params.plans.find((plan) => plan.id === id) ?? params.plans[0];
 
-	const backend = webgpuChoice();
+	const backend = chooseBackend();
 	const session = new SimulationSession({
 		params,
 		plans: params.plans,
@@ -80,7 +82,8 @@ export const createAirflowScene: SceneFactory<AirflowSceneParams, AirflowReadout
 		cellSize: (plan) => backend.cellSize(plan),
 		readout,
 		invalidate: host.invalidate,
-		reducedMotion: host.reducedMotion
+		reducedMotion: host.reducedMotion,
+		announce: (message) => params.announce(message)
 	});
 	const tracers = new TracerPoints(TRACERS);
 	const smoke = new SmokePoints(SMOKE);
