@@ -209,6 +209,13 @@ test.describe('the airflow page', () => {
 			await expect(probe).toHaveCount(1);
 			await expect(probe.locator('.stage-label-name')).toHaveText('Probe 1');
 			await expect(probe.locator('.stage-label-value'), 'with a speed in it').toHaveText(/\d/);
+
+			// Another home is a new world on a new worker, and the old worker is stopped while a read of it may still be waiting. That says nothing.
+			await page.evaluate((hash) => (location.hash = hash), setupToHash(blankSetup('studio')));
+			await expect(page.locator('.airflow-figure figcaption')).toContainText(planById('studio')!.name);
+			await expect(status).toHaveAttribute('data-status', 'running', { timeout: 30_000 });
+			await page.waitForTimeout(2000);
+			expect(workers, 'a worker for each world').toHaveLength(2);
 			expect(errors).toEqual([]);
 		});
 
