@@ -50,6 +50,8 @@ export interface TunerOptions {
 	cells?: (plan: Footprint, h: number) => number;
 	/** Cells the first world may have; defaults to `START_BUDGET[kind]`. */
 	budget?: number;
+	/** A cell size in words, for the messages: in the units the visitor reads. Defaults to centimetres. */
+	describe?: (h: number) => string;
 }
 
 type Footprint = Pick<HomePlan, 'width' | 'depth' | 'ceiling'>;
@@ -73,6 +75,20 @@ export interface Retune {
 	message: string;
 }
 
+/**
+ * What the session asks of the tuner of the device it runs on: to be fed the frames of the world it runs, and to say what it has to say
+ * about the grid. The choice of backend (backends.ts) owns one tuner for each kind of backend and answers for the one the world is on.
+ */
+export interface Tuning {
+	/**
+	 * One drawn frame of the world that runs on `kind`, and a new cell size when the window it completes calls for one. The session
+	 * calls it once for every frame it draws while the clock runs, and builds the world again at that size.
+	 */
+	observe(kind: BackendKind, sample: FrameSample): Retune | null;
+	/** Words about why this device runs the grid it does (a phone's coarsest grid, a processor that cannot keep up), or '' when there is nothing to say. */
+	note(kind: BackendKind): string;
+}
+
 export const cellsOf = (plan: Footprint, h: number) => Math.round(plan.width / h) * Math.round(plan.depth / h) * Math.round(plan.ceiling / h);
 
 interface Measured {
@@ -87,6 +103,7 @@ export class Tuner {
 	readonly kind: BackendKind;
 	readonly small: boolean;
 	private readonly cellsAt: (plan: Footprint, h: number) => number;
+	private readonly describe: (h: number) => string;
 	/** The cells the device is believed to hold; the next world is the finest that fits. */
 	private budget: number;
 	/** The most cells a window has been good at, and the fewest it has been bad at. */
@@ -109,6 +126,7 @@ export class Tuner {
 		this.kind = options.kind;
 		this.small = options.small ?? false;
 		this.cellsAt = options.cells ?? cellsOf;
+		this.describe = options.describe ?? centimetres;
 		this.budget = options.budget ?? START_BUDGET[options.kind];
 		if (this.small) this.note = 'This device runs the coarsest grid. The simulation is best on a laptop.';
 	}
@@ -192,7 +210,7 @@ export class Tuner {
 			return null;
 		}
 		this.budget = Math.max(this.budget, cells);
-		return { size: next, direction: 'finer', message: `The device has room to spare, so the simulation restarted on a finer grid, with cells of ${centimetres(next)}.` };
+		return { size: next, direction: 'finer', message: `The device has room to spare, so the simulation restarted on a finer grid, with cells of ${this.describe(next)}.` };
 	}
 
 	private stepDown(world: Measured, fps: number, keep: number): Retune | null {
@@ -213,6 +231,6 @@ export class Tuner {
 			this.budget = Math.min(this.budget, this.cellsAt(world.plan, next));
 		}
 		const why = fps < BAD_FPS ? `The page was drawing ${Math.round(fps)} frames a second` : `The simulation ran at ${Math.round(keep * 100)}% of real time`;
-		return { size: next, direction: 'coarser', message: `${why}, so the simulation restarted on a coarser grid, with cells of ${centimetres(next)}.` };
+		return { size: next, direction: 'coarser', message: `${why}, so the simulation restarted on a coarser grid, with cells of ${this.describe(next)}.` };
 	}
 }

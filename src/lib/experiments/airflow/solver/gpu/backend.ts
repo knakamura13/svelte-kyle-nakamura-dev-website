@@ -9,6 +9,12 @@ const READBACK = BufferUsage.MAP_READ | BufferUsage.COPY_DST;
 /** How much the last CFL reading is enlarged for every step it is old (see `step`). */
 const STALE_GROWTH = 1.1;
 const UNIFORM = BufferUsage.UNIFORM | BufferUsage.COPY_DST;
+/**
+ * Most steps the page leaves unfinished on the device (`FlowBackend.maxInFlight`). One frame at 60 fps and the fastest clock, 20 times
+ * real time, asks for 7 steps of the stable 0.05 s, so 8 lets a device that keeps up reach it; a smaller number holds a fast one back
+ * (4 reaches 12 times real time at 60 fps), and a larger one only deepens the queue a snapshot waits behind.
+ */
+export const GPU_MAX_IN_FLIGHT = 8;
 
 /** A copy from a device buffer into a fresh mappable buffer, read once the queue has caught up. */
 interface Pending {
@@ -24,11 +30,19 @@ interface Pending {
  *
  * The scalar substep count comes from the largest CFL speed read back lately (`GpuSolver.scalarSubsteps`), refreshed
  * by a small read after a step whenever none is in flight, and by every snapshot.
+ *
+ * A step is submitted at once, so a device that cannot keep up would be given work faster than it finishes it. Each submit is
+ * followed by a wait for the queue (`onSubmittedWorkDone`), and `stepsInFlight` counts the steps still waiting: the page sends no
+ * more at `maxInFlight`, which bounds the queue, the age of the CFL reading and the time a snapshot waits.
  */
 export class GpuBackend implements FlowBackend {
 	readonly kind = 'webgpu';
 	time = 0;
 	steps = 0;
+	/** The most unfinished steps the page leaves on the device. A field, so a measurement can try another. */
+	maxInFlight = GPU_MAX_IN_FLIGHT;
+	/** Steps submitted that the device has not finished. */
+	private unfinished = 0;
 	private lastDt = 0;
 	private cflSpeed = 0;
 	/** The step the CFL speed in `cflSpeed` was measured at; −∞ until the first reading arrives. */
@@ -74,6 +88,10 @@ export class GpuBackend implements FlowBackend {
 		return this.solver.fluidCells;
 	}
 
+	get stepsInFlight() {
+		return this.unfinished;
+	}
+
 	/** Reports the loss of the graphics device (`GpuContext.onLost`), which ends every backend built on it. A device that is already gone reports at once. */
 	onFailure(listener: (failure: BackendFailure) => void) {
 		const { context } = this.solver;
@@ -109,6 +127,13 @@ export class GpuBackend implements FlowBackend {
 			this.cflPending = true;
 		}
 		device.queue.submit([encoder.finish()]);
+		// The queue runs in order, so this resolves once this step, and everything submitted before it, is done. A device that was lost
+		// never finishes the work, and a rejection is how some browsers say so: the session has dropped the world by then, so both count alike.
+		this.unfinished++;
+		const finished = () => {
+			if (!this.disposed) this.unfinished = Math.max(0, this.unfinished - 1);
+		};
+		device.queue.onSubmittedWorkDone().then(finished, finished);
 		if (readCfl)
 			this.cflStaging.mapAsync(MapMode.READ).then(
 				() => {
@@ -290,6 +315,7 @@ export class GpuBackend implements FlowBackend {
 	dispose() {
 		if (this.disposed) return;
 		this.disposed = true;
+		this.unfinished = 0;
 		for (const buffers of this.roomBuffers) buffers.uniform.destroy();
 		this.cflStaging.destroy();
 		this.solver.dispose();

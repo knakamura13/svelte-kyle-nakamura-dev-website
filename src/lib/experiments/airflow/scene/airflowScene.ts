@@ -6,8 +6,10 @@ import type { DeviceModel } from '../devices/types';
 import type { HomePlan } from '../homes/types';
 import type { AirflowReadout } from '../readouts';
 import { chooseBackend } from '../sim/backends';
+import { cellFromSearch, detectSmallDevice } from '../sim/device';
 import { SMOKE, SMOKE_DENSE, SimulationSession, TRACERS, type SessionParams } from '../sim/session';
 import { effectiveOpenings } from '../sim/world';
+import { formatLength } from '../units';
 import { ARROW_SPACING, DirectionArrows } from './arrows';
 import { DeviceMeshes } from './deviceMeshes';
 import type { Point3 } from './deviceMath';
@@ -73,13 +75,19 @@ export const createAirflowScene: SceneFactory<AirflowSceneParams, AirflowReadout
 	const models = new Map(params.models.map((model) => [model.id, model]));
 	const planOf = (id: string) => params.plans.find((plan) => plan.id === id) ?? params.plans[0];
 
-	const backend = chooseBackend();
+	// The grid is the device's to say: measured by the tuner, the coarsest on a phone or a small tablet, or exactly what `?cell=0.15` asks for.
+	const backend = chooseBackend({
+		small: detectSmallDevice(),
+		fixedCell: cellFromSearch(location.search),
+		describeSize: (h) => formatLength(h, params.view.units).text
+	});
 	const session = new SimulationSession({
 		params,
 		plans: params.plans,
 		models: params.models,
 		make: backend.make,
 		cellSize: (plan) => backend.cellSize(plan),
+		tuning: backend,
 		readout,
 		invalidate: host.invalidate,
 		reducedMotion: host.reducedMotion,

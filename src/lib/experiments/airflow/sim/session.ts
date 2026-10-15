@@ -6,6 +6,7 @@ import { BackendUnavailable, type BackendFailure, type Snapshot } from '../solve
 import { POINT_FIELDS, type Slice } from '../solver/types';
 import type { Clock, Pin, Setup, View } from '../state';
 import { RollingMean, SliceHistory } from './history';
+import type { Tuning } from './tuner';
 import { World, type BackendFactory } from './world';
 
 /** The part of the page's state the session reads. The experience implements it; tests can pass a plain object. */
@@ -30,16 +31,19 @@ export interface SessionOptions {
 	/** Asks the Stage for another frame. */
 	invalidate: () => void;
 	reducedMotion: () => boolean;
-	/** Says something to a screen reader, politely: what the session does on its own (a simulation that starts again after the graphics device was lost). */
+	/** Says something to a screen reader, politely: what the session does on its own (a simulation that starts again after the graphics device was lost, or on another grid). */
 	announce?: (message: string) => void;
+	/**
+	 * The auto-tuner. The session tells it how each drawn frame of the running world went; when it asks for another cell size the world
+	 * is built again at that size, from the same setup (so the Probes and Devices stay), `readout.tuning` says so and the screen reader is told.
+	 * `cellSize` is how that size is asked for, so it must be the choice that this tuner belongs to. Absent, the grid stays as `cellSize` gave it.
+	 */
+	tuning?: Tuning;
 }
 
 /** Longest real time one frame's steps may take before the session lets the simulation run slower than real time, s. */
 const FRAME_BUDGET = 0.012;
-/**
- * Most steps a backend that works in the background (the worker) may have unfinished. Two keep it busy: the next step is
- * already waiting when it finishes one, and a snapshot asked for now is not behind more than two steps.
- */
+/** Most steps a backend that works in the background may have unfinished, when it does not say (`FlowBackend.maxInFlight`): what the worker needs. */
 const MAX_IN_FLIGHT = 2;
 /** Real seconds over which the rate readout averages, so it does not jump between frames that sent a step and frames that did not. */
 const RATE_WINDOW = 0.5;
@@ -102,6 +106,14 @@ export class SimulationSession {
 	private readonly probeHistory = new Map<string, RollingMean>();
 	private roomsDue = false;
 	private disposed = false;
+	/** How many times the tuner has asked for another cell size. Part of a world's key, so the next frame builds a world and asks `cellSize` again. */
+	private retunes = 0;
+	/** What the tuner said about the retune whose world is being built, until that world is on show and can say so. */
+	private retuning = '';
+	/** What it said about the retune that made the running world, which that world shows as long as it runs. */
+	private retuned = '';
+	/** What the tuner says about the grid on this device apart from a retune, as last shown and told. */
+	private note = '';
 
 	constructor(private readonly options: SessionOptions) {
 		this.options.readout.status = 'loading';
@@ -112,7 +124,7 @@ export class SimulationSession {
 	}
 
 	private keyFor(params: SessionParams) {
-		return `${params.restarts}|${params.setup.plan}|${params.setup.furniture}|${params.setup.conditions.indoorTemp}`;
+		return `${params.restarts}|${params.setup.plan}|${params.setup.furniture}|${params.setup.conditions.indoorTemp}|${this.retunes}`;
 	}
 
 	/** Builds a world for the current setup in the background; the old one keeps running until the new one is ready. */
@@ -160,6 +172,10 @@ export class SimulationSession {
 				const { readout } = this.options;
 				readout.physics = { ...readout.physics, backend: world.backend.kind, cellSize: world.raster.spec.h, cells: world.backend.fluidCells, time: 0, mass: null, reducedDetail: world.backend.kind === 'cpu' };
 				readout.status = this.params.clock.paused ? 'paused' : 'running';
+				// A world that a retune asked for says so for as long as it runs; any other (a restart, another Home) says only what the tuner notes about the device.
+				this.retuned = this.retuning;
+				this.retuning = '';
+				this.sayTuning(this.options.tuning?.note(world.backend.kind) ?? '');
 				world.backend.configureParticles({ tracers: TRACERS, smoke: SMOKE, scale: SMOKE_DENSE, seed: 1 });
 				this.unwatch = world.backend.onFailure?.((failure) => this.lose(world, failure)) ?? null;
 				old?.dispose();
@@ -171,6 +187,7 @@ export class SimulationSession {
 				// was overtaken: the world it was for failed or was replaced while it ran, and the next frame builds again.
 				if (this.disposed || generation !== this.generation) return;
 				this.failedKey = key;
+				this.retuning = '';
 				// A browser that can run no solver at all is not a fault: it just cannot, so it is a warning, said once.
 				const unavailable = error instanceof BackendUnavailable;
 				if (unavailable) {
@@ -203,6 +220,9 @@ export class SimulationSession {
 		this.unwatch = null;
 		this.world = null;
 		this.pending = false;
+		// A grid that was asked for on a backend that is gone is not asked of the next one: it is sized afresh, and says nothing of the old retune.
+		this.retuning = '';
+		this.retuned = '';
 		world.dispose();
 		readout.physics = { ...readout.physics, backend: null, rate: null };
 		if (failure.reason === 'lost') {
@@ -256,8 +276,46 @@ export class SimulationSession {
 		this.wasPaused = paused;
 		this.lastSpeed = params.clock.speed;
 		this.requestSnapshot(world, dtReal);
+		this.tune(world, wanted, dtReal);
 		// A paused simulation still wants frames while its picture is catching up.
 		return !paused || this.pending || this.building !== null;
+	}
+
+	/**
+	 * Tells the tuner how this frame went, and sees to it that the world is built again at the size it asks for. Only frames of the
+	 * world the tuner sized are told. Not while the clock is paused: nothing is stepping, so nothing can be measured. And not while
+	 * another world is being built, or the key says the running one is no longer wanted: that world is still on show, but the tuner
+	 * has already started counting the next one (`cellSize` resets it), and the old world's frames must not count toward it.
+	 *
+	 * A new size is part of the world's key (`retunes`), so the next frame builds a world for it from the same setup, which is where
+	 * the Probes and Devices live: they are untouched. The old world runs until the new one is ready, and then the readout and the screen
+	 * reader say that the simulation restarted.
+	 */
+	private tune(world: World, wanted: string, real: number) {
+		const { tuning } = this.options;
+		if (!tuning || this.params.clock.paused || this.building || wanted !== this.worldKey) return;
+		const kind = world.backend.kind;
+		const retune = tuning.observe(kind, { dt: real, rate: this.rate, paused: false });
+		if (retune) {
+			this.retuning = retune.message;
+			this.retunes++;
+			return;
+		}
+		// The tuner may have found something to say without a new size (a processor that cannot keep up even on the coarsest grid).
+		const note = tuning.note(kind);
+		if (note !== this.note) this.sayTuning(note);
+	}
+
+	/**
+	 * Puts what the tuner has to say into the readout, for the status line, and tells a screen reader what in it is new. The status
+	 * line shows it outside its live region, as it does the rate, so it is announced here, once: a retune, and a note the first time it is seen.
+	 */
+	private sayTuning(note: string) {
+		const fresh = note !== this.note ? note : '';
+		this.note = note;
+		this.options.readout.tuning = [this.retuned, note].filter(Boolean).join(' ');
+		const words = [this.retuned, fresh].filter(Boolean).join(' ');
+		if (words) this.options.announce?.(words);
 	}
 
 	private syncEmission(world: World) {
@@ -273,14 +331,15 @@ export class SimulationSession {
 	/**
 	 * Steps the backend for the `budget` simulated seconds the clock asks of this frame, as many steps as the backend can take,
 	 * and records how fast it went. How many that is depends on the backend. One that does its work inside `step` (the CPU in
-	 * the page, the GPU's encoding) is timed: a frame may spend `FRAME_BUDGET` on steps. One that works in the background (the
-	 * worker) says how many steps it has not finished (`stepsInFlight`), and gets no more than `MAX_IN_FLIGHT` unfinished, so
-	 * a backend that cannot keep up is not buried.
+	 * the page) is timed: a frame may spend `FRAME_BUDGET` on steps. One that works in the background (the worker, and the GPU,
+	 * whose steps only queue) says how many steps it has not finished (`stepsInFlight`), and gets no more than its `maxInFlight`
+	 * unfinished, so a backend that cannot keep up is not buried.
 	 *
 	 * Time the backend could not take stays owed to the next frame, which then sends a longer step, up to the stable one: a
 	 * worker that needs 30 ms a step is sent a step about every 30 ms that covers that long, not one of 17 ms every frame that it
 	 * cannot finish. Owed time beyond one stable step is dropped, so a backend that is too slow runs the simulation slower than
-	 * real time (`rate` says by how much) and does not fall further behind.
+	 * real time (`rate` says by how much) and does not fall further behind. That is what makes `rate` the throughput a backend
+	 * really achieved, on the GPU too, and so what the auto-tuner can judge by.
 	 */
 	private advance(world: World, budget: number, real: number) {
 		const { backend } = world;
@@ -290,7 +349,7 @@ export class SimulationSession {
 		const background = backend.stepsInFlight !== undefined;
 		this.owed += budget;
 		const wanted = Math.max(1, Math.ceil(this.owed / stable));
-		const room = background ? MAX_IN_FLIGHT - backend.stepsInFlight! : Math.max(1, Math.floor(FRAME_BUDGET / Math.max(this.stepCost, 1e-4)));
+		const room = background ? (backend.maxInFlight ?? MAX_IN_FLIGHT) - backend.stepsInFlight! : Math.max(1, Math.floor(FRAME_BUDGET / Math.max(this.stepCost, 1e-4)));
 		const steps = Math.max(0, Math.min(wanted, room));
 		const dt = steps > 0 ? Math.min(stable, this.owed / steps) : 0;
 		const started = performance.now();
