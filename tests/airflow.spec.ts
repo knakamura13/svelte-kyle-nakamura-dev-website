@@ -175,7 +175,9 @@ test.describe('the airflow page', () => {
 			});
 			page.on('worker', (worker) => workers.push(worker.url()));
 			await page.setViewportSize({ width: 1280, height: 900 });
-			await page.goto('/experiments/airflow');
+			// The grid is pinned at 20 cm (`?cell=0.2`): on a slow machine the auto-tuner would restart the world on another grid, which starts another
+			// worker and changes the count of them below, and says so in the status line, between the cell size and the rate.
+			await page.goto('/experiments/airflow?cell=0.2');
 			const view = page.getByRole('application', { name: /^The air in the/ });
 			await expect(view).toHaveAttribute('data-state', /^(live|unsupported)$/, { timeout: 15_000 });
 			test.skip((await view.getAttribute('data-state')) === 'unsupported', 'This browser has no WebGL.');

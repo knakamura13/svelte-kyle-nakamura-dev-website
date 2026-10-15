@@ -75,3 +75,13 @@
 /* Where the simulation is, under the Stage. */
 .sim-status { margin:0; padding:12px 20px 14px; font-size:12px; line-height:1.6; color:var(--muted); font-variant-numeric:tabular-nums; }
 .sim-status[data-status="unsupported"],.sim-status[data-status="error"] { color:var(--ink); }
+
+/* The auto-tuner (#56) adds one short sentence to the status line (a phone's note, or that the simulation restarted on another grid). On a phone that is the cell
+   size, the sentence and the rate, which is three lines, so the pinned figure keeps three: the Dock under it does not move when the sentence appears or goes.
+   --airflow-pin is the figure's height as far as focus is concerned, so it grows by the same line. */
+@media(max-width:519px) {
+ .airflow-figure .sim-status { min-height:calc(4.8em + 14px); }
+}
+@media(max-width:519px) and (min-height:701px) {
+ .airflow-card { --airflow-pin:calc(72px + clamp(240px,40vh,440px) + 111px); }
+}

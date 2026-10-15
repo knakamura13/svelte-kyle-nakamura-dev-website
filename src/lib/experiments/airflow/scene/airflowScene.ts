@@ -9,7 +9,6 @@ import { chooseBackend } from '../sim/backends';
 import { cellFromSearch, detectSmallDevice } from '../sim/device';
 import { SMOKE, SMOKE_DENSE, SimulationSession, TRACERS, type SessionParams } from '../sim/session';
 import { effectiveOpenings } from '../sim/world';
-import { formatLength } from '../units';
 import { ARROW_SPACING, DirectionArrows } from './arrows';
 import { DeviceMeshes } from './deviceMeshes';
 import type { Point3 } from './deviceMath';
@@ -76,11 +75,7 @@ export const createAirflowScene: SceneFactory<AirflowSceneParams, AirflowReadout
 	const planOf = (id: string) => params.plans.find((plan) => plan.id === id) ?? params.plans[0];
 
 	// The grid is the device's to say: measured by the tuner, the coarsest on a phone or a small tablet, or exactly what `?cell=0.15` asks for.
-	const backend = chooseBackend({
-		small: detectSmallDevice(),
-		fixedCell: cellFromSearch(location.search),
-		describeSize: (h) => formatLength(h, params.view.units).text
-	});
+	const backend = chooseBackend({ small: detectSmallDevice(), fixedCell: cellFromSearch(location.search) });
 	const session = new SimulationSession({
 		params,
 		plans: params.plans,
@@ -138,6 +133,7 @@ export const createAirflowScene: SceneFactory<AirflowSceneParams, AirflowReadout
 	let sensitivity = NaN;
 	let mode = params.view.mode;
 	let framed: { plan: string; topDown: boolean; setup: RigSetup } | null = null;
+	let lastUpdate = 0;
 
 	/** Height of the slice plane as drawn: the cell layer the solver snapped to, or the requested height before the first slice. */
 	const planeY = () => session.latest.slice?.y ?? params.view.sliceHeight;
@@ -194,7 +190,12 @@ export const createAirflowScene: SceneFactory<AirflowSceneParams, AirflowReadout
 				input.reset();
 			}
 			const reduced = host.reducedMotion();
-			let moving = session.update(dt);
+			// The Stage caps the `dt` it hands over at 50 ms so that an animation never jumps. The session and the tuner want how long the frame really
+			// took: a page drawing at 8 frames a second is not at 20, and a tab that was hidden for a minute is not one slow frame.
+			const now = performance.now();
+			const real = lastUpdate ? (now - lastUpdate) / 1000 : dt;
+			lastUpdate = now;
+			let moving = session.update(real);
 
 			// The home follows the setup: furniture, plan view, and every door and window as far open as the solver has it.
 			const { dollhouse } = house;

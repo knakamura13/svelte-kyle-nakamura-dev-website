@@ -253,17 +253,17 @@ test.describe('the cell size the choice gives', () => {
 			expect(frames(choice, 'cpu', VERDICT, { rate: 0.3 })?.direction).toBe('coarser');
 			expect(await choice.cellSize(house)).toBe(0.3);
 			expect(frames(choice, 'cpu', VERDICT, { rate: 0.3 }), 'there is no coarser grid to go to').toBeNull();
-			expect(choice.note('cpu')).toMatch(/cannot keep up with real time even on the coarsest grid/);
+			expect(choice.note('cpu')).toBe('Even the coarsest grid is too slow for this device.');
 			expect(choice.note('webgpu')).toBe('');
 		});
 		choice.dispose();
 	});
 
-	test('the tuner’s messages say a cell size in the words the page gives it, not always in centimetres', async () => {
-		const choice = withGpu({ describeSize: (h) => `${Math.round(h / 0.0254)} in` });
+	test('what the choice says about a change is the tuner’s one short sentence, which gives no cell size: the status line gives it, in the units the visitor reads', async () => {
+		const choice = withGpu();
 		await said(async () => {
 			await choice.cellSize(house);
-			expect(frames(choice, 'webgpu', VERDICT)?.message).toBe('The device has room to spare, so the simulation restarted on a finer grid, with cells of 4 in.');
+			expect(frames(choice, 'webgpu', VERDICT)?.message).toBe('Restarted on a finer grid: the device has room to spare.');
 		});
 		choice.dispose();
 	});
@@ -273,7 +273,7 @@ test.describe('the cell size the choice gives', () => {
 			const choice = kind === 'webgpu' ? withGpu({ small: true }) : withoutGpu({ small: true });
 			await said(async () => {
 				for (const plan of plans) expect(await choice.cellSize(plan), `${kind} ${plan.id}`).toBe(0.3);
-				expect(choice.note(kind)).toBe('This device runs the coarsest grid. The simulation is best on a laptop.');
+				expect(choice.note(kind)).toBe('Coarsest grid here: best on a laptop.');
 				// Ten minutes of frames that would be good or bad on any other device: it does not move.
 				expect(frames(choice, kind, 600), 'good frames').toBeNull();
 				expect(frames(choice, kind, 600, { rate: 0.01 }), 'and slow ones').toBeNull();

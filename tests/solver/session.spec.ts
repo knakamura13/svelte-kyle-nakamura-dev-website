@@ -905,7 +905,7 @@ test.describe('simulation session', () => {
 		};
 		return { tuning, told, ask: (retune: Retune) => (ready = retune) };
 	};
-	const retune = (size: number): Retune => ({ size, direction: 'finer', message: `The device has room to spare, so the simulation restarted on a finer grid, with cells of ${size * 100} cm.` });
+	const retune = (size: number): Retune => ({ size, direction: 'finer', message: 'Restarted on a finer grid: the device has room to spare.' });
 	/** Draws frames the way the Stage does until `done`, letting the build and the reads proceed. */
 	const until = async (session: SimulationSession, done: () => boolean, what: string) => {
 		const deadline = Date.now() + 30000;
@@ -1101,7 +1101,7 @@ test.describe('simulation session', () => {
 				const { session, params, readout, announced } = makeSession(undefined, make, (plan) => choice.cellSize(plan), { tuning: choice });
 				await start(session);
 				expect(readout.physics.cellSize).toBe(0.3);
-				expect(readout.tuning).toBe('This device runs the coarsest grid. The simulation is best on a laptop.');
+				expect(readout.tuning).toBe('Coarsest grid here: best on a laptop.');
 				expect(announced).toEqual([readout.tuning]);
 				const first = session.world!;
 				await draw(session, 20, 0.5);
@@ -1109,7 +1109,7 @@ test.describe('simulation session', () => {
 				params.restarts++;
 				await until(session, () => session.world !== first, 'the restart');
 				expect(readout.physics.cellSize).toBe(0.3);
-				expect(readout.tuning, 'the note is permanent').toBe('This device runs the coarsest grid. The simulation is best on a laptop.');
+				expect(readout.tuning, 'the note is permanent').toBe('Coarsest grid here: best on a laptop.');
 				expect(announced, 'but it is announced once').toHaveLength(1);
 				params.setup = blankSetup('house');
 				await until(session, () => session.world!.raster.plan.id === 'house', 'another Home');
@@ -1181,7 +1181,7 @@ test.describe('simulation session', () => {
 			expect(atVerdict).toBeLessThanOrEqual(52);
 			expect(observed, 'and none of the old world’s frames while the new one was being built (a dozen of them) were told').toBe(atVerdict);
 			expect(readout.physics.cellSize).toBe(0.2);
-			expect(readout.tuning).toMatch(/finer grid, with cells of 20 cm/);
+			expect(readout.tuning).toBe('Restarted on a finer grid: the device has room to spare.');
 			expect(announced).toHaveLength(1);
 			const second = session.world!;
 			// Another verdict takes another five seconds of the new world's own frames, and they are counted from its first.

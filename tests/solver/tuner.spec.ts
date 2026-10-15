@@ -114,7 +114,8 @@ test.describe('the auto-tuner', () => {
 		// 0.15 m (98,304 cells) holds; 0.1 m (331,776) does not: back to 0.15 for good.
 		expect(sizes.map((s) => s.size)).toEqual([0.15, 0.1, 0.15]);
 		expect(messages).toHaveLength(2);
-		expect(messages[1]).toMatch(/coarser grid, with cells of 15 cm/);
+		// 0.1 m drew at 27 frames a second, which is under the bad mark, so that is what the message gives as the reason.
+		expect(messages[1]).toBe('Restarted on a coarser grid: the page ran at 27 frames a second.');
 		expect(tuner.isSettled).toBe(true);
 		// Every change came in the first half minute, and nothing moved in the last four minutes.
 		expect(sizes[sizes.length - 1].at).toBeLessThan(30);
@@ -156,8 +157,26 @@ test.describe('the auto-tuner', () => {
 		const tuner = new Tuner({ kind: 'cpu' });
 		const { sizes } = drive(tuner, house, 200, device(8_000));
 		expect(sizes[sizes.length - 1].size).toBe(0.3);
-		expect(tuner.note).toMatch(/cannot keep up with real time even on the coarsest grid/);
+		expect(tuner.note).toBe('Even the coarsest grid is too slow for this device.');
 		expect(sizes[sizes.length - 1].at).toBeLessThan(40);
+	});
+
+	test('every message it can give is one short sentence, because on a phone it shares two lines of the status line with the cell size', () => {
+		const said = new Set<string>();
+		// Every way it speaks: a try that is too much for the page's frame rate, one that is too much for the solver, a good run, a phone, and a device that is too slow even on the coarsest grid.
+		for (const perf of [(cells: number): Perf => ({ fps: cells > 100_000 ? 12 : 60, rate: 1 }), (cells: number): Perf => ({ fps: 60, rate: cells > 100_000 ? 0.5 : 1 }), () => ({ fps: 60, rate: 1 })]) {
+			const tuner = new Tuner({ kind: 'webgpu' });
+			for (const m of drive(tuner, house, 120, perf).messages) said.add(m);
+		}
+		const slow = new Tuner({ kind: 'cpu' });
+		drive(slow, house, 200, device(8_000));
+		said.add(slow.note!);
+		said.add(new Tuner({ kind: 'webgpu', small: true }).note!);
+		expect(said.size, 'five different things it can say').toBeGreaterThanOrEqual(5);
+		for (const message of said) {
+			expect(message.length, message).toBeLessThanOrEqual(64);
+			expect(message, 'one sentence').toMatch(/^[^.]+\.$/);
+		}
 	});
 
 	test('the page’s frame rate says nothing about the worker, which steps off the page’s thread; the solver keeping up does', () => {

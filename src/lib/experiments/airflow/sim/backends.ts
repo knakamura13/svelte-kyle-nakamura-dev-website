@@ -31,8 +31,6 @@ export interface ChoiceOptions {
 	small?: boolean;
 	/** Runs every Home at exactly this cell size, m, and no tuner is asked (`?cell=` in the address: for QA and tests). */
 	fixedCell?: number;
-	/** A cell size in words for the tuner's messages, in the units the visitor reads. Defaults to centimetres. */
-	describeSize?: (h: number) => string;
 }
 
 /** The worker is a separate file the bundler builds on its own, so the page's own JavaScript holds none of the solver. */
@@ -58,14 +56,11 @@ function spawnSolverWorker(): WorkerPort {
  * the device is found to hold is settled once for the page too: the next Home, a restart and a rebuilt world all start from it.
  * A phone or small tablet (`small`) is given the coarsest grid and a note, and `fixedCell` bypasses the tuners altogether.
  */
-export function chooseBackend({ openGpu = () => GpuContext.create(), spawn = spawnSolverWorker, small = false, fixedCell, describeSize }: ChoiceOptions = {}): BackendChoice {
+export function chooseBackend({ openGpu = () => GpuContext.create(), spawn = spawnSolverWorker, small = false, fixedCell }: ChoiceOptions = {}): BackendChoice {
 	let opened: GpuContext | null = null;
 	let gpu: Promise<GpuContext | null> | null = null;
 	let disposed = false;
-	const tuners: Record<BackendKind, Tuner> = {
-		webgpu: new Tuner({ kind: 'webgpu', small, describe: describeSize }),
-		cpu: new Tuner({ kind: 'cpu', small, describe: describeSize })
-	};
+	const tuners: Record<BackendKind, Tuner> = { webgpu: new Tuner({ kind: 'webgpu', small }), cpu: new Tuner({ kind: 'cpu', small }) };
 
 	/** The shared device, or null once WebGPU is known not to work. */
 	const open = async () => {
