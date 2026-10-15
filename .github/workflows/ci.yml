@@ -30,7 +30,7 @@ jobs:
         run: yarn install --frozen-lockfile
 
       - name: Check
-        run: yarn check
+        run: yarn run check
 
       - name: Install Playwright browsers
         run: yarn playwright install --with-deps
