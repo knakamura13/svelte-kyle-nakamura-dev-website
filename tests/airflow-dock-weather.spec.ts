@@ -334,7 +334,7 @@ test.describe('the Weather group, in metric units', () => {
 				shown: n('−3_°C'),
 				spoken: 'minus 3 degrees Celsius',
 				announced: 'Outdoor temperature minus 3 degrees Celsius.',
-				described: 'How far it is from the indoor temperature sets how hard warm air rises and cold air sinks through open Openings.'
+				described: 'The bigger the difference from the indoor temperature, the harder warm air rises out of high Openings and cold air sinks in through low ones.'
 			},
 			{
 				name: 'Indoor starting temperature',

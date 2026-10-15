@@ -11,7 +11,7 @@
 
 <div class="dock-field">
 	<!-- The Switch changes the state through the experience, which says what happened and builds the air again without the furniture. -->
-	<Switch bind:checked={() => experience.setup.furniture, (on) => experience.setFurniture(on)} label="Furniture" />
+	<Switch checked={experience.setup.furniture} onchange={(on) => experience.setFurniture(on)} label="Furniture" />
 	<p class="dock-notice">Furniture blocks the air and slows it, and the Stage shows it. Changing it starts the air over.</p>
 </div>
 

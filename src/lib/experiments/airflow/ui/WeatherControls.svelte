@@ -70,7 +70,7 @@
 		describe={(shown) => weatherAnnouncement('outdoorTemp', outdoor.range.fromDisplay(shown), units)}
 		onuser={(shown) => experience.setCondition('outdoorTemp', outdoor.range.fromDisplay(shown))}
 	/>
-	<p class="dock-notice" id="airflow-outdoor-temp-note">How far it is from the indoor temperature sets how hard warm air rises and cold air sinks through open Openings.</p>
+	<p class="dock-notice" id="airflow-outdoor-temp-note">The bigger the difference from the indoor temperature, the harder warm air rises out of high Openings and cold air sinks in through low ones.</p>
 </div>
 
 <!-- `change` fires when the visitor lets go of the slider, or at each press of a key, and bubbles up from the range input. (Not `focusout`: Safari fires it when a drag begins on a slider that has focus.) -->
