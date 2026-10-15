@@ -7,6 +7,7 @@
 	import ViewControls from './ViewControls.svelte';
 	import HomeControls from './HomeControls.svelte';
 	import OpeningsGroup from './OpeningsGroup.svelte';
+	import PhysicsPanel from './PhysicsPanel.svelte';
 	import ProbeControls from './ProbeControls.svelte';
 	import SmokeControls from './SmokeControls.svelte';
 	import TransportBar from './TransportBar.svelte';
@@ -47,5 +48,7 @@
 		</ProbeControls>
 	</DockGroup>
 
-	<!-- #55 Physics -->
+	<DockGroup id="dock-physics" title="Physics" hint="Solver, smoke, Rooms">
+		<PhysicsPanel />
+	</DockGroup>
 </div>

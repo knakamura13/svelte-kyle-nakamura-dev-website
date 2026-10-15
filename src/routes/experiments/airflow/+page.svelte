@@ -9,6 +9,7 @@
 	import { SCENARIOS } from '$lib/experiments/airflow/scenarios';
 	import { shortfall } from '$lib/experiments/airflow/ui/clock';
 	import Dock from '$lib/experiments/airflow/ui/Dock.svelte';
+	import Explainer from '$lib/experiments/airflow/ui/Explainer.svelte';
 	import { detectUnits, formatLength } from '$lib/experiments/airflow/units';
 	import { stage } from '$lib/experiments/ui/stage';
 
@@ -110,6 +111,8 @@
 		</figure>
 		<Dock />
 	</div>
+
+	<Explainer />
 
 	<div class="case-end">
 		<a class="text-link" href="/experiments"><span aria-hidden="true"><Arrow direction="left" /></span> All experiments</a>

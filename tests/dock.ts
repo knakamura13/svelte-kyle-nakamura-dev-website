@@ -16,6 +16,9 @@ export const status = (page: Page) => page.locator('.sim-status');
  * attached to it, and a click then does nothing. The Stage leaves `pending` once the script has taken the page over.
  */
 export async function openAirflow(page: Page, path = '/experiments/airflow') {
+	// Loading the page again brings back the scroll position the last load was left at, and the page is long (the explainer is under the card), so that can be
+	// far below the Stage, which then never comes within a screen of the viewport and never starts. A visitor opening the page starts at its top.
+	await page.evaluate(() => scrollTo({ top: 0, behavior: 'instant' }));
 	await page.goto(path);
 	await expect(page.locator('.airflow-dock')).toBeVisible();
 	await expect(page.getByRole('application', { name: /^The air in the/ })).not.toHaveAttribute('data-state', 'pending', { timeout: 15_000 });
