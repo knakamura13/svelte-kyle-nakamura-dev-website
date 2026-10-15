@@ -49,7 +49,7 @@
 		</ul>
 	</div>
 	<p class="dock-notice smoke-about">
-		Strength is the PM2.5 the source releases each minute, in milligrams, shown for four real sources. Press and hold on the air with a mouse to release smoke. With a finger or the keyboard, choose Emit mode above.
+		Strength is how much PM2.5 the source releases each minute, in milligrams, with four real sources marked. Press and hold on the air with a mouse to release smoke. With a finger or the keyboard, choose Emit mode above.
 	</p>
 	<p class="smoke-status" role="status" data-releasing={releasing ? '' : undefined}>{releasing ? 'Releasing smoke' : 'Not releasing smoke'}</p>
 </div>
@@ -136,6 +136,8 @@
 			height: 108px;
 		}
 		.marks li:nth-child(even)::before {
+			left: -0.5px;
+			width: 1px;
 			height: 56px;
 		}
 		.marks li:nth-child(even) button {
