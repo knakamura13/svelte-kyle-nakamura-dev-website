@@ -25,3 +25,21 @@ export function pointOnPlane(camera: Camera, at: { x: number; y: number }, y: nu
 	}
 	return { x: hit.x, y, z: hit.z };
 }
+
+/**
+ * Where the pointer looks at the floor or at a piece of furniture, whichever is nearer, in the solver's axes: the point a device
+ * dragged across the home would stand at. The floor and the furniture are the `surfaces` (the dollhouse's `pickables`); a ray that
+ * meets neither, or meets one outside the footprint, gives null. `at` is in normalized device coordinates.
+ */
+export function pointOnSurface(camera: Camera, at: { x: number; y: number }, footprint: { width: number; depth: number }, surfaces: readonly Object3D[]): Point3 | null {
+	ndc.set(at.x, at.y);
+	raycaster.setFromCamera(ndc, camera);
+	const first = raycaster.intersectObjects(surfaces as Object3D[], false)[0];
+	let point: Vector3 | null = first ? first.point : null;
+	if (!point) {
+		plane.constant = 0;
+		point = raycaster.ray.intersectPlane(plane, hit) ? hit : null;
+	}
+	if (!point || point.x < 0 || point.z < 0 || point.x > footprint.width || point.z > footprint.depth) return null;
+	return { x: point.x, y: Math.max(0, point.y), z: point.z };
+}
