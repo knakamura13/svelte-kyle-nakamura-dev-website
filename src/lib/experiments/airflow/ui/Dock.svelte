@@ -1,10 +1,13 @@
 <script lang="ts">
 	import { useAirflow } from '../experience.svelte';
+	import { MAX_PINS } from '../state';
 	import DevicesPanel from './DevicesPanel.svelte';
 	import DockGroup from './DockGroup.svelte';
 	import Legend from './Legend.svelte';
 	import ViewControls from './ViewControls.svelte';
 	import HomeControls from './HomeControls.svelte';
+	import ProbeControls from './ProbeControls.svelte';
+	import SmokeControls from './SmokeControls.svelte';
 
 	const experience = useAirflow();
 </script>
@@ -35,7 +38,11 @@
 		<DevicesPanel />
 	</DockGroup>
 
-	<!-- #54 Probes and smoke -->
+	<DockGroup id="dock-probes" title="Probes and smoke" hint="{experience.probes.length} of {MAX_PINS} probes" open>
+		<ProbeControls>
+			<SmokeControls />
+		</ProbeControls>
+	</DockGroup>
 
 	<!-- #55 Physics -->
 </div>
