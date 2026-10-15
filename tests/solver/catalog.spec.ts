@@ -138,8 +138,7 @@ test.describe('the device catalog', () => {
 		}
 	});
 
-	// No maker or certification listing read so far publishes a purifier's CADR at every speed (see the note in catalog.ts).
-	test.fixme('has a purifier of each size', () => {
+	test('has a purifier of each size', () => {
 		for (const size of ['small', 'medium', 'large'] as const) expect(PURIFIER_MODELS.some((m) => m.size === size), size).toBe(true);
 	});
 });

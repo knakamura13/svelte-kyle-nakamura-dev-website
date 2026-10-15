@@ -1,8 +1,14 @@
 <script lang="ts">
 	import { useAirflow } from '../experience.svelte';
+	import { MAX_PINS } from '../state';
+	import DevicesPanel from './DevicesPanel.svelte';
 	import DockGroup from './DockGroup.svelte';
+	import Legend from './Legend.svelte';
+	import ViewControls from './ViewControls.svelte';
 	import HomeControls from './HomeControls.svelte';
 	import PhysicsPanel from './PhysicsPanel.svelte';
+	import ProbeControls from './ProbeControls.svelte';
+	import SmokeControls from './SmokeControls.svelte';
 
 	const experience = useAirflow();
 </script>
@@ -15,21 +21,29 @@
 <div class="dock airflow-dock" role="group" aria-label="Simulation controls">
 	<!-- #52 transport bar: pause, speed and the clock -->
 
-	<!-- #51 legend: the scale of the layer on the Slice -->
+	<Legend />
 
 	<DockGroup id="dock-home" title="Home and scenario" hint={experience.plan.name} open>
 		<HomeControls />
 	</DockGroup>
 
-	<!-- #51 View: layer, sensitivity, slice height, toggles, units -->
+	<DockGroup id="dock-view" title="View" open hint="Layer, scale, height, units">
+		<ViewControls />
+	</DockGroup>
 
 	<!-- #52 Weather -->
 
 	<!-- #52 Openings -->
 
-	<!-- #53 Devices -->
+	<DockGroup id="dock-devices" title="Fans and purifiers" hint="{experience.setup.devices.length} of 6" open>
+		<DevicesPanel />
+	</DockGroup>
 
-	<!-- #54 Probes and smoke -->
+	<DockGroup id="dock-probes" title="Probes and smoke" hint="{experience.probes.length} of {MAX_PINS} probes">
+		<ProbeControls>
+			<SmokeControls />
+		</ProbeControls>
+	</DockGroup>
 
 	<DockGroup id="dock-physics" title="Physics" hint="Solver, smoke, Rooms">
 		<PhysicsPanel />

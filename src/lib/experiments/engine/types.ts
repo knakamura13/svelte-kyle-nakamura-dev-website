@@ -11,6 +11,8 @@ export interface SceneHost {
 	compact: () => boolean;
 	/** Asks for one more frame, for a scene whose picture changed without a param changing (a hover marker, a readout that just arrived). */
 	invalidate: () => void;
+	/** Where the Stage is on the page right now, for a scene that works out where a pointer outside it (a drag from the Dock) would land inside it. */
+	rect: () => DOMRect;
 }
 
 export type PointerPhase = 'down' | 'move' | 'up' | 'leave';
