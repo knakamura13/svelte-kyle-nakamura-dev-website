@@ -1,5 +1,7 @@
 <script lang="ts">
 	import DockGroup from './DockGroup.svelte';
+	import Legend from './Legend.svelte';
+	import ViewControls from './ViewControls.svelte';
 	import HomeControls from './HomeControls.svelte';
 </script>
 
@@ -11,13 +13,15 @@
 <div class="dock airflow-dock" role="group" aria-label="Simulation controls">
 	<!-- #52 transport bar: pause, speed and the clock -->
 
-	<!-- #51 legend: the scale of the layer on the Slice -->
+	<Legend />
 
 	<DockGroup id="dock-home" title="Home and scenario" open>
 		<HomeControls />
 	</DockGroup>
 
-	<!-- #51 View: layer, sensitivity, slice height, toggles, units -->
+	<DockGroup id="dock-view" title="View" open hint="Layer, scale, height, units">
+		<ViewControls />
+	</DockGroup>
 
 	<!-- #52 Weather -->
 
