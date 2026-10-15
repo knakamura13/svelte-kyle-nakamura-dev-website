@@ -57,6 +57,8 @@ export class AirflowExperience extends Experience {
 	/** Particulates in the indoor air when a run starts, ppm. */
 	startingSmoke = $state(0);
 	copied = $state(false);
+	/** Restart or Reset has just been pressed: the button says so for a moment, as Copy link does, because the air may be paused and show nothing. */
+	acknowledged: 'restart' | 'reset' | null = $state(null);
 	/** Whether the Dock shows the share link to be copied by hand, because the browser would not copy it. The link shown is always the setup's current one. */
 	linkShown = $state(false);
 	readout: AirflowReadout = $state(emptyReadout());
@@ -65,6 +67,7 @@ export class AirflowExperience extends Experience {
 	/** The scenario `starting` is, or null when it is a home the visitor picked or a link's setup. */
 	private startingScenario: string | null = null;
 	private copiedTimer: ReturnType<typeof setTimeout> | undefined;
+	private acknowledgedTimer: ReturnType<typeof setTimeout> | undefined;
 
 	constructor(options: AirflowOptions) {
 		super(options.load);
@@ -230,6 +233,7 @@ export class AirflowExperience extends Experience {
 
 	/** Starts the simulation over with the same setup: the air is still and the smoke is gone, and the probes stay where they are, reading the new air. */
 	restart() {
+		this.acknowledge('restart');
 		this.restarts++;
 		this.announce('Restarted. The air is still and the smoke is gone.');
 		this.wake();
@@ -237,6 +241,7 @@ export class AirflowExperience extends Experience {
 
 	/** Back to how this home, scenario or link began: its setup as it was first loaded, with the air still. */
 	reset() {
+		this.acknowledge('reset');
 		this.setup = clone(this.starting);
 		this.scenario = this.startingScenario;
 		this.probes = [];
@@ -244,6 +249,12 @@ export class AirflowExperience extends Experience {
 		this.restarts++;
 		this.announce('Back to the start.');
 		this.wake();
+	}
+
+	private acknowledge(what: 'restart' | 'reset') {
+		this.acknowledged = what;
+		clearTimeout(this.acknowledgedTimer);
+		this.acknowledgedTimer = setTimeout(() => (this.acknowledged = null), 2200);
 	}
 
 	private adoptScenario(id: string, announce: boolean) {

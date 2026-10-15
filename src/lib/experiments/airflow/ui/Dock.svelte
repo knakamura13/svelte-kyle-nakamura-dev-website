@@ -1,9 +1,12 @@
 <script lang="ts">
+	import { useAirflow } from '../experience.svelte';
 	import DockGroup from './DockGroup.svelte';
 	import HomeControls from './HomeControls.svelte';
 	import OpeningsGroup from './OpeningsGroup.svelte';
 	import TransportBar from './TransportBar.svelte';
 	import WeatherGroup from './WeatherGroup.svelte';
+
+	const experience = useAirflow();
 </script>
 
 <!--
@@ -16,7 +19,7 @@
 
 	<!-- #51 legend: the scale of the layer on the Slice -->
 
-	<DockGroup id="dock-home" title="Home and scenario" open>
+	<DockGroup id="dock-home" title="Home and scenario" hint={experience.plan.name} open>
 		<HomeControls />
 	</DockGroup>
 
