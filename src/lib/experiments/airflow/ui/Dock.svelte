@@ -1,8 +1,11 @@
 <script lang="ts">
+	import { useAirflow } from '../experience.svelte';
 	import DockGroup from './DockGroup.svelte';
 	import Legend from './Legend.svelte';
 	import ViewControls from './ViewControls.svelte';
 	import HomeControls from './HomeControls.svelte';
+
+	const experience = useAirflow();
 </script>
 
 <!--
@@ -15,7 +18,7 @@
 
 	<Legend />
 
-	<DockGroup id="dock-home" title="Home and scenario" open>
+	<DockGroup id="dock-home" title="Home and scenario" hint={experience.plan.name} open>
 		<HomeControls />
 	</DockGroup>
 

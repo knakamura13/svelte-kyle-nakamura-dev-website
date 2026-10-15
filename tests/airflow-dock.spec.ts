@@ -18,15 +18,24 @@ test.describe('the Dock', () => {
 		await page.emulateMedia({ reducedMotion: 'reduce' });
 	});
 
-	test('sits under the Stage, keeps every control inside the card, and never scrolls sideways', async ({ page }) => {
-		for (const width of [320, 360, 390, 700, 1000, 1280]) {
+	test('sits beside the Stage on a wide screen and under it on a narrow one, keeps every control inside the card, and never scrolls sideways', async ({ page }) => {
+		// Nine page loads: on a busy machine that is more than the default half minute.
+		test.setTimeout(120_000);
+		for (const width of [320, 360, 390, 700, 1000, 1159, 1160, 1280, 1600]) {
 			await page.setViewportSize({ width, height: 900 });
 			await openAirflow(page);
 			const stage = (await page.locator('.airflow-figure .stage-view').boundingBox())!;
 			const dock = (await page.locator('.airflow-dock').boundingBox())!;
 			const card = (await page.locator('.airflow-card').boundingBox())!;
-			expect(dock.y, `${width}px wide: the Dock is under the Stage`).toBeGreaterThanOrEqual(stage.y + stage.height - 1);
-			expect(Math.round(dock.width), `${width}px wide: the Dock fills its card`).toBe(Math.round(card.width));
+			if (width >= 1160) {
+				expect(dock.x, `${width}px wide: the Dock is beside the Stage`).toBeGreaterThanOrEqual(stage.x + stage.width - 1);
+				expect(Math.round(dock.x + dock.width), `${width}px wide: and reaches the card's edge`).toBe(Math.round(card.x + card.width));
+				expect(dock.width, `${width}px wide: in a column that is wide enough for its controls and not wider than a third or so of the card`).toBeGreaterThanOrEqual(340);
+				expect(dock.width).toBeLessThanOrEqual(card.width * 0.4);
+			} else {
+				expect(dock.y, `${width}px wide: the Dock is under the Stage`).toBeGreaterThanOrEqual(stage.y + stage.height - 1);
+				expect(Math.round(dock.width), `${width}px wide: the Dock fills its card`).toBe(Math.round(card.width));
+			}
 			expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${width}px wide: no sideways scroll`).toBe(true);
 			const outside = await page.evaluate(() => {
 				const card = document.querySelector('.airflow-card')!.getBoundingClientRect();
@@ -39,6 +48,81 @@ test.describe('the Dock', () => {
 			});
 			expect(outside, `${width}px wide: nothing in the Dock sticks out of its card`).toEqual([]);
 		}
+	});
+
+	test('the Stage stays on screen while the Dock is used, so the air can be watched as a control moves: pinned beside the Dock on a wide screen, and above it on a narrow one', async ({ page }) => {
+		for (const [width, height] of [
+			[1280, 800],
+			[1600, 1000],
+			[900, 900],
+			[390, 844]
+		]) {
+			await page.setViewportSize({ width, height });
+			await openAirflow(page);
+			const figure = page.locator('.airflow-figure');
+			expect(await figure.evaluate((el) => getComputedStyle(el).position), `${width}px wide: the Stage's figure is pinned`).toBe('sticky');
+			// The Dock will be long, so make it long: a control far down it, scrolled into view as a visitor does. The Stage must still be there, whole, with the control on the same screen.
+			await page.evaluate(() => {
+				const far = document.createElement('button');
+				far.textContent = 'A control far down the Dock';
+				far.style.cssText = 'margin-top:1800px;min-height:44px;';
+				document.querySelector('.airflow-dock')!.append(far);
+			});
+			const last = page.locator('.airflow-dock').getByRole('button').last();
+			// Scrolled until it is just in view at the bottom of the screen, which is as far as using it takes the visitor (beyond the Dock's end is the page's footer, and the Stage leaves with its card).
+			await last.evaluate((el) => el.scrollIntoView({ block: 'end' }));
+			await page.waitForTimeout(150);
+			const view = await page.evaluate(() => {
+				const stage = document.querySelector('.airflow-figure .stage-view')!.getBoundingClientRect();
+				const button = [...document.querySelectorAll('.airflow-dock button')].pop()!.getBoundingClientRect();
+				return { stage: { top: stage.top, bottom: stage.bottom, height: stage.height }, button: { top: button.top, bottom: button.bottom }, inner: innerHeight };
+			});
+			const where = `${width}x${height}`;
+			expect(view.stage.top, `${where}: the Stage is not above the screen`).toBeGreaterThanOrEqual(-1);
+			expect(view.stage.bottom, `${where}: or below it`).toBeLessThanOrEqual(view.inner + 1);
+			expect(view.stage.height, `${where}: and is big enough to see the home`).toBeGreaterThanOrEqual(240);
+			expect(view.button.bottom, `${where}: the Dock's control is on the same screen`).toBeLessThanOrEqual(view.inner + 1);
+			if (width < 1160) expect(view.button.top, `${where}: and not hidden behind the Stage`).toBeGreaterThanOrEqual(view.stage.bottom - 1);
+		}
+	});
+
+	test('every control is at least 44 px tall and wide, at desktop and phone widths', async ({ page }) => {
+		for (const width of [1280, 390]) {
+			await page.setViewportSize({ width, height: 900 });
+			await openAirflow(page);
+			await page.getByRole('button', { name: 'Copy link' }).click();
+			const small = await page.evaluate(() => {
+				const found: string[] = [];
+				// What a finger meets: buttons, group headers, the visible face of a segment (its input is invisible, laid over it) and a text box.
+				for (const el of document.querySelectorAll('.airflow-dock button, .airflow-dock summary, .airflow-dock .segment span, .airflow-dock input[type="text"]')) {
+					const box = el.getBoundingClientRect();
+					if (box.width < 43.5 || box.height < 43.5) found.push(`${el.tagName.toLowerCase()} "${(el.textContent ?? '').trim().slice(0, 24)}" ${Math.round(box.width)}x${Math.round(box.height)}`);
+				}
+				return found;
+			});
+			expect(small, `${width}px wide`).toEqual([]);
+		}
+	});
+
+	test('the chosen Home is clearly marked: its fill is at least 3:1 against the others, in the colours the page draws', async ({ page }) => {
+		await openAirflow(page);
+		const ratio = await page.evaluate(() => {
+			const luminance = (css: string) => {
+				const [r, g, b] = (css.match(/[\d.]+/g) ?? []).slice(0, 3).map(Number).map((v) => {
+					const c = v / 255;
+					return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+				});
+				return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+			};
+			const fill = (el: Element) => getComputedStyle(el).backgroundColor;
+			const checked = document.querySelector('.airflow-dock .segment input:checked + span')!;
+			const other = document.querySelector('.airflow-dock .segment input:not(:checked) + span')!;
+			const [a, b] = [luminance(fill(checked)), luminance(fill(other))];
+			const track = luminance(fill(document.querySelector('.airflow-dock .segments')!));
+			return { againstOthers: (Math.max(a, track) + 0.05) / (Math.min(a, track) + 0.05), fillIsSet: fill(checked) !== fill(other), other: b };
+		});
+		expect(ratio.fillIsSet, 'the checked segment has a fill of its own').toBe(true);
+		expect(ratio.againstOthers).toBeGreaterThanOrEqual(3);
 	});
 
 	test('has no WCAG 2.1 A/AA violations that axe can detect, at desktop and phone widths', async ({ page }) => {
