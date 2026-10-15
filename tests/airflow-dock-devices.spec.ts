@@ -195,6 +195,30 @@ test.describe('fans and purifiers in the Dock', () => {
 		expect(device.intake).toBe(false);
 	});
 
+	test('a purifier has Sleep, Low, Medium and High, no direction or aim, says its lower speeds are derived and not published, and the Share link keeps it', async ({ page }) => {
+		test.setTimeout(150_000);
+		const clipboard = await stubClipboard(page, 'succeed');
+		await ready(page);
+		const purifiers = DEVICE_MODELS.filter((m) => m.kind === 'air-purifier');
+		expect(purifiers.map((m) => m.size)).toEqual(['small', 'medium', 'large']);
+		for (const model of purifiers) {
+			await add(page, model.name);
+			const settings = page.getByRole('group', { name: `Settings for ${model.name}` });
+			await expect(settings).toBeVisible();
+			const presets = page.getByRole('group', { name: 'Power presets' });
+			for (const name of ['Off', 'Sleep', 'Low', 'Medium', 'High']) await expect(presets.getByRole('button', { name, exact: true })).toBeVisible();
+			await expect(page.getByRole('slider', { name: 'Direction it faces' })).toHaveCount(0);
+			await expect(page.getByRole('slider', { name: 'Aim' })).toHaveCount(0);
+			await expect(settings).toContainText('Only the top speed is published');
+			await expect(settings).toContainText(`Rated ${formatFlow(purifierCadr(model, 1), 'imperial').text} clean air at its highest speed`);
+			await presets.getByRole('button', { name: 'Sleep', exact: true }).click();
+			await expect(settings).toContainText(`At this setting it cleans ${formatFlow(purifierCadr(model, 0.25), 'imperial').text}`);
+			const device = (await shared(page, clipboard)).devices.find((d) => d.model === model.id)!;
+			expect(device.power).toBeCloseTo(0.25, 2);
+			await rows(page).first().getByRole('button', { name: /^Remove/ }).click();
+		}
+	});
+
 	test('the buttons move the chosen device a step at a time, a shifted press a metre, and a move that cannot be made says why', async ({ page }) => {
 		test.setTimeout(120_000);
 		const clipboard = await stubClipboard(page, 'succeed');
