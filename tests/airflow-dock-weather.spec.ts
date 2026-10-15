@@ -78,7 +78,7 @@ async function watchAnnouncements(page: Page) {
 		Object.defineProperty(window, '__said', { value: said, configurable: true });
 		new MutationObserver(() => said.push(region.textContent ?? '')).observe(region, { childList: true, characterData: true, subtree: true });
 	});
-	return async () => (await page.evaluate(() => [...((window as unknown as { __said: string[] }).__said ?? [])])).filter((text) => text.replace(' ', '') !== 'Link copied.');
+	return async () => (await page.evaluate(() => [...((window as unknown as { __said: string[] }).__said ?? [])])).filter((text) => text.trim() !== 'Link copied.');
 }
 
 /** Takes WebGPU away, so the page runs the simulation on the worker in every browser, as the processor-only visitor sees it. */
@@ -627,6 +627,7 @@ test.describe('the Openings and furniture group', () => {
 		const group = await dockGroup(page, 'Openings and furniture');
 		const furniture = group.getByRole('checkbox', { name: 'Furniture' });
 		await expect(furniture).toBeChecked();
+		await expect(furniture).toHaveAccessibleDescription('Furniture blocks the air and slows it, and the Stage shows it. Changing it starts the air over.');
 		await expect(page.getByRole('button', { name: SCENARIOS[0].name, exact: true })).toHaveAttribute('aria-pressed', 'true');
 		expect((await copiedLink(page, writes)).setup.furniture).toBe(true);
 		const withFurniture = await settledStage(page);

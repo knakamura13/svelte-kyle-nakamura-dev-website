@@ -2,6 +2,7 @@
 	import Switch from '$lib/experiments/ui/Switch.svelte';
 	import { useAirflow } from '../experience.svelte';
 	import { openingsByRoom } from '../homes/rooms';
+	import { describedBy } from './describedBy';
 	import OpeningRow from './OpeningRow.svelte';
 
 	const experience = useAirflow();
@@ -9,10 +10,10 @@
 	const rooms = $derived(openingsByRoom(experience.plan));
 </script>
 
-<div class="dock-field">
+<div class="dock-field" use:describedBy={'airflow-furniture-note'}>
 	<!-- The Switch changes the state through the experience, which says what happened and builds the air again without the furniture. -->
 	<Switch checked={experience.setup.furniture} onchange={(on) => experience.setFurniture(on)} label="Furniture" />
-	<p class="dock-notice">Furniture blocks the air and slows it, and the Stage shows it. Changing it starts the air over.</p>
+	<p class="dock-notice" id="airflow-furniture-note">Furniture blocks the air and slows it, and the Stage shows it. Changing it starts the air over.</p>
 </div>
 
 <div class="dock-field">
