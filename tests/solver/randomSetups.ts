@@ -10,7 +10,7 @@ import { blankSetup, LIMITS, type DeviceState, type Setup } from '../../src/lib/
  * changing one changes every seed's setup (and the GPU stress in `tests/gpu/` copies them).
  */
 
-/** The catalog's fans, and a stand-in purifier because the catalog has none yet. */
+/** The catalog's fans, and a stand-in purifier: the seeds of the stress tests were drawn with it, so it stays; `robustness.spec.ts` also runs the catalog's own purifiers. */
 export const deviceModels: DeviceModel[] = [
 	...FAN_MODELS,
 	{
@@ -66,12 +66,12 @@ export const setupFor = (plan: HomePlan, rand: () => number): Setup => ({
 
 const uniform = (rand: () => number, { min, max }: { min: number; max: number }) => min + rand() * (max - min);
 
-/** One to five devices at random places, aims, powers and oscillation settings. */
-export const devicesFor = (plan: HomePlan, rand: () => number): DeviceState[] => {
+/** One to five devices at random places, aims, powers and oscillation settings, drawn from `models` (the fans and the stand-in purifier unless a test passes others). */
+export const devicesFor = (plan: HomePlan, rand: () => number, models: readonly DeviceModel[] = deviceModels): DeviceState[] => {
 	const devices: DeviceState[] = [];
 	const count = 1 + Math.floor(rand() * 5);
 	for (let n = 0; n < count; n++) {
-		const made = newDevice(plan, deviceModels[Math.floor(rand() * deviceModels.length)], devices);
+		const made = newDevice(plan, models[Math.floor(rand() * models.length)], devices);
 		if (!('device' in made)) continue;
 		const device = made.device;
 		device.power = [0, 1 / 3, 2 / 3, 1, rand()][Math.floor(rand() * 5)];
