@@ -2,6 +2,7 @@
 	import RangeField from '$lib/experiments/ui/RangeField.svelte';
 	import { useAirflow } from '../experience.svelte';
 	import { describeBearing } from '../readout';
+	import { describedBy } from './describedBy';
 	import { WEATHER_NAMES, weatherAnnouncement, weatherField, windFromAnnouncement, windFromNote } from './weather';
 
 	const experience = useAirflow();
@@ -24,7 +25,7 @@
 	}
 </script>
 
-<div class="dock-field weather-field">
+<div class="dock-field weather-field" use:describedBy={'airflow-wind-from-note'}>
 	<RangeField
 		id="airflow-wind-from"
 		label="Wind from"
@@ -37,10 +38,10 @@
 		describe={(degrees) => windFromAnnouncement(degrees, conditions.windSpeed)}
 		onuser={(degrees) => experience.setCondition('windFrom', degrees)}
 	/>
-	<p class="dock-notice">{windFromNote(conditions.windFrom, conditions.windSpeed)}</p>
+	<p class="dock-notice" id="airflow-wind-from-note">{windFromNote(conditions.windFrom, conditions.windSpeed)}</p>
 </div>
 
-<div class="dock-field weather-field">
+<div class="dock-field weather-field" use:describedBy={'airflow-wind-speed-note'}>
 	<RangeField
 		id="airflow-wind-speed"
 		label={WEATHER_NAMES.windSpeed}
@@ -53,10 +54,10 @@
 		describe={(shown) => weatherAnnouncement('windSpeed', speed.range.fromDisplay(shown), units)}
 		onuser={(shown) => experience.setCondition('windSpeed', speed.range.fromDisplay(shown))}
 	/>
-	<p class="dock-notice">As a weather report gives it, in the open and well above the ground. About half of it reaches the Home.</p>
+	<p class="dock-notice" id="airflow-wind-speed-note">As a weather report gives it, in the open and well above the ground. About half of it reaches the Home.</p>
 </div>
 
-<div class="dock-field weather-field">
+<div class="dock-field weather-field" use:describedBy={'airflow-outdoor-temp-note'}>
 	<RangeField
 		id="airflow-outdoor-temp"
 		label={WEATHER_NAMES.outdoorTemp}
@@ -69,11 +70,11 @@
 		describe={(shown) => weatherAnnouncement('outdoorTemp', outdoor.range.fromDisplay(shown), units)}
 		onuser={(shown) => experience.setCondition('outdoorTemp', outdoor.range.fromDisplay(shown))}
 	/>
-	<p class="dock-notice">How far it is from the indoor temperature sets how hard warm air rises and cold air sinks through open Openings.</p>
+	<p class="dock-notice" id="airflow-outdoor-temp-note">How far it is from the indoor temperature sets how hard warm air rises and cold air sinks through open Openings.</p>
 </div>
 
-<!-- `change` fires when the visitor lets go of the slider, or at each press of a key, and bubbles up from the range input. -->
-<div class="dock-field weather-field" onchange={startOver}>
+<!-- `change` fires when the visitor lets go of the slider, or at each press of a key, and bubbles up from the range input. (Not `focusout`: Safari fires it when a drag begins on a slider that has focus.) -->
+<div class="dock-field weather-field" use:describedBy={'airflow-indoor-temp-note'} onchange={startOver}>
 	<RangeField
 		id="airflow-indoor-temp"
 		label={WEATHER_NAMES.indoorTemp}
@@ -86,10 +87,10 @@
 		describe={(shown) => weatherAnnouncement('indoorTemp', indoor.range.fromDisplay(shown), units)}
 		onuser={(shown) => (draft = indoor.range.fromDisplay(shown))}
 	/>
-	<p class="dock-notice">The temperature the air indoors starts at. Changing it starts the air over at that temperature.</p>
+	<p class="dock-notice" id="airflow-indoor-temp-note">The temperature the air indoors starts at. Changing it starts the air over at that temperature.</p>
 </div>
 
-<div class="dock-field weather-field">
+<div class="dock-field weather-field" use:describedBy={'airflow-outdoor-pm25-note'}>
 	<RangeField
 		id="airflow-outdoor-pm25"
 		label={WEATHER_NAMES.outdoorPm25}
@@ -102,7 +103,7 @@
 		describe={(shown) => weatherAnnouncement('outdoorPm25', pm25.range.fromDisplay(shown), units)}
 		onuser={(shown) => experience.setCondition('outdoorPm25', pm25.range.fromDisplay(shown))}
 	/>
-	<p class="dock-notice">Fine particles in the outdoor air, which come in through open Openings. Zero is clean air.</p>
+	<p class="dock-notice" id="airflow-outdoor-pm25-note">Fine particles in the outdoor air, which come in through open Openings. Zero is clean air.</p>
 </div>
 
 <style>

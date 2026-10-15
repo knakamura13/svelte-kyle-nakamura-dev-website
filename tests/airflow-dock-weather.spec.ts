@@ -305,10 +305,37 @@ test.describe('the Weather group, in metric units', () => {
 		const start = (await copiedLink(page, writes)).setup.conditions;
 		expect(start).toEqual({ windFrom: 270, windSpeed: 4, outdoorTemp: 18, indoorTemp: 21, outdoorPm25: 0 });
 
-		const cases: { name: string; id: string; value: number; key: keyof typeof start; shown: string; spoken: string; announced: string }[] = [
-			{ name: 'Wind from', id: 'airflow-wind-from', value: 225, key: 'windFrom', shown: 'SW 225°', spoken: 'southwest, 225 degrees', announced: 'Wind from the southwest, 225 degrees.' },
-			{ name: 'Wind speed', id: 'airflow-wind-speed', value: 6.5, key: 'windSpeed', shown: n('6.5_m/s'), spoken: '6.5 metres per second', announced: 'Wind speed 6.5 metres per second.' },
-			{ name: 'Outdoor temperature', id: 'airflow-outdoor-temp', value: -3, key: 'outdoorTemp', shown: n('−3_°C'), spoken: 'minus 3 degrees Celsius', announced: 'Outdoor temperature minus 3 degrees Celsius.' },
+		const cases: { name: string; id: string; value: number; key: keyof typeof start; shown: string; spoken: string; announced: string; described: string }[] = [
+			{
+				name: 'Wind from',
+				id: 'airflow-wind-from',
+				value: 225,
+				key: 'windFrom',
+				shown: 'SW 225°',
+				spoken: 'southwest, 225 degrees',
+				announced: 'Wind from the southwest, 225 degrees.',
+				described: 'The wind blows from the southwest, toward the northeast.'
+			},
+			{
+				name: 'Wind speed',
+				id: 'airflow-wind-speed',
+				value: 6.5,
+				key: 'windSpeed',
+				shown: n('6.5_m/s'),
+				spoken: '6.5 metres per second',
+				announced: 'Wind speed 6.5 metres per second.',
+				described: 'As a weather report gives it, in the open and well above the ground. About half of it reaches the Home.'
+			},
+			{
+				name: 'Outdoor temperature',
+				id: 'airflow-outdoor-temp',
+				value: -3,
+				key: 'outdoorTemp',
+				shown: n('−3_°C'),
+				spoken: 'minus 3 degrees Celsius',
+				announced: 'Outdoor temperature minus 3 degrees Celsius.',
+				described: 'How far it is from the indoor temperature sets how hard warm air rises and cold air sinks through open Openings.'
+			},
 			{
 				name: 'Indoor starting temperature',
 				id: 'airflow-indoor-temp',
@@ -316,9 +343,19 @@ test.describe('the Weather group, in metric units', () => {
 				key: 'indoorTemp',
 				shown: n('24.5_°C'),
 				spoken: '24.5 degrees Celsius',
-				announced: 'Indoor starting temperature 24.5 degrees Celsius. The air starts over at that temperature.'
+				announced: 'Indoor starting temperature 24.5 degrees Celsius. The air starts over at that temperature.',
+				described: 'The temperature the air indoors starts at. Changing it starts the air over at that temperature.'
 			},
-			{ name: 'Outdoor PM2.5', id: 'airflow-outdoor-pm25', value: 150, key: 'outdoorPm25', shown: n('150_µg/m³'), spoken: '150 micrograms per cubic metre', announced: 'Outdoor PM2.5 150 micrograms per cubic metre.' }
+			{
+				name: 'Outdoor PM2.5',
+				id: 'airflow-outdoor-pm25',
+				value: 150,
+				key: 'outdoorPm25',
+				shown: n('150_µg/m³'),
+				spoken: '150 micrograms per cubic metre',
+				announced: 'Outdoor PM2.5 150 micrograms per cubic metre.',
+				described: 'Fine particles in the outdoor air, which come in through open Openings. Zero is clean air.'
+			}
 		];
 		let expected = { ...start };
 		for (const c of cases) {
@@ -326,6 +363,8 @@ test.describe('the Weather group, in metric units', () => {
 			await setSlider(page, c.name, c.value);
 			await expect(shown(page, c.id)).toHaveText(c.shown);
 			await expect(slider(group, c.name)).toHaveAttribute('aria-valuetext', c.spoken);
+			// The sentence under the slider is its description, read after its name and value.
+			await expect(slider(group, c.name)).toHaveAccessibleDescription(c.described);
 			await expect(live(page)).toHaveText(c.announced);
 			// Polite, and once: nothing else was said for this move.
 			await page.waitForTimeout(800);
@@ -514,6 +553,8 @@ test.describe('the Openings and furniture group', () => {
 		await expect(shown(page, 'airflow-opening-living-window-1')).toHaveText('60%');
 		await expect(row('Living room window 1').locator('.dock-notice')).toHaveText('60% of travel opens 30% of the frame. It opens at most 50% of its frame.');
 		await expect(slider(group, 'Living room window 1')).toHaveAttribute('aria-valuetext', '60 percent of travel, 30 percent of the frame open');
+		// The line under the slider is its description, so a screen reader reads the limit after the name and the value.
+		await expect(slider(group, 'Living room window 1')).toHaveAccessibleDescription('60% of travel opens 30% of the frame. It opens at most 50% of its frame.');
 		await expect(live(page)).toHaveText('Living room window 1, 60 percent of travel, 30 percent of the frame open. It opens at most 50 percent of its frame.');
 		await page.waitForTimeout(800);
 		expect(await said(), 'said once').toEqual(['Living room window 1, 60 percent of travel, 30 percent of the frame open. It opens at most 50 percent of its frame.']);
@@ -666,6 +707,13 @@ test.describe('the Openings and furniture group', () => {
 		const held = group.locator('.opening-row', { hasText: 'A window fan is in this window' });
 		await expect(held).toHaveCount(1);
 		await expect(held.locator('.dock-notice').last()).toContainText('the fan sets how far it is open');
+		// A screen reader reads it with the slider: the limit, and then that the fan decides.
+		await expect(held.getByRole('slider')).toHaveAccessibleDescription(/It opens at most 50% of its frame\. A window fan is in this window, so the fan sets how far it is open\./);
+		// And the other rows say nothing of a fan.
+		await expect(group.getByText('A window fan is in this window')).toHaveCount(1);
+		// Take the fan's Scenario away and the note goes with it.
+		await page.getByRole('button', { name: 'Cross-ventilation', exact: true }).click();
+		await expect(group.getByText('A window fan is in this window')).toHaveCount(0);
 	});
 
 	test('the Openings are reached by keyboard in the order of the list: down one Room, then the next', async ({ page, browserName }) => {
