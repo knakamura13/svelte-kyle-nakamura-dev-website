@@ -7,8 +7,15 @@ import type { BackendUpdate, FlowBackend, FaceUpdate } from '../solver/backend';
 import { AIR, type Emitter, type FluidProperties, type SolverConfig } from '../solver/types';
 import type { Setup } from '../state';
 
-/** Particulate properties of PM2.5 indoors (see docs/research/airflow/devices-and-particulates.md): drift down and stick to surfaces. */
-export const PARTICLE = { settling: 1.2e-4, deposition: 5e-5 } as const;
+/**
+ * Particulate properties of PM2.5 indoors: the speed it drifts down in still air and the speed at which it sticks to every
+ * surface, m/s, for the one lumped mass the solver carries. docs/research/airflow/devices-and-particulates.md, section 6,
+ * has the sources, the working and the uncertainty. Settling is the mass-weighted Stokes speed of a published PM2.5 size
+ * distribution (a factor of 3 either way, and less for fresh smoke). Deposition is what makes a room's total loss about
+ * 0.4 per hour, as measured in occupied homes (a factor of 2.5 either way), once settling's share is taken out: measured rates
+ * contain settling, so the two are not set apart. tests/solver/particle-constants.spec.ts holds both to the note.
+ */
+export const PARTICLE = { settling: 3e-5, deposition: 5e-5 } as const;
 
 /** Makes a backend for a solver configuration, with the starting temperature (kelvin above the reference) and particulates of the air. The page passes WebGPU-or-worker selection; tests pass the CPU. */
 export type BackendFactory = (config: SolverConfig, initial: { theta: number; particulates: number }) => FlowBackend | Promise<FlowBackend>;
