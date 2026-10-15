@@ -196,7 +196,7 @@
 			class="floating-nav"
 			onfocusin={() => (hidden = false)}
 		>
-			<div class="capsule" class:pill-ready={pillReady} bind:this={capsule} onpointerleave={() => (hovered = null)}>
+			<div class="capsule" role="presentation" class:pill-ready={pillReady} bind:this={capsule} onpointerleave={() => (hovered = null)}>
 				<span class="nav-pill" class:moves={pillMoves} class:shown={pillReady} style={pillStyle} aria-hidden="true"></span>
 				<a class="desktop-nav" href="/#work" bind:this={linkEls.work} data-resting={resting === 'work' ? '' : undefined} onclick={closePanels} onpointerenter={pointerOn('work')} onfocus={focusOn('work')} onblur={() => (focused = null)}>Work</a>
 				<a class="desktop-nav" href="/#about" bind:this={linkEls.about} data-resting={resting === 'about' ? '' : undefined} onclick={closePanels} onpointerenter={pointerOn('about')} onfocus={focusOn('about')} onblur={() => (focused = null)}>About</a>
