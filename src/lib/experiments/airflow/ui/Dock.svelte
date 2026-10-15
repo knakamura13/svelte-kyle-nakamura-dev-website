@@ -1,6 +1,8 @@
 <script lang="ts">
 	import DockGroup from './DockGroup.svelte';
 	import HomeControls from './HomeControls.svelte';
+	import ProbeControls from './ProbeControls.svelte';
+	import SmokeControls from './SmokeControls.svelte';
 </script>
 
 <!--
@@ -25,7 +27,11 @@
 
 	<!-- #53 Devices -->
 
-	<!-- #54 Probes and smoke -->
+	<DockGroup id="dock-probes" title="Probes and smoke" open>
+		<ProbeControls>
+			<SmokeControls />
+		</ProbeControls>
+	</DockGroup>
 
 	<!-- #55 Physics -->
 </div>
