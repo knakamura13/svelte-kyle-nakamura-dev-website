@@ -153,6 +153,9 @@ test.describe('pinned figures', () => {
 			await page.emulateMedia({ reducedMotion: 'reduce' });
 			await page.goto('/experiments/relativity');
 			await page.addStyleTag({ content: 'html { scroll-behavior: auto !important; }' });
+			// The stylesheet pins every figure until hydration measures this window. An unread
+			// data-pin is not a decision that the figure should scroll.
+			await expect(page.locator('.chapter-figure[data-pin]')).toHaveCount(chapterIds.length);
 			let pinned = 0;
 			for (const id of chapterIds) {
 				const figure = await page.evaluate((id) => {
