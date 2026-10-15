@@ -7,7 +7,7 @@
 	<div class="background-copy">
 		<ol class="takeaways">
 			<li>
-				<strong>The home is cut into small cubes of air.</strong> They are 5 to 10 cm across on a fast graphics card and about 20 cm without one. Each
+				<strong>The home is cut into small cubes of air.</strong> How small depends on the device: finer on a fast graphics card, coarser on the processor, and the Physics panel says the size in use. Each
 				remembers how fast the air in it moves, its pressure, its temperature, and how much smoke it holds.
 			</li>
 			<li>
@@ -29,8 +29,8 @@
 			</li>
 			<li>
 				<strong>Smoke is fine particulate matter, PM2.5.</strong> The air carries it and swirls spread it. It settles slowly, sticks to surfaces, leaves
-				through openings, and is removed by purifiers at their rated clean air delivery rate. The Physics panel adds it all up: smoke released and let in
-				equals smoke still in the air plus smoke that left, was filtered, or settled. The two sides agree to rounding.
+				through openings, and is removed by purifiers at their rated clean air delivery rate. The Physics panel adds it all up: smoke that was already there, released and let in
+				equals smoke still in the air plus smoke that left, was filtered, or settled. The two sides agree to within 0.1&nbsp;%, and the panel says so if they stop.
 			</li>
 			<li>
 				<strong>The solver is checked against published results.</strong> Each of these runs in the test suite: air in a lid-driven cavity at Reynolds number

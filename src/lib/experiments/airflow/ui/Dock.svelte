@@ -2,6 +2,7 @@
 	import { useAirflow } from '../experience.svelte';
 	import DockGroup from './DockGroup.svelte';
 	import HomeControls from './HomeControls.svelte';
+	import PhysicsPanel from './PhysicsPanel.svelte';
 
 	const experience = useAirflow();
 </script>
@@ -30,5 +31,7 @@
 
 	<!-- #54 Probes and smoke -->
 
-	<!-- #55 Physics -->
+	<DockGroup id="dock-physics" title="Physics" hint="Solver, smoke, Rooms">
+		<PhysicsPanel />
+	</DockGroup>
 </div>
