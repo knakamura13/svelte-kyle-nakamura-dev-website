@@ -6,8 +6,11 @@
 	import Legend from './Legend.svelte';
 	import ViewControls from './ViewControls.svelte';
 	import HomeControls from './HomeControls.svelte';
+	import OpeningsGroup from './OpeningsGroup.svelte';
 	import ProbeControls from './ProbeControls.svelte';
 	import SmokeControls from './SmokeControls.svelte';
+	import TransportBar from './TransportBar.svelte';
+	import WeatherGroup from './WeatherGroup.svelte';
 
 	const experience = useAirflow();
 </script>
@@ -18,7 +21,7 @@
 	The comments mark where the other slices go, top to bottom as they appear on the page: replace your own line and leave the others.
 -->
 <div class="dock airflow-dock" role="group" aria-label="Simulation controls">
-	<!-- #52 transport bar: pause, speed and the clock -->
+	<TransportBar />
 
 	<Legend />
 
@@ -30,9 +33,9 @@
 		<ViewControls />
 	</DockGroup>
 
-	<!-- #52 Weather -->
+	<WeatherGroup />
 
-	<!-- #52 Openings -->
+	<OpeningsGroup />
 
 	<DockGroup id="dock-devices" title="Fans and purifiers" hint="{experience.setup.devices.length} of 6" open>
 		<DevicesPanel />

@@ -37,6 +37,9 @@ export function compassName(degrees: number): CompassPoint {
 	return COMPASS_POINTS[Math.round(wrap(degrees) / 22.5) % 16];
 }
 
+/** The nearest compass point spelled out, for a sentence: "west", "west-northwest". */
+export const compassWord = (degrees: number) => COMPASS_WORDS[compassName(degrees)];
+
 export interface Bearing {
 	/** Whole degrees, 0 to 359. */
 	degrees: number;

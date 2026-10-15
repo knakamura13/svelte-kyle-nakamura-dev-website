@@ -7,6 +7,7 @@
 	import { plans } from '$lib/experiments/airflow/homes/plans';
 	import { linkCatalog, setupFromHash, setupToHash } from '$lib/experiments/airflow/link';
 	import { SCENARIOS } from '$lib/experiments/airflow/scenarios';
+	import { shortfall } from '$lib/experiments/airflow/ui/clock';
 	import Dock from '$lib/experiments/airflow/ui/Dock.svelte';
 	import { detectUnits, formatLength } from '$lib/experiments/airflow/units';
 	import { stage } from '$lib/experiments/ui/stage';
@@ -56,12 +57,8 @@
 				return readout.note;
 		}
 	});
-	// A backend that cannot keep up runs the simulation slower than the clock asks. The rate changes as it goes, so it is kept out of the live region: a screen reader hears the status once, not every few seconds.
-	const behind = $derived.by(() => {
-		const { rate } = readout.physics;
-		if (readout.status !== 'running' || rate === null || rate >= 0.85 * experience.clock.speed) return '';
-		return rate < 0.1 ? 'Running at under 0.1× real time.' : `Running at ${rate.toFixed(1)}× real time.`;
-	});
+	// A backend that cannot keep up runs the simulation slower than the clock asks. The rate changes as it goes, so it is kept out of the live region: a screen reader hears the status once, not every few seconds. The Dock's clock says it in the same words.
+	const behind = $derived(shortfall(readout.status, readout.physics.rate, experience.clock.speed));
 </script>
 
 <svelte:head>
