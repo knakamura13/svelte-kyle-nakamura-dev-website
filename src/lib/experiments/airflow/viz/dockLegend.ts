@@ -78,7 +78,7 @@ function decimalsFor(values: readonly number[]): number {
 /** 0 decimals for a value that is whole to a tenth, else 1: a temperature such as 21 °C, 69.8 °F or 64.4 °F. */
 const tenths = (x: number) => (Math.abs(x - Math.round(x)) < 0.05 ? 0 : 1);
 
-/** `tick` with its label made by `label`. */
+/** A tick at `at` along the scale, with its label and, where it has one, its second reading. */
 const labelled = (at: number, label: Formatted, second?: Formatted): DockTick => (second ? { at, label, second } : { at, label });
 
 export function dockLegend(options: DockLegendOptions): DockLegend {
