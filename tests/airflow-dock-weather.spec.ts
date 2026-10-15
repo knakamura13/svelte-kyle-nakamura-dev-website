@@ -142,14 +142,14 @@ test.describe('the transport bar', () => {
 
 	test('is the first thing on the Dock, outside every group, and names its controls', async ({ page }) => {
 		await openAirflow(page);
-		const bar = page.getByRole('group', { name: 'Time' });
+		const bar = page.getByRole('group', { name: 'Time', exact: true });
 		await expect(bar).toBeVisible();
 		expect(await page.evaluate(() => document.querySelector('.airflow-dock')!.firstElementChild!.classList.contains('transport-frame')), 'first in the Dock').toBe(true);
 		await expect(page.locator('details .transport'), 'not inside a group that can be closed').toHaveCount(0);
 		await expect(bar.getByRole('button')).toHaveCount(1);
 		// A page that prefers reduced motion starts paused, and the button says what it does next.
 		await expect(bar.getByRole('button', { name: 'Resume', exact: true })).toBeVisible();
-		const speed = bar.getByRole('group', { name: 'Speed' });
+		const speed = bar.getByRole('group', { name: 'Speed', exact: true });
 		await expect(speed.getByRole('radio')).toHaveCount(3);
 		for (const label of ['1×', '5×', '20×']) await expect(speed.getByRole('radio', { name: label, exact: true })).toBeVisible();
 		// The Scenario the page starts with runs at five times real time.
@@ -197,7 +197,7 @@ test.describe('the transport bar', () => {
 
 	test('the three speeds are one group of radio buttons that the arrow keys move along, and each says what it did', async ({ page, browserName }) => {
 		await openAirflow(page);
-		const speed = page.getByRole('group', { name: 'Speed' });
+		const speed = page.getByRole('group', { name: 'Speed', exact: true });
 		for (const [label, said] of [
 			['20×', '20 times real time.'],
 			['1×', 'Real time.'],
