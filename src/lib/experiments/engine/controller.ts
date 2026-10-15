@@ -185,7 +185,7 @@ export class StageController {
 			if (!create) throw new Error(`No scene is registered as "${slot.options.scene}".`);
 			slot.layer = new LabelLayer(slot.view.querySelector<HTMLElement>('.stage-labels') ?? slot.view);
 			slot.inst = create(
-				{ labels: slot.layer, reducedMotion: () => this.reduced.matches, compact: () => slot.view.clientWidth < 480, invalidate: () => this.invalidate() },
+				{ labels: slot.layer, reducedMotion: () => this.reduced.matches, compact: () => slot.view.clientWidth < 480, invalidate: () => this.invalidate(), rect: () => slot.view.getBoundingClientRect() },
 				slot.options.params as never,
 				slot.options.readout as never
 			);

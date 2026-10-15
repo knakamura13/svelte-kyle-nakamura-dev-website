@@ -38,7 +38,8 @@ export function freeWindows(plan: HomePlan, devices: readonly DeviceState[]) {
 }
 
 let counter = 0;
-const nextId = (devices: readonly DeviceState[]) => {
+/** An id no device of the home has. */
+export const nextId = (devices: readonly DeviceState[]) => {
 	const used = new Set(devices.map((d) => d.id));
 	let id: string;
 	do id = `d${++counter}`;
@@ -51,9 +52,9 @@ const nextId = (devices: readonly DeviceState[]) => {
  * nearest the middle of the largest room, aimed down that room's long axis; a window fan goes into the first window
  * without one and draws air in.
  */
-export function newDevice(plan: HomePlan, model: DeviceModel, devices: readonly DeviceState[]): { device: DeviceState } | { reason: string } {
-	if (devices.length >= MAX_DEVICES) return { reason: `A home holds at most ${MAX_DEVICES} fans and purifiers.` };
-	const base: Omit<DeviceState, 'id' | 'x' | 'z' | 'yaw'> = {
+/** What a new device of this model starts with, wherever it is put: two thirds power, level, a pedestal fan's head at the middle of its range, not oscillating. */
+export function deviceDefaults(model: DeviceModel): Omit<DeviceState, 'id' | 'x' | 'z' | 'yaw'> {
+	return {
 		model: model.id,
 		y: 0,
 		tilt: 0,
@@ -61,6 +62,11 @@ export function newDevice(plan: HomePlan, model: DeviceModel, devices: readonly 
 		height: model.kind === 'pedestal-fan' && model.heightRange ? (model.heightRange[0] + model.heightRange[1]) / 2 : 0,
 		oscillation: { on: false, sweep: Math.min(90, model.kind === 'pedestal-fan' ? (model.maxSweep ?? 90) : 90), period: 8 }
 	};
+}
+
+export function newDevice(plan: HomePlan, model: DeviceModel, devices: readonly DeviceState[]): { device: DeviceState } | { reason: string } {
+	if (devices.length >= MAX_DEVICES) return { reason: `A home holds at most ${MAX_DEVICES} fans and purifiers. Remove one to add another.` };
+	const base = deviceDefaults(model);
 
 	if (model.kind === 'window-fan') {
 		const window = freeWindows(plan, devices)[0];

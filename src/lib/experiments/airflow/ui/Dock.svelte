@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { useAirflow } from '../experience.svelte';
+	import DevicesPanel from './DevicesPanel.svelte';
 	import DockGroup from './DockGroup.svelte';
 	import Legend from './Legend.svelte';
 	import ViewControls from './ViewControls.svelte';
@@ -30,7 +31,9 @@
 
 	<!-- #52 Openings -->
 
-	<!-- #53 Devices -->
+	<DockGroup id="dock-devices" title="Fans and purifiers" hint="{experience.setup.devices.length} of 6" open>
+		<DevicesPanel />
+	</DockGroup>
 
 	<!-- #54 Probes and smoke -->
 
