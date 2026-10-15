@@ -1,11 +1,11 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { prefersReducedMotion, useExperience } from '../experience.svelte';
+	import { prefersReducedMotion, useExperience } from '$lib/experiments/engine/experience.svelte';
 	import type { FramesParams, FramesReadout } from '../scenes/frames';
 	import Chapter from '../ui/Chapter.svelte';
-	import PlayControls from '../ui/PlayControls.svelte';
-	import RangeField from '../ui/RangeField.svelte';
-	import Segmented from '../ui/Segmented.svelte';
+	import PlayControls from '$lib/experiments/ui/PlayControls.svelte';
+	import RangeField from '$lib/experiments/ui/RangeField.svelte';
+	import Segmented from '$lib/experiments/ui/Segmented.svelte';
 
 	const experience = useExperience();
 	const params: FramesParams = $state({ view: 'platform', speed: 8, playing: false, restart: 0 });

@@ -71,3 +71,49 @@ _Avoid_: toolbar, HUD, sidebar
 **Role color**:
 A color that means the same thing in every Stage of an Experiment: blue is the observer at rest, green the traveler, amber light, red what Newton's arithmetic predicts.
 _Avoid_: theme color, series color
+
+### Airflow experiment
+
+**Home**:
+One of the four single-story homes the Airflow Experiment simulates, drawn as a plan: its Rooms, walls, Openings and furniture.
+_Avoid_: house (that is one of the four), apartment, floor plan, layout
+
+**Room**:
+A named part of a Home, such as the Kitchen. Each Room has its own average speed, temperature, particulates, and air changes per hour.
+_Avoid_: zone, space
+
+**Opening**:
+A door or window in a Home. It opens from 0 to 100% of its travel, and how much air it passes depends on how much of its frame that leaves open.
+_Avoid_: vent, hole, gap
+
+**Device**:
+A fan or air purifier the visitor places in a Home.
+_Avoid_: appliance, gadget, unit
+
+**Slice**:
+The horizontal plane through a Home, at a height the visitor sets, that carries the heatmap, the hover readout, Probes, and where smoke is released.
+_Avoid_: cross-section, cut, floor map
+
+**Layer**:
+Which quantity the Slice shows: speed, direction, particulates, or temperature.
+_Avoid_: mode, view, overlay
+
+**Probe**:
+A point on the Slice the visitor pinned, which keeps reading the air there.
+_Avoid_: pin, sensor, marker
+
+**Tracer**:
+A tiny dot that drifts with the air so its motion can be seen.
+_Avoid_: particle (that is smoke), arrow
+
+**Smoke**:
+Fine particulates, measured as PM2.5, that the visitor releases or that come in from outdoors.
+_Avoid_: dust, pollution, pollutant
+
+**Scenario**:
+A prepared Home, Devices, Openings, and weather that shows one idea, such as cross-ventilation.
+_Avoid_: preset, demo, example
+
+**Physics panel**:
+The expandable panel that says how the simulation is doing: its clock, grid, backend, air changes per hour, and whether the particulate mass balance closes.
+_Avoid_: debug panel, stats

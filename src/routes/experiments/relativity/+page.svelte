@@ -2,8 +2,9 @@
 	import { onMount } from 'svelte';
 	import Arrow from '$lib/components/Arrow.svelte';
 	import { reveal } from '$lib/motion/reveal';
+	import { provideExperience } from '$lib/experiments/engine/experience.svelte';
 	import { chapters } from '$lib/experiments/relativity/chapters';
-	import { provideExperience } from '$lib/experiments/relativity/experience.svelte';
+	import { loadEngine } from '$lib/experiments/relativity/experience';
 	import Frames from '$lib/experiments/relativity/chapters/Frames.svelte';
 	import Gravity from '$lib/experiments/relativity/chapters/Gravity.svelte';
 	import LightSpeed from '$lib/experiments/relativity/chapters/LightSpeed.svelte';
@@ -11,7 +12,7 @@
 	import Muons from '$lib/experiments/relativity/chapters/Muons.svelte';
 	import Twins from '$lib/experiments/relativity/chapters/Twins.svelte';
 
-	const experience = provideExperience();
+	const experience = provideExperience(loadEngine);
 	onMount(() => experience.start());
 </script>
 

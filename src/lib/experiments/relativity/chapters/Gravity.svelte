@@ -1,11 +1,11 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { prefersReducedMotion, useExperience } from '../experience.svelte';
+	import { prefersReducedMotion, useExperience } from '$lib/experiments/engine/experience.svelte';
 	import { gravityRate } from '../physics';
 	import type { GravityParams, GravityReadout } from '../scenes/gravity';
 	import Chapter from '../ui/Chapter.svelte';
-	import PlayControls from '../ui/PlayControls.svelte';
-	import RangeField from '../ui/RangeField.svelte';
+	import PlayControls from '$lib/experiments/ui/PlayControls.svelte';
+	import RangeField from '$lib/experiments/ui/RangeField.svelte';
 
 	const experience = useExperience();
 	const params: GravityParams = $state({ radius: 3, playing: false, restart: 0 });

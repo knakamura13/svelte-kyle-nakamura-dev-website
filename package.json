@@ -13,7 +13,10 @@
 		"preview": "vite preview",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-		"test:e2e": "playwright test"
+		"test:e2e": "playwright test",
+		"test:solver": "playwright test -c playwright.solver.config.ts",
+		"test:gpu": "playwright test -c playwright.gpu.config.ts",
+		"test": "yarn test:solver && yarn test:e2e"
 	},
 	"devDependencies": {
 		"@axe-core/playwright": "^4.13.0",
@@ -27,6 +30,7 @@
 		"@tailwindcss/vite": "^4.1.0",
 		"@types/node": "20.14.12",
 		"@types/three": "^0.186.0",
+		"esbuild": "0.25.12",
 		"prettier": "^3.3.3",
 		"prettier-plugin-svelte": "^3.2.6",
 		"svelte": "^5.28.0",

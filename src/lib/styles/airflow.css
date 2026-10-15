@@ -1,0 +1,77 @@
+/* Airflow: the page's own Stage frame and label tones, loaded after experiments.css by routes/experiments/airflow/+layout.svelte. */
+.experiment.airflow { --tint:var(--mist); }
+
+/* The Stage: one live 3D view of the home, in a card. The card holds the figure (the Stage, where the simulation is, and its caption) and the Dock.
+   The point of the page is to change something and watch the air answer, so the Stage and the Dock are always on screen together: side by side
+   on a wide screen, with the Stage pinned while the Dock scrolls beside it, and on a narrower one the Stage pinned at the top while the Dock
+   scrolls under it. --airflow-pin is how far down the pinned Stage reaches, so focus is never left behind it. */
+.airflow-card { --airflow-pin:calc(72px + clamp(240px,40vh,440px) + 92px); margin:0 0 56px; border-radius:22px; background:var(--surface); box-shadow:var(--shadow-card); overflow:clip; }
+.airflow-figure { position:sticky; top:72px; z-index:3; margin:0; background:var(--surface); }
+/* The shared Stage rules give it an aspect ratio below 1000px, and with a fixed height that sets its width, so it would overflow its card. */
+.airflow-figure .stage-view { --dock:0px; aspect-ratio:auto; height:clamp(240px,40vh,440px); }
+/* Pinned above the Dock, the figure keeps to the Stage and two short lines: the caption is cut to one (a screen reader still has all of it). */
+.airflow-figure figcaption { padding:0 16px 10px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.airflow-figure .sim-status { padding:8px 16px 6px; min-height:calc(3.2em + 14px); }
+.airflow-dock :is(button,input,summary,select,a) { scroll-margin-top:calc(var(--airflow-pin) + 12px); }
+@media(min-width:1160px) {
+ .airflow-card { --airflow-pin:84px; display:grid; grid-template-columns:minmax(0,1fr) clamp(340px,36%,440px); align-items:start; }
+ .airflow-figure { top:96px; }
+ .airflow-figure .stage-view { height:clamp(340px,calc(100vh - 230px),760px); }
+ .airflow-figure figcaption { padding:0 20px 18px; white-space:normal; overflow:visible; }
+ .airflow-figure .sim-status { padding:12px 20px 14px; min-height:0; }
+ .airflow-dock { border-top:0; border-left:1px solid var(--rule); }
+}
+/* A short window, such as a phone on its side or a small one held upright, has no room to pin the Stage above the Dock. */
+@media(max-width:1159px) and (max-height:700px) {
+ .airflow-figure { position:static; }
+ .airflow-card { --airflow-pin:0px; }
+}
+@media(max-height:560px) {
+ .airflow-figure { position:static; }
+ .airflow-card { --airflow-pin:0px; }
+}
+@media(max-width:700px) {
+ .airflow-figure .stage-view { height:clamp(260px,40vh,420px); }
+}
+
+/* Room names and compass letters are plain text over the picture, so they carry no dot; a probe's label keeps one. */
+.airflow .stage-label[data-tone="room"],.airflow .stage-label[data-tone="compass"] { padding:2px 8px; background:#ffffffb8; border-color:transparent; box-shadow:none; font-weight:650; }
+.airflow .stage-label[data-tone="room"]::before,.airflow .stage-label[data-tone="compass"]::before { display:none; }
+.airflow .stage-label[data-tone="compass"] { padding:1px 7px; color:var(--muted); font-size:10px; letter-spacing:.06em; }
+.airflow .stage-label[data-tone="probe"] { --tone:var(--ink); }
+
+/* The Dock: groups of controls, each a disclosure that holds a grid of controls. `.dock.airflow-dock` is written with both classes because the shared `.dock` rule has the same weight and would win whenever its stylesheet came second. */
+.dock.airflow-dock { gap:0; padding:0 20px 6px; border-top:1px solid var(--rule); }
+@media(max-width:700px) { .dock.airflow-dock { padding-inline:16px; } }
+.dock-group { border-bottom:1px solid var(--rule); }
+.dock-group:last-child { border-bottom:0; }
+.dock-group>summary { display:flex; align-items:center; gap:12px; min-height:52px; margin-inline:-8px; padding:10px 8px; list-style:none; cursor:pointer; font-size:14px; font-weight:700; border-radius:10px; transition:background 160ms; }
+.dock-group>summary:hover { background:var(--dock); }
+.dock-group>summary::-webkit-details-marker { display:none; }
+.dock-group>summary::after { content:''; flex:none; margin-left:auto; width:8px; height:8px; border:solid currentColor; border-width:0 2px 2px 0; transform:rotate(45deg) translateY(-2px); transition:transform 160ms var(--ease); }
+.dock-group[open]>summary::after { transform:rotate(-135deg) translateY(-1px); }
+.dock-group>summary:focus-visible { outline:3px solid var(--focus); outline-offset:3px; }
+.dock-group-hint { font-size:11px; font-weight:500; color:var(--muted); }
+.dock-group-body { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr)); gap:18px 32px; align-items:start; padding:8px 0 22px; }
+.dock-field { display:grid; gap:8px; min-width:0; align-content:start; }
+.dock-label { margin:0; font-size:12px; font-weight:650; }
+.dock-notice { margin:0; font-size:12px; line-height:1.7; color:var(--muted); }
+.dock-notice strong { font-weight:650; color:var(--ink); }
+.dock-link { display:grid; gap:6px; }
+.dock-link input { width:100%; min-height:44px; padding:0 14px; border:0; border-radius:12px; background:var(--dock); box-shadow:inset 0 0 0 1px var(--muted); font:inherit; font-size:12px; color:var(--ink); text-overflow:ellipsis; }
+.dock-link input:focus-visible { outline:3px solid var(--focus); outline-offset:3px; }
+/* The Dock's controls are at least 44px tall (the shared ones are 40), and the chosen Home reads as chosen in more than a faint shadow: the same ink fill a pressed Scenario has. */
+.dock.airflow-dock .chip,.dock.airflow-dock .segment span { min-height:44px; }
+.airflow-dock .segments { display:grid; grid-template-columns:repeat(auto-fit,minmax(7.5rem,1fr)); width:100%; border-radius:26px; }
+.airflow-dock .segment span { justify-content:center; }
+.airflow-dock .segment input:checked + span { background:var(--ink); color:#fff; box-shadow:none; }
+.airflow-dock .segment:hover input:not(:checked) + span { background:var(--dock-hover); }
+.airflow-dock .segment input:focus-visible + span { outline-offset:3px; }
+.concept .airflow-dock button:focus-visible { outline-offset:3px; }
+/* The three buttons that act on the whole setup are one width each, so a label that changes ("Link copied") never moves the others. */
+.airflow-dock .dock-actions { display:grid; grid-template-columns:repeat(auto-fit,minmax(8.5rem,1fr)); justify-content:stretch; gap:8px; }
+.airflow-dock .dock-actions .pill { justify-content:center; padding-inline:14px; }
+
+/* Where the simulation is, under the Stage. */
+.sim-status { margin:0; padding:12px 20px 14px; font-size:12px; line-height:1.6; color:var(--muted); font-variant-numeric:tabular-nums; }
+.sim-status[data-status="unsupported"],.sim-status[data-status="error"] { color:var(--ink); }

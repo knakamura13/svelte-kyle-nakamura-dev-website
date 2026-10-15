@@ -5,12 +5,17 @@ import { experiments } from '../src/lib/experiments/catalog';
 
 const routes = fileURLToPath(new URL('../src/routes/experiments/', import.meta.url));
 
+/** Pages that exist but are not listed yet because they are not finished: reachable by address only. Add each to the catalog, and take it off this list, when it is. */
+const UNLISTED = ['airflow'];
+
 test.describe('the experiments landing page', () => {
 	test('lists an experiment for every page under /experiments, and a page for every experiment', () => {
 		const pages = readdirSync(routes, { withFileTypes: true })
 			.filter((entry) => entry.isDirectory())
-			.map((entry) => entry.name);
+			.map((entry) => entry.name)
+			.filter((name) => !UNLISTED.includes(name));
 		expect(experiments.map((experiment) => experiment.slug).sort()).toEqual(pages.sort());
+		for (const slug of UNLISTED) expect(experiments.map((experiment) => experiment.slug), `${slug} is listed, so it is no longer unlisted`).not.toContain(slug);
 	});
 
 	test('shows each experiment and links to it', async ({ page }) => {
