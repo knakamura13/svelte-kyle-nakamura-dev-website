@@ -5,6 +5,7 @@
 
 	const experience = useAirflow();
 	const marks = smokeMarks();
+	const how = ['no', 'one', 'two', 'three', 'four', 'five', 'six'][marks.length] ?? String(marks.length);
 	const strength = $derived(experience.emission.strength);
 	const words = $derived(describeStrength(strength));
 	const releasing = $derived(experience.emission.active);
@@ -36,7 +37,7 @@
 		/>
 		<!-- The marks are buttons along the track, each where its rate falls on the log scale. A list that loses its bullets loses its list role in Safari, so it is given back. -->
 		<!-- svelte-ignore a11y_no_redundant_roles -->
-		<ul class="marks" role="list" aria-label="Real sources of smoke, to set the strength to">
+		<ul class="marks" role="list" aria-label="Set the strength to a real source">
 			{#each marks as mark (mark.id)}
 				<li style:--at={mark.position} data-mark={mark.id} data-position={mark.position}>
 					<button type="button" aria-pressed={Math.abs(strength - mark.position) < HALF_STEP} onclick={() => choose(mark)}>
@@ -49,7 +50,7 @@
 		</ul>
 	</div>
 	<p class="dock-notice smoke-about">
-		Strength is how much PM2.5 the source releases each minute, in milligrams, with four real sources marked. Press and hold on the air with a mouse to release smoke. With a finger or the keyboard, choose Emit mode above.
+		Strength is how much PM2.5 the source releases each minute, in milligrams, with {how} real sources marked. Press and hold on the air with a mouse to release smoke. With a finger or the keyboard, choose Emit mode above.
 	</p>
 	<p class="smoke-status" role="status" data-releasing={releasing ? '' : undefined}>{releasing ? 'Releasing smoke' : 'Not releasing smoke'}</p>
 </div>

@@ -229,11 +229,14 @@ test.describe('with a mouse and no mode', () => {
 		// A click leaves a Probe, and the list shows its row.
 		await expect(rows(page)).toHaveCount(0);
 		await expect(count(page)).toHaveText(`0 of ${MAX_PINS} probes`);
+		const hint = page.locator('#dock-probes > summary .dock-group-hint');
+		await expect(hint, 'a closed group still says how many Probes are pinned').toHaveText(`0 of ${MAX_PINS} probes`);
 		const at = await stageAt(page, spot);
 		await page.mouse.click(at.x, at.y);
 		await expect(rows(page)).toHaveCount(1);
 		await expect(live(page)).toHaveText('Probe 1 pinned.');
 		await expect(count(page)).toHaveText(`1 of ${MAX_PINS} probes`);
+		await expect(hint).toHaveText(`1 of ${MAX_PINS} probes`);
 		const row = rows(page).first();
 		await expect(row.locator('.probe-name')).toHaveText('Probe 1');
 		await expect(row.locator('.spot-facts dt')).toHaveText(FIVE, { timeout: 15_000 });
@@ -457,7 +460,7 @@ test.describe('the Smoke strength', () => {
 			// The button says the rate in words as well, and its name starts with what the eye reads.
 			await expect(item.getByRole('button'), mark.id).toHaveAccessibleName(`${mark.label} ${formatEmissionRate(mark.mgPerMinute).spoken}`);
 		}
-		const list = page.getByRole('list', { name: 'Real sources of smoke, to set the strength to' });
+		const list = page.getByRole('list', { name: 'Set the strength to a real source' });
 		await expect(list.getByRole('listitem')).toHaveCount(table.length);
 		await expect(list.getByRole('button')).toHaveCount(table.length);
 		await expect(page.locator('#dock-probes .mark-rate')).toHaveText(table.map((mark) => formatEmissionRate(mark.mgPerMinute).value));
