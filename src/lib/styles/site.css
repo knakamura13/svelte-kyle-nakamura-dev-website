@@ -155,3 +155,15 @@ button.stack-card { background:none; padding:0; text-align:left; }
 @keyframes route-out { to { opacity:0; } }
 @keyframes route-in { from { opacity:0; } }
 @media(prefers-reduced-motion:reduce) { ::view-transition-group(*),::view-transition-old(*),::view-transition-new(*) { animation:none!important; } }
+
+/*
+ * Shared image (#43). The name exists only for one home ↔ story navigation, and only when both
+ * captures were eligible (routeTransition.ts). Left-aligned cover keeps the crop coherent while the
+ * square thumbnail becomes the wide story figure. Without data-shared-image the named snapshot, if
+ * any, does not travel on its own.
+ */
+::view-transition-group(korean-project) { animation-duration:240ms; animation-timing-function:var(--ease); }
+::view-transition-image-pair(korean-project) { overflow:clip; }
+::view-transition-old(korean-project),::view-transition-new(korean-project) { height:100%; width:auto; max-width:none; object-fit:cover; object-position:left center; overflow:clip; }
+:root:not([data-shared-image]) ::view-transition-old(korean-project),
+:root:not([data-shared-image]) ::view-transition-new(korean-project) { animation:none; opacity:0; }
