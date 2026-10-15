@@ -25,7 +25,11 @@ async function dominantShare(page: Page, png: Buffer) {
 	}, png.toString('base64'));
 }
 
-/** The largest gap between a pixel's brightest and dimmest colour channel, over the left and right edges of a picture: near 0 for a plain tint, large for coloured speckle. */
+/**
+ * The largest gap between a pixel's brightest and dimmest colour channel, over the four corners of a picture: near 0 for a plain tint,
+ * large for coloured speckle. The corners hold only the ground and the sky: the Stage is narrower beside the Dock, so the home reaches
+ * the left and right edges, and the top and bottom corners are what stay empty.
+ */
 async function edgeSpread(page: Page, png: Buffer) {
 	return page.evaluate(async (base64) => {
 		const image = new Image();
@@ -36,12 +40,14 @@ async function edgeSpread(page: Page, png: Buffer) {
 		canvas.height = image.height;
 		const context = canvas.getContext('2d')!;
 		context.drawImage(image, 0, 0);
-		const edge = Math.round(image.width * 0.12);
+		const w = Math.round(image.width * 0.12);
+		const h = Math.round(image.height * 0.2);
 		let worst = 0;
-		for (const x of [0, image.width - edge]) {
-			const { data } = context.getImageData(x, 0, edge, image.height);
-			for (let i = 0; i < data.length; i += 4) worst = Math.max(worst, Math.max(data[i], data[i + 1], data[i + 2]) - Math.min(data[i], data[i + 1], data[i + 2]));
-		}
+		for (const x of [0, image.width - w])
+			for (const y of [0, image.height - h]) {
+				const { data } = context.getImageData(x, y, w, h);
+				for (let i = 0; i < data.length; i += 4) worst = Math.max(worst, Math.max(data[i], data[i + 1], data[i + 2]) - Math.min(data[i], data[i + 1], data[i + 2]));
+			}
 		return worst;
 	}, png.toString('base64'));
 }
@@ -114,7 +120,7 @@ test.describe('the airflow page', () => {
 		await expect(view).toHaveAttribute('data-state', /^(live|unsupported)$/, { timeout: 15_000 });
 		test.skip((await view.getAttribute('data-state')) === 'unsupported', 'This browser has no WebGL.');
 		await expect(page.locator('.sim-status')).toHaveAttribute('data-status', /^(paused|running|unsupported)$/, { timeout: 30_000 });
-		// The outer fifth of the Stage holds only the ground and the sky: no home, no slice, no labels.
+		// The corners of the Stage hold only the ground and the sky: no home, no slice, no labels.
 		expect(await edgeSpread(page, await view.screenshot())).toBeLessThan(40);
 	});
 
