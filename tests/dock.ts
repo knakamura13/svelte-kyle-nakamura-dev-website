@@ -25,7 +25,11 @@ export async function openAirflow(page: Page, path = '/experiments/airflow') {
 export async function dockGroup(page: Page, title: string): Promise<Locator> {
 	const group = page.locator('.dock-group', { has: page.locator('summary', { hasText: title }) });
 	await expect(group, `a group called ${title}`).toHaveCount(1);
-	if ((await group.getAttribute('open')) === null) await group.locator('summary').click();
+	if ((await group.getAttribute('open')) === null) {
+		await group.locator('summary').click();
+		// A click makes the browser take the next focus for a pointer's, which shows no ring: a key press says the keyboard is in use again, as it is for a test that tabs.
+		await page.keyboard.press('Shift');
+	}
 	await expect(group).toHaveAttribute('open', '');
 	return group;
 }
