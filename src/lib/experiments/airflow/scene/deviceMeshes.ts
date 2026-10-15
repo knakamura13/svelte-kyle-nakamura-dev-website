@@ -1,4 +1,4 @@
-import { BufferGeometry, ConeGeometry, CylinderGeometry, DoubleSide, Float32BufferAttribute, Group, Mesh, MeshBasicMaterial, RingGeometry, Vector3, type MeshStandardMaterial } from 'three';
+import { BufferGeometry, CircleGeometry, ConeGeometry, CylinderGeometry, DoubleSide, Float32BufferAttribute, Group, Mesh, MeshBasicMaterial, RingGeometry, Vector3, type MeshStandardMaterial, type Object3D } from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { clay, disposeTree } from '$lib/experiments/engine/kit';
 import { aimVector, oscillatedYaw } from '../devices/model';
@@ -13,6 +13,10 @@ const FACE_OFF = 0xaeb6ae;
 const FLOW = 0xd9822b;
 const INK = 0x202a24;
 const IDLE = 0x8a948f;
+/** The ring of the device the visitor has chosen: the site's accent green. */
+const SELECTED = 0x276b42;
+/** How far from a device's centre a click still takes it, m: the symbol on the slice is a ring with a hole, and the whole disc is the target. */
+export const GRAB_RADIUS = 0.34;
 /** The slice plane's default height, m, and how far its symbols float above the plane so they never fight it for depth. */
 const PLANE = 1.1;
 const SYMBOL_LIFT = 0.03;
@@ -60,7 +64,7 @@ export class DeviceMeshes {
 	 * Adds, removes and moves the meshes to match `devices`, with `time` the simulated seconds that oscillating fans turn
 	 * by, and `planeY` the height of the slice plane, m, where each device's symbol is drawn.
 	 */
-	update(devices: readonly DeviceState[], time: number, planeY = PLANE) {
+	update(devices: readonly DeviceState[], time: number, planeY = PLANE, selected: string | null = null) {
 		const present = new Set<string>();
 		for (const device of devices) {
 			const model = this.models.get(device.model);
@@ -77,7 +81,7 @@ export class DeviceMeshes {
 				this.items.set(device.id, item);
 				this.group.add(item.group);
 			}
-			this.pose(item, device, model, time, planeY);
+			this.pose(item, device, model, time, planeY, device.id === selected);
 		}
 		for (const id of [...this.items.keys()]) if (!present.has(id)) this.drop(id);
 	}
@@ -146,12 +150,15 @@ export class DeviceMeshes {
 		wedge.setAttribute('position', new Float32BufferAttribute([-0.08, 0, -0.3, 0.08, 0, -0.3, 0, 0, -0.48], 3));
 		const arrow = new Mesh(wedge, translucent(FLOW, 0.95));
 		for (const mesh of [halo, ring, arrow]) mesh.renderOrder = RENDER_ORDER.markers;
-		symbol.add(halo, ring, arrow);
+		// The whole disc inside the ring takes a click; it draws nothing.
+		const target = new Mesh(new CircleGeometry(GRAB_RADIUS, 20), new MeshBasicMaterial({ visible: false }));
+		target.rotation.x = -Math.PI / 2;
+		symbol.add(halo, ring, arrow, target);
 		group.add(symbol);
 		return { group, shape, head, face, flow, rise, front, symbol, ring, arrow };
 	}
 
-	private pose(item: Item, device: DeviceState, model: DeviceModel, time: number, planeY: number) {
+	private pose(item: Item, device: DeviceState, model: DeviceModel, time: number, planeY: number, selected: boolean) {
 		const { group, head, face, flow, symbol } = item;
 		group.position.set(device.x, device.y, device.z);
 		head.position.y = item.rise;
@@ -164,7 +171,8 @@ export class DeviceMeshes {
 			symbol.position.x = SYMBOL_INSET * inward[0];
 			symbol.position.z = SYMBOL_INSET * inward[2];
 		}
-		item.ring.material.color.set(on ? INK : IDLE);
+		item.ring.material.color.set(selected ? SELECTED : on ? INK : IDLE);
+		item.ring.scale.setScalar(selected ? 1.18 : 1);
 		if (model.kind === 'air-purifier') {
 			// A purifier stands upright and blows up whatever its yaw, so its symbol has no arrow.
 			group.rotation.y = -device.yaw * DEGREES;
@@ -203,6 +211,12 @@ export class DeviceMeshes {
 		const purifier = item.flow !== null && item.face === null;
 		const forward = purifier ? new Vector3(0, 1, 0) : new Vector3(0, 0, -1).transformDirection(item.head.matrixWorld);
 		return { position, forward };
+	}
+
+	/** The id of the device a mesh belongs to, found through its parents, or null for anything else. */
+	static deviceOf(object: Object3D | null): string | null {
+		for (let node: Object3D | null = object; node; node = node.parent) if (typeof node.userData.deviceId === 'string') return node.userData.deviceId;
+		return null;
 	}
 
 	private drop(id: string) {

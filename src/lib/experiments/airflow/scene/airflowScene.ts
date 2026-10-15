@@ -9,13 +9,14 @@ import { chooseBackend } from '../sim/backends';
 import { SMOKE, SMOKE_DENSE, SimulationSession, TRACERS, type SessionParams } from '../sim/session';
 import { effectiveOpenings } from '../sim/world';
 import { ARROW_SPACING, DirectionArrows } from './arrows';
+import { DeviceEditor, type Grab } from './deviceEditor';
 import { DeviceMeshes } from './deviceMeshes';
 import type { Point3 } from './deviceMath';
 import { Dollhouse, dollhouseRig } from './dollhouse';
 import { AirflowInput } from './input';
 import { Markers } from './markers';
 import { SmokePoints, TracerPoints } from './particles';
-import { pointOnPlane } from './pick';
+import { pointOnPlane, pointOnSurface } from './pick';
 import { SliceLayer } from './sliceLayer';
 
 /** The Stage's tint: the site's mist, so the 3D view matches the page around it. */
@@ -42,6 +43,16 @@ export interface AirflowSceneParams extends SessionParams {
 	setEmitting(on: boolean): void;
 	/** Tells a screen reader something the simulation did on its own. */
 	announce(message: string): void;
+	/** The device whose handles are showing, and the one being dragged from the Dock's tray with where it would land (null for neither). */
+	selected: string | null;
+	drag: { model: string; x: number; y: number; z: number; ok: boolean; reason: string | null } | null;
+	selectDevice(id: string | null): void;
+	/** Moves a placed device to where the pointer took it, turns it to face a bearing, aims it up or down. Each says what it did, politely, once the visitor stops. */
+	moveDevice(id: string, x: number, z: number): string | null;
+	turnDevice(id: string, yaw: number): void;
+	aimDevice(id: string, tilt: number): void;
+	/** What the Dock needs from the Stage to drag a device in from its tray: whether a screen point is over the Stage, and the floor or furniture it is over. */
+	bridge: { pick?: (clientX: number, clientY: number) => Point3 | null; over?: (clientX: number, clientY: number) => boolean };
 }
 
 /** Everything that belongs to one home, so a new plan swaps it as a piece. */
@@ -125,6 +136,29 @@ export const createAirflowScene: SceneFactory<AirflowSceneParams, AirflowReadout
 	}
 
 	let house = buildHouse(planOf(params.setup.plan));
+	const editor = new DeviceEditor({
+		camera,
+		devices,
+		models,
+		height: () => host.rect().height,
+		surfaces: () => house.dollhouse.pickables,
+		footprint: () => house.plan,
+		select: (id) => params.selectDevice(id),
+		move: (id, x, z) => void params.moveDevice(id, x, z),
+		turn: (id, yaw) => params.turnDevice(id, yaw),
+		aim: (id, tilt) => params.aimDevice(id, tilt)
+	});
+	scene.add(editor.group);
+	// The Dock drags a device in from its tray: it asks the Stage where a point on the screen lands, in the Stage's own metres.
+	const ndcOf = (clientX: number, clientY: number) => {
+		const box = host.rect();
+		return { x: ((clientX - box.left) / box.width) * 2 - 1, y: -(((clientY - box.top) / box.height) * 2 - 1) };
+	};
+	params.bridge.over = (clientX, clientY) => {
+		const box = host.rect();
+		return clientX >= box.left && clientX <= box.right && clientY >= box.top && clientY <= box.bottom;
+	};
+	params.bridge.pick = (clientX, clientY) => pointOnSurface(camera, ndcOf(clientX, clientY), house.plan, house.dollhouse.pickables);
 	let openings = '';
 	let version = -1;
 	let sensitivity = NaN;
@@ -150,7 +184,12 @@ export const createAirflowScene: SceneFactory<AirflowSceneParams, AirflowReadout
 			params.setEmitting(point !== null);
 			markers.setSmoke(point);
 		},
-		now: () => performance.now()
+		now: () => performance.now(),
+		grab: (at) => editor.grabAt(at, params.selected),
+		dragGrab: (grab, at, phase) => {
+			const held = grab as Grab;
+			editor.dragTo(held, at, phase, params.setup.devices.find((d) => d.id === held.id));
+		}
 	});
 
 	return {
@@ -222,7 +261,9 @@ export const createAirflowScene: SceneFactory<AirflowSceneParams, AirflowReadout
 				}
 			}
 
-			devices.update(setup.devices, session.simTime, planeY());
+			devices.update(setup.devices, session.simTime, planeY(), params.selected);
+			editor.update(setup.devices.find((d) => d.id === params.selected));
+			editor.setGhost(params.drag);
 			markers.syncProbes(params.probes, readout.probes, view.units);
 			markers.update(dt, reduced);
 
@@ -238,6 +279,7 @@ export const createAirflowScene: SceneFactory<AirflowSceneParams, AirflowReadout
 			backend.dispose();
 			disposeHouse(house);
 			markers.dispose();
+			editor.dispose();
 			devices.dispose();
 			tracers.dispose();
 			smoke.dispose();

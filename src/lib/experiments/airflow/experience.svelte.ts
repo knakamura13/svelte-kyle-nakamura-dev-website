@@ -1,11 +1,13 @@
 import { getContext, setContext } from 'svelte';
 import { Experience, setExperience, type EngineLoader } from '../engine/experience.svelte';
 import { newDevice } from './devices/placement';
+import { deviceAt, placeAt } from './devices/surfaces';
 import type { DeviceModel } from './devices/types';
 import type { HomePlan, PlanId } from './homes/types';
+import { describeBearing } from './readout';
 import { emptyReadout, type AirflowReadout } from './readouts';
 import type { Scenario } from './scenarios';
-import { DEFAULT_CLOCK, DEFAULT_VIEW, LIMITS, MAX_PINS, blankSetup, type Clock, type Conditions, type DeviceState, type Pin, type Setup, type UnitSystem, type View } from './state';
+import { DEFAULT_CLOCK, DEFAULT_VIEW, LIMITS, MAX_DEVICES, MAX_PINS, blankSetup, type Clock, type Conditions, type DeviceState, type Pin, type Setup, type UnitSystem, type View } from './state';
 
 const key = Symbol('airflow');
 
@@ -63,6 +65,9 @@ export class AirflowExperience extends Experience {
 	linkShown = $state(false);
 	readout: AirflowReadout = $state(emptyReadout());
 	bridge: StageBridge = {};
+	/** A device being dragged from the tray, and where it would land: the Stage draws a ghost there, and a drop takes the spot or says why not. Null when nothing is being dragged. */
+	drag: { model: string; x: number; y: number; z: number; ok: boolean; reason: string | null } | null = $state(null);
+	private readonly modelMap: ReadonlyMap<string, DeviceModel>;
 	private starting: Setup;
 	/** The scenario `starting` is, or null when it is a home the visitor picked or a link's setup. */
 	private startingScenario: string | null = null;
@@ -74,6 +79,7 @@ export class AirflowExperience extends Experience {
 		this.options = options;
 		this.plans = options.plans;
 		this.models = options.models;
+		this.modelMap = new Map(options.models.map((m) => [m.id, m]));
 		this.scenarios = options.scenarios;
 		const first = options.initial ?? options.scenarios.find((s) => s.id === options.defaultScenario)?.setup ?? blankSetup('two-bedroom');
 		this.setup = clone(first);
@@ -174,6 +180,92 @@ export class AirflowExperience extends Experience {
 
 	selectDevice(id: string | null) {
 		this.selected = id;
+		this.wake();
+	}
+
+	private nameOf(device: DeviceState) {
+		return this.modelOf(device)?.name ?? 'Device';
+	}
+
+	/** Adds a device where the visitor put it, as a drop from the tray does. Returns the reason in words when it cannot go there, which it also announces. */
+	addDeviceAt(modelId: string, x: number, z: number): string | null {
+		const model = this.modelMap.get(modelId);
+		if (!model) return 'That device is not in the catalog.';
+		const refuse = (reason: string) => {
+			this.announce(reason);
+			return reason;
+		};
+		if (this.setup.devices.length >= MAX_DEVICES) return refuse(`A home holds at most ${MAX_DEVICES} fans and purifiers. Remove one to add another.`);
+		const placed = placeAt(this.plan, model, x, z, this.setup.devices, this.modelMap);
+		if (!placed.ok) return refuse(placed.reason);
+		const made = deviceAt(this.plan, model, placed.placement, this.setup.devices);
+		if ('reason' in made) return refuse(made.reason);
+		this.setup.devices.push(made.device);
+		this.selected = made.device.id;
+		this.scenario = null;
+		this.announce(`${model.name} added${placed.placement.surface === 'sill' ? ' in a window' : placed.placement.surface === 'furniture' ? ' on a table' : ''}.`);
+		this.wake();
+		return null;
+	}
+
+	/** Where a device being dragged would land, for the ghost on the Stage. `null` ends the drag. */
+	previewDrag(modelId: string | null, x = 0, z = 0) {
+		const model = modelId ? this.modelMap.get(modelId) : undefined;
+		if (!model) {
+			this.drag = null;
+			this.wake();
+			return;
+		}
+		const placed = placeAt(this.plan, model, x, z, this.setup.devices, this.modelMap);
+		this.drag = placed.ok ? { model: model.id, x: placed.placement.x, y: placed.placement.y, z: placed.placement.z, ok: true, reason: null } : { model: model.id, x, y: 0, z, ok: false, reason: placed.reason };
+		this.wake();
+	}
+
+	/** Moves a placed device to where the visitor dragged it, or says why it cannot go there (a window fan goes to another window). Returns the reason, or null. */
+	moveDevice(id: string, x: number, z: number): string | null {
+		const device = this.setup.devices.find((d) => d.id === id);
+		const model = device ? this.modelMap.get(device.model) : undefined;
+		if (!device || !model) return null;
+		const placed = placeAt(this.plan, model, x, z, this.setup.devices, this.modelMap, id);
+		if (!placed.ok) {
+			this.announce(placed.reason);
+			return placed.reason;
+		}
+		const { placement } = placed;
+		const patch: Partial<Omit<DeviceState, 'id' | 'model'>> = { x: placement.x, z: placement.z, y: placement.y };
+		if (placement.opening) Object.assign(patch, { opening: placement.opening, yaw: placement.yaw ?? device.yaw });
+		else if (device.opening) Object.assign(patch, { opening: undefined, intake: undefined });
+		Object.assign(device, patch);
+		this.scenario = null;
+		this.announce(`Moved the ${model.name}.`);
+		this.wake();
+		return null;
+	}
+
+	/** A step of a key or a button: moves a device by `dx` east and `dz` south, metres. */
+	nudgeDevice(id: string, dx: number, dz: number): string | null {
+		const device = this.setup.devices.find((d) => d.id === id);
+		return device ? this.moveDevice(id, device.x + dx, device.z + dz) : null;
+	}
+
+	/** Turns a device to face `yaw` degrees clockwise from north, and says which way that is once the visitor stops. */
+	turnDevice(id: string, yaw: number) {
+		const device = this.setup.devices.find((d) => d.id === id);
+		if (!device) return;
+		const wrapped = ((Math.round(yaw) % 360) + 360) % 360;
+		device.yaw = wrapped;
+		this.scenario = null;
+		this.announce(`${this.nameOf(device)} faces ${describeBearing(wrapped).spoken}.`);
+		this.wake();
+	}
+
+	/** Aims a device up (positive) or down, degrees, within the limits, and says so once the visitor stops. */
+	aimDevice(id: string, tilt: number) {
+		const device = this.setup.devices.find((d) => d.id === id);
+		if (!device) return;
+		device.tilt = Math.max(LIMITS.tilt.min, Math.min(LIMITS.tilt.max, Math.round(tilt)));
+		this.scenario = null;
+		this.announce(`${this.nameOf(device)} aimed ${device.tilt === 0 ? 'level' : `${Math.abs(device.tilt)} degrees ${device.tilt > 0 ? 'up' : 'down'}`}.`);
 		this.wake();
 	}
 

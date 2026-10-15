@@ -37,6 +37,13 @@ export interface InputHost {
 	/** Starts releasing smoke at a point, moves the source, or stops it (null). */
 	emit(point: Point3 | null): void;
 	now(): number;
+	/**
+	 * What a press at `at` takes hold of, when it is a device or a handle of one: a mouse and a finger alike take it, in any mode, ahead of a
+	 * probe or the camera. The input holds what this returns and hands it back to `dragGrab`; it does not look inside.
+	 */
+	grab?(at: { x: number; y: number }): unknown;
+	/** Follows a held grab: 'start' on the press, 'move' while it is held, 'end' when it lifts or is dropped. */
+	dragGrab?(grab: unknown, at: { x: number; y: number }, phase: 'start' | 'move' | 'end'): void;
 }
 
 interface Press {
@@ -70,15 +77,17 @@ export class AirflowInput implements SceneInput {
 	private press: Press | null = null;
 	private cursor: { x: number; z: number } | null = null;
 	private cursorEmitting = false;
+	/** A device or handle the pointer has hold of, by the pointer's id, until it lifts. */
+	private held: { id: number; grab: unknown } | null = null;
 	/** The probe the last tap pinned, and where and when. */
 	private lastPin: { id: string; at: number; x: number; y: number } | null = null;
 
 	constructor(private readonly host: InputHost) {}
 
-	/** True while the Stage must keep drawing for the input: a press that may still become a hold, or smoke being released. */
+	/** True while the Stage must keep drawing for the input: a press that may still become a hold, smoke being released, or a device being dragged. */
 	get busy() {
 		const press = this.press;
-		return this.cursorEmitting || (!!press && (press.emitting || (!press.owned && !press.dragged)));
+		return this.cursorEmitting || !!this.held || (!!press && (press.emitting || (!press.owned && !press.dragged)));
 	}
 
 	touchAction(): 'pan-y' | 'none' {
@@ -93,6 +102,15 @@ export class AirflowInput implements SceneInput {
 			return false;
 		}
 		if (phase === 'down') return this.down(event, ndc, touch);
+		const held = this.held?.id === event.pointerId ? this.held : null;
+		if (held) {
+			// Already claimed, so the camera never sees it: a move follows it, and the lift lets go.
+			if (phase === 'up') {
+				this.held = null;
+				this.host.dragGrab?.(held.grab, ndc, 'end');
+			} else this.host.dragGrab?.(held.grab, ndc, 'move');
+			return false;
+		}
 		const press = this.press?.id === event.pointerId ? this.press : null;
 		if (phase === 'move') {
 			if (press) this.move(press, event, ndc);
@@ -104,6 +122,15 @@ export class AirflowInput implements SceneInput {
 	}
 
 	private down(event: PointerEvent, ndc: { x: number; y: number }, touch: boolean) {
+		if (this.held) this.letGo();
+		// A device or one of its handles comes first, in every mode and for a finger as for a mouse.
+		const grab = this.host.grab?.(ndc);
+		if (grab) {
+			if (this.press) this.end(this.press);
+			this.held = { id: event.pointerId, grab };
+			this.host.dragGrab?.(grab, ndc, 'start');
+			return true;
+		}
 		if (this.press) this.end(this.press);
 		const mode = this.host.mode();
 		// A finger in look mode only orbits and scrolls, and has no hover.
@@ -238,8 +265,15 @@ export class AirflowInput implements SceneInput {
 		this.host.hover(point, point ? this.host.read(point) : null);
 	}
 
+	private letGo() {
+		const held = this.held;
+		this.held = null;
+		if (held) this.host.dragGrab?.(held.grab, { x: 0, y: 0 }, 'end');
+	}
+
 	/** Forgets everything in progress: the mode changed, the home changed, or the Stage is going away. */
 	reset() {
+		this.letGo();
 		if (this.press?.emitting) this.host.emit(null);
 		this.press = null;
 		if (this.cursorEmitting) this.stopCursorSmoke();
