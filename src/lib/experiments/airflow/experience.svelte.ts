@@ -225,7 +225,7 @@ export class AirflowExperience extends Experience {
 
 	setSpeed(speed: Clock['speed']) {
 		this.clock.speed = speed;
-		this.announce(`${speed} times real time.`);
+		this.announce(speed === 1 ? 'Real time.' : `${speed} times real time.`);
 		this.wake();
 	}
 

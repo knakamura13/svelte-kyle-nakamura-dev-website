@@ -47,8 +47,13 @@
 		break-inside: avoid;
 		margin-bottom: 24px;
 	}
+	/* The Room's name is a heading over its Openings, so it reads as one beside their labels, which are the same size. */
 	.openings-room .dock-label {
 		margin-bottom: 14px;
+		padding-bottom: 6px;
+		border-bottom: 1px solid var(--rule);
+		font-size: 13px;
+		font-weight: 700;
 	}
 	.openings-room :global(.opening-row + .opening-row) {
 		margin-top: 14px;

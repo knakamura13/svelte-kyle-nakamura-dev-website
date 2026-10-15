@@ -106,8 +106,11 @@
 </div>
 
 <style>
-	/* The shared slider is 40px tall; a finger wants 44. */
+	/* The shared slider is 40px tall; a finger wants 44. The ring stands off it by 3px, as every Dock control's does. */
 	.weather-field :global(input[type='range']) {
 		height: 44px;
+	}
+	.weather-field :global(input[type='range']:focus-visible) {
+		outline-offset: 3px;
 	}
 </style>

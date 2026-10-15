@@ -15,86 +15,106 @@
 </script>
 
 <!--
-	Always on the page, above every group: pause, speed and the simulated time. The clock is not a live region (it changes every
+	Always on the Dock, above every group: pause, speed and the simulated time. The clock is not a live region (it changes every
 	second), so a screen reader reads it where it stands; Pause and the speeds say what they did, once, through the page's live region.
+	The frame is what the layout asks its width of: in the Dock's column beside the Stage it is narrow, and under the Stage it is wide.
 -->
-<div class="transport" role="group" aria-label="Time">
-	<button type="button" class="pill primary" onclick={() => experience.togglePause()}>
-		<svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
-			{#if paused}
-				<path d="M6.5 4.5 15 10l-8.5 5.5z" />
-			{:else}
-				<path d="M6 4.5v11M14 4.5v11" />
-			{/if}
-		</svg>
-		{paused ? 'Resume' : 'Pause'}
-	</button>
-	<Segmented
-		legend="Speed"
-		name="airflow-speed"
-		value={String(experience.clock.speed)}
-		options={SPEEDS.map((speed) => ({ value: String(speed), label: `${speed}×` }))}
-		onchange={(speed) => experience.setSpeed(Number(speed) as Clock['speed'])}
-	/>
-	<dl class="clock">
-		<div>
-			<dt>Simulated time</dt>
-			<dd>
-				<span class="field-value" aria-hidden="true">{time.text}</span>
-				<span class="sr-only">{time.spoken}</span>
-				{#if behind}<span class="clock-behind" data-behind>{behind}</span>{/if}
-			</dd>
-		</div>
-	</dl>
+<div class="transport-frame">
+	<div class="transport" role="group" aria-label="Time">
+		<button type="button" class="pill primary" onclick={() => experience.togglePause()}>
+			<svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+				{#if paused}
+					<path d="M6.5 4.5 15 10l-8.5 5.5z" />
+				{:else}
+					<path d="M6 4.5v11M14 4.5v11" />
+				{/if}
+			</svg>
+			{paused ? 'Resume' : 'Pause'}
+		</button>
+		<Segmented
+			legend="Speed"
+			name="airflow-speed"
+			value={String(experience.clock.speed)}
+			options={SPEEDS.map((speed) => ({ value: String(speed), label: `${speed}×` }))}
+			onchange={(speed) => experience.setSpeed(Number(speed) as Clock['speed'])}
+		/>
+		<dl class="clock">
+			<div>
+				<dt>Simulated time</dt>
+				<dd>
+					<span class="field-value" aria-hidden="true">{time.text}</span>
+					<span class="sr-only">{time.spoken}</span>
+				</dd>
+				{#if behind}<dd class="clock-behind" data-behind>{behind}</dd>{/if}
+			</div>
+		</dl>
+	</div>
 </div>
 
 <style>
-	.transport {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: flex-end;
-		gap: 14px 28px;
-		padding: 16px 0 18px;
+	.transport-frame {
+		container-type: inline-size;
 		border-bottom: 1px solid var(--rule);
 	}
-	/* The shared controls are 40px tall; a control at the top of the Dock that is used often is worth 44 and more. */
-	.transport :global(.segment span) {
-		min-height: 44px;
+	/* Narrow, as in the Dock's column: Pause and the clock on one line and the speeds across the width under them. */
+	.transport {
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr);
+		grid-template-areas:
+			'pause clock'
+			'speed speed';
+		align-items: end;
+		gap: 14px 16px;
+		padding: 16px 0 18px;
 	}
+	/* One button for Resume and for Pause: the label changes and the button must not, or the speeds beside it would shift. As tall as the speeds' capsule beside it. */
 	.transport :global(.pill) {
+		grid-area: pause;
+		justify-content: center;
+		min-width: 8.5rem;
 		min-height: 52px;
 	}
+	.transport :global(.segmented) {
+		grid-area: speed;
+	}
+	/* The shared Dock rule lets the speeds wrap onto lines of two; three speeds are one row of equal parts. */
+	.transport :global(.segments) {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
 	.clock {
-		margin: 0 0 0 auto;
+		grid-area: clock;
+		justify-self: end;
 		min-width: 0;
+		margin: 0;
+		text-align: right;
 	}
 	.clock dt {
-		margin: 0 0 8px;
 		font-size: 12px;
 		font-weight: 650;
 	}
 	.clock dd {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: baseline;
-		align-content: center;
-		gap: 2px 12px;
-		min-height: 52px;
 		margin: 0;
 	}
-	.clock-behind {
+	.clock .field-value {
+		display: block;
+		line-height: 1.2;
+	}
+	.clock dd.clock-behind {
 		font-size: 12px;
 		line-height: 1.5;
 		color: var(--muted);
 		font-variant-numeric: tabular-nums;
 	}
-	@media (max-width: 700px) {
-		.clock {
-			margin-left: 0;
-			flex-basis: 100%;
+	/* Wide, under the Stage: Pause, the speeds and the clock in one line. */
+	@container (min-width: 30rem) {
+		.transport {
+			grid-template-columns: auto auto minmax(0, 1fr);
+			grid-template-areas: 'pause speed clock';
+			gap: 14px 28px;
 		}
-		.clock dd {
-			min-height: 0;
+		.transport :global(.segments) {
+			width: auto;
+			grid-template-columns: repeat(3, minmax(3.5rem, 1fr));
 		}
 	}
 </style>

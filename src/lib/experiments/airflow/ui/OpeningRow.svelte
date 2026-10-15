@@ -41,8 +41,14 @@
 	.opening-row :global(input[type='range']) {
 		height: 44px;
 	}
-	/* A long name beside the percentage wraps instead of pushing the percentage out of the card. */
+	.opening-row :global(input[type='range']:focus-visible) {
+		outline-offset: 3px;
+	}
+	/* A long name beside the percentage, in the Dock's narrow column, wraps instead of pushing the percentage out of the card; alone on its line the percentage stays at the right. */
 	.opening-row :global(.field-head) {
 		flex-wrap: wrap;
+	}
+	.opening-row :global(.field-value) {
+		margin-left: auto;
 	}
 </style>
