@@ -108,9 +108,12 @@ export class AirflowExperience extends Experience {
 		this.afterChange(plan ? `${plan.name}. ${plan.blurb}` : '', true);
 	}
 
+	/** Shows or hides the furniture, and builds the air again, because the obstacles the solver sees change. A setup of the visitor's own is no longer a Scenario. */
 	setFurniture(on: boolean) {
+		if (on === this.setup.furniture) return;
 		this.setup.furniture = on;
-		this.afterChange(on ? 'Furniture on.' : 'Furniture off.');
+		this.scenario = null;
+		this.afterChange(on ? 'Furniture on. The air starts over.' : 'Furniture off. The air starts over.');
 	}
 
 	setOpening(id: string, amount: number) {

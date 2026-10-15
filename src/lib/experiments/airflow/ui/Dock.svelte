@@ -1,6 +1,9 @@
 <script lang="ts">
 	import DockGroup from './DockGroup.svelte';
 	import HomeControls from './HomeControls.svelte';
+	import OpeningsGroup from './OpeningsGroup.svelte';
+	import TransportBar from './TransportBar.svelte';
+	import WeatherGroup from './WeatherGroup.svelte';
 </script>
 
 <!--
@@ -9,7 +12,7 @@
 	The comments mark where the other slices go, top to bottom as they appear on the page: replace your own line and leave the others.
 -->
 <div class="dock airflow-dock" role="group" aria-label="Simulation controls">
-	<!-- #52 transport bar: pause, speed and the clock -->
+	<TransportBar />
 
 	<!-- #51 legend: the scale of the layer on the Slice -->
 
@@ -19,9 +22,9 @@
 
 	<!-- #51 View: layer, sensitivity, slice height, toggles, units -->
 
-	<!-- #52 Weather -->
+	<WeatherGroup />
 
-	<!-- #52 Openings -->
+	<OpeningsGroup />
 
 	<!-- #53 Devices -->
 
