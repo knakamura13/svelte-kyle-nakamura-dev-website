@@ -29,9 +29,12 @@
 	const height = $derived(sliderRange('sliceHeight', view.units));
 	const heightText = $derived(formatLength(view.sliceHeight, view.units));
 
-	/** The Layer's scale in words, as the legend would draw it for `layer` at `sensitivity`: what a change of either announces. */
-	const scaleOf = (layer: LayerId, sensitivity: number) =>
-		dockLegend({ layer, sensitivity, units: view.units, reference: experience.setup.conditions.indoorTemp }).description;
+	/** The legend as it would draw `layer` at `sensitivity`. */
+	const legendAt = (layer: LayerId, sensitivity: number) => dockLegend({ layer, sensitivity, units: view.units, reference: experience.setup.conditions.indoorTemp });
+	/** The Layer's scale in words: what a change of Layer or sensitivity announces. */
+	const scaleOf = (layer: LayerId, sensitivity: number) => legendAt(layer, sensitivity).description;
+	/** The scale now, in a few words beside the slider that sets it, because the legend may be out of sight by then. */
+	const scale = $derived(legendAt(view.layer, view.sensitivity).range);
 
 	const chooseLayer = (layer: LayerId) => {
 		experience.setView({ layer });
@@ -71,7 +74,7 @@
 			return describeSensitivity(view.layer, sensitivity, scaleOf(view.layer, sensitivity));
 		}}
 	/>
-	<p class="dock-notice">{sensitivityHint(view.layer)}</p>
+	<p class="dock-notice"><strong>Scale: {scale}.</strong> {sensitivityHint(view.layer)}</p>
 </div>
 
 <div class="dock-field view-range">

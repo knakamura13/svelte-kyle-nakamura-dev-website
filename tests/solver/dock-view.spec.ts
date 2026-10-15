@@ -45,9 +45,11 @@ test.describe('the legend in the Dock', () => {
 		expect(metric.ticks.map((tick) => tick.label.value)).toEqual(['0', '0.5', '1.0', '1.5']);
 		expect(metric.ticks.map((tick) => tick.label.text)).toEqual([u('0', 'm/s'), u('0.5', 'm/s'), u('1.0', 'm/s'), u('1.5', 'm/s')]);
 		expect(metric.description).toBe('Air speed, 0 to 1.5 metres per second, from pale to dark blue.');
+		expect(metric.range).toBe(`0 to ${u('1.5', 'm/s')}`);
 
 		const imperial = dockLegend({ layer: 'speed', sensitivity: 0.5, units: 'imperial', reference: 21 });
 		expect(imperial.unit).toBe('mph');
+		expect(imperial.range).toBe(`0 to ${u('3.4', 'mph')}`);
 		expect(imperial.ticks.map((tick) => tick.label.text)).toEqual([u('0', 'mph'), u('1', 'mph'), u('2', 'mph'), u('3', 'mph')]);
 		expect(imperial.description).toBe('Air speed, 0 to 3.4 miles per hour, from pale to dark blue.');
 	});
@@ -58,6 +60,7 @@ test.describe('the legend in the Dock', () => {
 		expect(metric.ticks.map((tick) => tick.label.value)).toEqual(['18', '20', '22', '24']);
 		expect(metric.midpoint?.label.text).toBe(u('21', '°C'));
 		expect(metric.midpoint?.at).toBe(0.5);
+		expect(metric.range).toBe(`18 to ${u('24', '°C')}`);
 		expect(metric.description).toBe('Temperature, 18 to 24 degrees Celsius, from blue for cooler through grey at 21 degrees Celsius to orange for warmer.');
 		expect(metric.caption).toBe(`Blue is cooler and orange is warmer. Grey is where the indoor air started, ${u('21', '°C')}.`);
 
@@ -65,6 +68,7 @@ test.describe('the legend in the Dock', () => {
 		const imperial = dockLegend({ layer: 'temperature', sensitivity: 0.5, units: 'imperial', reference: 21 });
 		expect(imperial.unit).toBe('°F');
 		expect(imperial.midpoint?.label.text).toBe(u('69.8', '°F'));
+		expect(imperial.range).toBe(`64.4 to ${u('75.2', '°F')}`);
 		expect(imperial.ticks.map((tick) => tick.label.value)).toEqual(['66', '68', '72', '74']);
 		expect(imperial.description).toBe('Temperature, 64.4 to 75.2 degrees Fahrenheit, from blue for cooler through grey at 69.8 degrees Fahrenheit to orange for warmer.');
 		// The neutral follows the starting temperature the visitor chose.
@@ -77,6 +81,7 @@ test.describe('the legend in the Dock', () => {
 		expect(metric.ticks.map((tick) => tick.label.value)).toEqual(['0.001', '0.01', '0.1', '1', '10']);
 		expect(metric.ticks.map((tick) => tick.second?.value)).toEqual(['1.2', '12', '120', '1,200', '12,000']);
 		expect(metric.ticks.map((tick) => tick.at)).toEqual([0, 0.25, 0.5, 0.75, 1]);
+		expect(metric.range).toBe(`0.001 to ${u('10', 'ppm')}`);
 		expect(metric.description).toBe(
 			'Particulates (PM2.5), 0.001 to 10 parts per million by mass, which is 1.2 to 12,000 micrograms per cubic metre, on a logarithmic scale, from pale to dark orange.'
 		);
@@ -85,6 +90,7 @@ test.describe('the legend in the Dock', () => {
 		const lower = dockLegend({ layer: 'particulates', sensitivity: 0.5, units: 'metric', reference: 21 });
 		expect(lower.ticks.map((tick) => tick.label.value)).toEqual(['0.001', '0.01', '0.1', '1']);
 		expect(lower.caption).toContain(`The palest is ${u('0.0005', 'ppm')} or less.`);
+		expect(lower.range).toBe(`0.0005 to ${u('5', 'ppm')}`);
 	});
 
 	test('draws direction as a wheel: the four compass points, and a ring at each speed in the unit shown', () => {
@@ -100,6 +106,7 @@ test.describe('the legend in the Dock', () => {
 		expect(metric.wheel?.rings.map((ring) => ring.label.text)).toEqual([u('0.5', 'm/s'), u('1.0', 'm/s'), u('1.5', 'm/s')]);
 		expect(metric.wheel?.background).toContain('conic-gradient');
 		expect(metric.description).toContain('full colour at 1.5 metres per second');
+		expect(metric.range).toBe(`full colour at ${u('1.5', 'm/s')}`);
 		const imperial = dockLegend({ layer: 'direction', sensitivity: 0.5, units: 'imperial', reference: 21 });
 		expect(imperial.wheel?.rings.map((ring) => ring.label.text)).toEqual([u('1', 'mph'), u('2', 'mph'), u('3', 'mph')]);
 		expect(imperial.description).toContain('full colour at 3.4 miles per hour');

@@ -50,6 +50,8 @@ export interface DockLegend {
 	/** The temperature scale's neutral middle. */
 	midpoint?: DockTick;
 	wheel?: DockWheel;
+	/** The scale's two ends in a few words, for a control that sets it: "0 to 1.5 m/s", "64.4 to 75.2 °F", "full colour at 1.5 m/s" for the wheel. */
+	range: string;
 	/** The scale in words: "Air speed, 0 to 1.5 metres per second, from pale to dark blue." For the bar's accessible name and for announcing a new layer. */
 	description: string;
 	/** What the colors mean, for the eye: one or two short sentences under the title. */
@@ -112,6 +114,7 @@ export function dockLegend(options: DockLegendOptions): DockLegend {
 				...base,
 				unit,
 				ticks: speeds(legend.ticks),
+				range: `0 to ${highest.text}`,
 				description: `${legend.title}, 0 to ${highest.spoken}, from pale to dark blue.`,
 				caption: 'Darker blue is faster air.'
 			};
@@ -126,6 +129,7 @@ export function dockLegend(options: DockLegendOptions): DockLegend {
 				rings: speeds(wheel.rings),
 				headings: wheel.headings.map((heading) => ({ ...heading, spoken: SPOKEN_COMPASS[heading.label] }))
 			},
+			range: `full colour at ${highest.text}`,
 			description: `${legend.title}, a colour wheel with north at the top. The hue is the compass heading the air moves toward, and it fades to grey as the air slows, to full colour at ${highest.spoken}.`,
 			caption: 'Hue is the way the air is heading, with north at the top. It fades to grey as the air slows.'
 		};
@@ -139,6 +143,7 @@ export function dockLegend(options: DockLegendOptions): DockLegend {
 			...base,
 			unit: 'ppm above, µg/m³ below',
 			ticks: legend.ticks.map((tick) => labelled(tick.at, ppm(tick.value), micrograms(tick.value))),
+			range: `${significant.format(lo)} to ${ppm(hi).text}`,
 			description: `${legend.title}, ${significant.format(lo)} to ${ppm(hi).spoken}, which is ${significant.format(ugPerM3FromPpm(lo))} to ${micrograms(hi).spoken}, on a logarithmic scale, from pale to dark orange.`,
 			caption: `Darker orange is more particulates, ten times more at each tick. The palest is ${ppm(lo).text} or less.`
 		};
@@ -156,6 +161,7 @@ export function dockLegend(options: DockLegendOptions): DockLegend {
 		unit: middle.unit,
 		ticks: legend.ticks.map((tick) => labelled(tick.at, formatTemperature(reference + tick.value, units, { digits: tickDigits }))),
 		midpoint: labelled(0.5, middle),
+		range: `${low.value} to ${high.text}`,
 		description: `${legend.title}, ${low.value} to ${high.spoken}, from blue for cooler through grey at ${middle.spoken} to orange for warmer.`,
 		caption: `Blue is cooler and orange is warmer. Grey is where the indoor air started, ${middle.text}.`
 	};

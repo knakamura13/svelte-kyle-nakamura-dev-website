@@ -168,6 +168,7 @@ test.describe('the View group and the legend', () => {
 		const legend = legendOf(page);
 		const probe = view.locator('.stage-label[data-tone="probe"]');
 		// A probe on the Stage, so that its label has a speed to write.
+		await view.scrollIntoViewIfNeeded();
 		const box = (await view.boundingBox())!;
 		for (const [x, y] of [
 			[0.5, 0.55],
@@ -226,6 +227,9 @@ test.describe('the View group and the legend', () => {
 		await expect(slider).toHaveValue('-1');
 		await expect(valueOf(page, 'airflow-sensitivity')).toHaveText('0.5×');
 		await expect(slider).toHaveAttribute('aria-valuetext', '0.5 times');
+		// The scale it sets is said beside it too, because the legend may be out of sight, higher in the Dock, while the slider is used.
+		const scaleNote = page.locator('.dock-notice', { hasText: 'Scale:' });
+		await expect(scaleNote).toContainText('Scale: 0 to 3.4 mph.');
 		const ticks = await legend.locator('.legend-ticks').innerText();
 
 		// Three quick presses are one announcement, of where the slider came to rest.
@@ -256,10 +260,12 @@ test.describe('the View group and the legend', () => {
 		await expect(valueOf(page, 'airflow-sensitivity')).toHaveText('0.25×');
 		await expect(legend.getByRole('img')).toHaveAccessibleName(scale('speed', 0.25));
 		await expect(legend.getByRole('img')).toHaveAccessibleName(/^Air speed, 0 to 1\.7 miles per hour/);
+		await expect(scaleNote).toContainText('Scale: 0 to 1.7 mph.');
 		await page.keyboard.press('End');
 		await expect(valueOf(page, 'airflow-sensitivity')).toHaveText('4×');
 		await expect(legend.getByRole('img')).toHaveAccessibleName(scale('speed', 4));
 		await expect(legend.getByRole('img')).toHaveAccessibleName(/^Air speed, 0 to 27 miles per hour/);
+		await expect(scaleNote).toContainText('Scale: 0 to 27 mph.');
 		await expect(live(page)).toHaveText(describeSensitivity('speed', 4, scale('speed', 4)));
 		await expect(live(page)).toContainText('only stronger flow shows in strong colour');
 
@@ -270,6 +276,8 @@ test.describe('the View group and the legend', () => {
 		await expect(valueOf(page, 'airflow-sensitivity')).toHaveText('0.25×');
 		await expect(live(page)).toHaveText(describeSensitivity('temperature', 0.25, scale('temperature', 0.25)));
 		await expect(legend.getByRole('img')).toHaveAccessibleName(scale('temperature', 0.25));
+		await expect(scaleNote).toContainText(`Scale: ${dockLegend({ layer: 'temperature', sensitivity: 0.25, units: 'imperial', reference: START.reference }).range}.`);
+		await expect(scaleNote).toContainText('Scale: 67.1 to 72.5 °F.');
 	});
 
 	test('the slice height slider moves the Slice while the simulation is paused, and its reading follows the unit shown', async ({ page }) => {
