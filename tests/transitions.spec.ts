@@ -34,7 +34,7 @@ async function watchTransitions(page: Page, mode: 'native' | 'missing' | 'throws
 
 const settled = async (page: Page) => {
 	await expect.poll(() => page.evaluate(() => document.documentElement.dataset.routeTransition ?? null)).toBeNull();
-	expect(await page.evaluate(() => document.documentElement.style.scrollBehavior)).toBe('');
+	await expect.poll(() => page.evaluate(() => document.documentElement.style.scrollBehavior)).toBe('');
 };
 const storyResumeLink = (page: Page) => page.locator('.case-end').getByRole('link', { name: 'Résumé' });
 
@@ -109,6 +109,56 @@ test.describe('route transitions', () => {
 		await page.goForward();
 		await expect(page).toHaveURL(/\/resume$/);
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText(/Résumé,\s*in full\./);
+		await settled(page);
+	});
+
+	test('back pressed as soon as a transitioned link changes the URL returns to the page being left', async ({ page }) => {
+		test.setTimeout(60_000);
+		// #44: Back while the link navigation is held open inside startViewTransition. The URL has already
+		// changed (pushState ran first). Calling history.back() from that call is the same moment as
+		// goBack() as soon as the URL changes, and it makes the flaky WebKit/Chromium failure happen every time.
+		await page.addInitScript(() => {
+			const native = document.startViewTransition?.bind(document);
+			Object.defineProperty(document, 'startViewTransition', {
+				configurable: true,
+				value: (update: () => Promise<void> | void) => {
+					const transition = native
+						? native(update)
+						: (void update?.(), { ready: Promise.resolve(), updateCallbackDone: Promise.resolve(), finished: Promise.resolve(), skipTransition() {} });
+					if (location.pathname === '/resume' && !Reflect.get(window, '__disarm')) history.back();
+					return transition;
+				}
+			});
+		});
+		for (let attempt = 0; attempt < 5; attempt++) {
+			await page.goto('/projects/learning-korean');
+			// The capsule is measured on mount, so this waits until the client router is alive.
+			await page.locator('.capsule.pill-ready').waitFor();
+			await page.evaluate(() => {
+				const link = document.querySelector('.case-end a[href="/resume"]');
+				if (!(link instanceof HTMLAnchorElement)) throw new Error('missing résumé link');
+				link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0, view: window }));
+			});
+			await expect(page).toHaveURL(/\/projects\/learning-korean$/);
+			await expect(page).toHaveTitle('Learning Korean — Kyle Nakamura');
+			await expect(page.getByRole('heading', { level: 1 })).toHaveText(/Learning Korean,/);
+			await settled(page);
+		}
+		// The interrupted navigation must not leave the router stuck.
+		await page.evaluate(() => Reflect.set(window, '__disarm', true));
+		await storyResumeLink(page).waitFor();
+		await page.evaluate(() => {
+			const link = document.querySelector('.case-end a[href="/resume"]');
+			if (!(link instanceof HTMLAnchorElement)) throw new Error('missing résumé link');
+			link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0, view: window }));
+		});
+		await expect(page).toHaveURL(/\/resume$/);
+		await expect(page).toHaveTitle('Résumé — Kyle Nakamura');
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText(/Résumé,\s*in full\./);
+		await settled(page);
+		await page.goBack();
+		await expect(page).toHaveURL(/\/projects\/learning-korean$/);
+		await expect(page).toHaveTitle('Learning Korean — Kyle Nakamura');
 		await settled(page);
 	});
 
