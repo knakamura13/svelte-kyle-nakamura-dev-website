@@ -41,7 +41,7 @@
 		<DevicesPanel />
 	</DockGroup>
 
-	<DockGroup id="dock-probes" title="Probes and smoke" hint="{experience.probes.length} of {MAX_PINS} probes" open>
+	<DockGroup id="dock-probes" title="Probes and smoke" hint="{experience.probes.length} of {MAX_PINS} probes">
 		<ProbeControls>
 			<SmokeControls />
 		</ProbeControls>
