@@ -39,11 +39,11 @@
 	<div class="dock-actions" role="group" aria-label="Whole setup">
 		<button type="button" class="pill" onclick={() => experience.restart()}>
 			<svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M4.5 10a5.5 5.5 0 1 0 1.9-4.2M4.5 3.5v3.3h3.3" /></svg>
-			Restart
+			{experience.acknowledged === 'restart' ? 'Restarted' : 'Restart'}
 		</button>
 		<button type="button" class="pill" onclick={() => experience.reset()}>
 			<svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M7.5 5.5 4 9l3.5 3.5M4 9h7.2a4 4 0 0 1 0 8H8" /></svg>
-			Reset
+			{experience.acknowledged === 'reset' ? 'Reset done' : 'Reset'}
 		</button>
 		<button type="button" class="pill primary" onclick={() => experience.copyLink()}>
 			<svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M8.6 11.4a3 3 0 0 0 4.2 0l2.4-2.4a3 3 0 0 0-4.2-4.2l-.8.8M11.4 8.6a3 3 0 0 0-4.2 0L4.8 11a3 3 0 0 0 4.2 4.2l.8-.8" /></svg>
