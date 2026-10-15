@@ -362,7 +362,12 @@ test.describe('the Probe list', () => {
 			),
 			{ timeout: 20_000 }
 		);
-		// What the eye gets is not read a second time, and nothing in it is a symbol a screen reader says badly.
+		// What the eye gets is not read a second time, and nothing in it is a symbol a screen reader says badly. The sentence is for the ear only: it takes up no room on the page.
+		const room = await sentence.evaluate((el) => {
+			const box = el.getBoundingClientRect();
+			return { width: box.width, height: box.height };
+		});
+		expect(room.width <= 1 && room.height <= 1, `the sentence is visually hidden (${room.width} by ${room.height})`).toBe(true);
 		await expect(row.locator('.spot-facts')).toHaveAttribute('aria-hidden', 'true');
 		await expect(row.locator('.probe-id')).toHaveAttribute('aria-hidden', 'true');
 		expect((await sentence.textContent()) ?? '').not.toMatch(/[°µ³<−]/);

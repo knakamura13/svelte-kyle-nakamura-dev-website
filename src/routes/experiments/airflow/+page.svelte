@@ -121,7 +121,7 @@
 
 	<p id="stage-help" class="sr-only">
 		The 3D view can be focused. When it is, the arrow keys rotate it, plus and minus zoom, and zero resets it. In Probe or Emit
-		mode, which you choose in the Probes and smoke controls under the view, the arrow keys move a cursor over the air instead:
+		mode, which you choose in the Probes and smoke group of controls, the arrow keys move a cursor over the air instead:
 		Enter pins a probe, or starts and stops smoke, at the cursor, Shift makes the steps bigger, and Escape puts the cursor away.
 		With a mouse, point to read the air, click to pin a probe, and press and hold to release smoke.
 	</p>
