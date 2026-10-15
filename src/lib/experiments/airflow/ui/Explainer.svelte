@@ -68,8 +68,9 @@
 			<li>The four homes are single-story and rectangular, with fixed furniture. Doors and windows stay where they are drawn.</li>
 			<li>
 				A window’s free area is less than its frame. Published figures put a double-hung or sliding window at about 40 to 50&nbsp;% of its frame and a single casement sash
-				at about 80&nbsp;%. The model uses half for a double-hung window and a sliding door, and all of the frame for a casement and a door, so a casement passes more air
-				here than those figures suggest. Every opening also uses one discharge coefficient, 0.62, although measured windows range from 0.2 to 1.
+				at about 80&nbsp;%. The model uses half of the frame for a double-hung window and a sliding door, about 80&nbsp;% for a casement, and all of it for a door. The
+				casement figure is one maker’s measurement, on Australian aluminium windows, and the open sash can funnel or shield the opening in a wind, which the model does not
+				do. Every opening also uses one discharge coefficient, 0.62, although measured windows range from 0.2 to 1.
 			</li>
 			<li>Turbulence is modelled, not resolved. Swirls smaller than a few centimetres, and the thin layers of air at walls, are approximated.</li>
 			<li>

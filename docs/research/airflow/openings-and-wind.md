@@ -276,6 +276,8 @@ Implementation default (judgement, not a per-type value): Cd = 0.62 on the geome
 
 Method of [S26] (Breezway Technical Bulletin, 9 August 2012, Australian aluminium windows): fraction = ventilation area / total window area including the frame, counting only portions with an unimpeded view perpendicular to the wall (views through glass count as blocked); sill obstruction ignored. It is a vendor document, not a code.
 
+Used in the model (2026-10-14, issue 47): 0.8 for a casement (`OPENING_LIMITS` in `src/lib/experiments/airflow/homes/types.ts`), the top of the measured 0.78 to 0.80, with the single-source status above; 0.5 for a double-hung window and a sliding door; 1 for a swinging door.
+
 Angle dependence for a side-hung casement (geometry, derived, not sourced and not executed): with sash width W and height H opened to angle theta, the gap between the free edge and the opposite jamb is H * 2 * W * sin(theta/2); it equals the frame width at theta = 60 degrees. The sash obstructs the stream, so Cd must fall with angle ([S12], [S11]).
 
 ## 4. Typical dimensions

@@ -3,8 +3,10 @@ import { DEVICE_MODELS, FAN_MODELS } from '../../src/lib/experiments/airflow/dev
 import type { DeviceModel } from '../../src/lib/experiments/airflow/devices/types';
 import { planById } from '../../src/lib/experiments/airflow/homes/plans';
 import { SCENARIOS } from '../../src/lib/experiments/airflow/scenarios';
+import { windowOpening } from '../../src/lib/experiments/airflow/scene/deviceMath';
 import { World, type BackendFactory } from '../../src/lib/experiments/airflow/sim/world';
 import { CpuBackend } from '../../src/lib/experiments/airflow/solver/cpu/backend';
+import { AIR } from '../../src/lib/experiments/airflow/solver/types';
 import { LIMITS, MAX_DEVICES, type Setup } from '../../src/lib/experiments/airflow/state';
 
 const make: BackendFactory = (config, initial) => new CpuBackend({ ...config, scalarSubsteps: undefined }, initial);
@@ -63,6 +65,16 @@ test.describe('scenario presets', () => {
 		}
 	});
 
+	test('only the stack-effect scenario opens a casement, which passes 0.8 of its frame: one that opens another has its flow and its notice to recheck', () => {
+		const opened = SCENARIOS.flatMap((preset) => {
+			const plan = planById(preset.setup.plan)!;
+			// A window fan holds its window open while it runs.
+			const open = new Set([...Object.keys(preset.setup.openings), ...preset.setup.devices.flatMap((d) => (d.opening ? [d.opening] : []))]);
+			return plan.openings.filter((o) => o.kind === 'casement' && open.has(o.id)).map((o) => `${preset.id}: ${o.id}`);
+		});
+		expect(opened).toEqual(['stack-effect: clerestory-window']);
+	});
+
 	test('cross-ventilation: the wind comes in at the west windows and leaves at the east ones, and a closed bedroom door stops the flow through that bedroom', async () => {
 		const preset = scenario('cross-ventilation');
 		const world = await create(preset.setup);
@@ -95,6 +107,27 @@ test.describe('scenario presets', () => {
 		expect(low).toBeGreaterThan(0.02);
 		expect(high).toBeLessThan(-0.02);
 		expect(Math.abs(low + high) / low).toBeLessThan(0.15);
+
+		// The flow itself, against the standard stack formula for these openings' open areas and heights: Q = Cd A sqrt(2 g H dT / T),
+		// with A = A1 A2 / sqrt(A1^2 + A2^2) for two openings in series. The clerestory is a casement, which opens 0.8 of its frame, so it is
+		// the smaller area and sets the flow. The solver gives 0.87 of the formula here (0.264 m³/s against 0.302), and gave 0.86 when
+		// the casement opened its whole frame (0.306 m³/s against 0.357): the flow follows the open area as the formula does.
+		const opening = (id: string) => world.raster.openings.find((o) => o.spec.id === id)!;
+		const lowIds = ['living-north-window-1', 'living-north-window-2'];
+		const lowArea = lowIds.reduce((sum, id) => sum + opening(id).area(1), 0);
+		const highArea = opening('clerestory-window').area(1);
+		expect(opening('clerestory-window').spec.kind).toBe('casement');
+		expect(highArea, 'the clerestory passes 0.8 of its 1.2 m by 0.45 m frame').toBeCloseTo(1.2 * 0.45 * 0.8, 9);
+		const centre = (id: string) => {
+			const region = windowOpening(opening(id).spec);
+			return (region.y0 + region.y1) / 2;
+		};
+		const rise = centre('clerestory-window') - centre(lowIds[0]);
+		const { indoorTemp, outdoorTemp } = preset.setup.conditions;
+		const formula = AIR.cd * ((lowArea * highArea) / Math.hypot(lowArea, highArea)) * Math.sqrt((2 * AIR.g * rise * (indoorTemp - outdoorTemp)) / (indoorTemp + 273.15));
+		console.log(`stack effect: the formula gives ${formula.toFixed(3)} m³/s, the solver ${(low / formula).toFixed(3)} of it`);
+		expect(low / formula).toBeGreaterThan(0.8);
+		expect(low / formula).toBeLessThan(0.95);
 		world.dispose();
 	});
 

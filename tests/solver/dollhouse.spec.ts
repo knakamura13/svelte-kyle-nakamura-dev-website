@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { rasterizePlan } from '../../src/lib/experiments/airflow/homes/rasterize';
-import type { HomePlan } from '../../src/lib/experiments/airflow/homes/types';
+import { OPENING_LIMITS, type HomePlan } from '../../src/lib/experiments/airflow/homes/types';
 import { validatePlan } from '../../src/lib/experiments/airflow/homes/validate';
 import { coveredSpan, doorSwing, frameLayouts, frameSpan, openRegion, openingPanels, spanArea, wallPieces, wallRuns, type Span } from '../../src/lib/experiments/airflow/scene/wallPieces';
 
@@ -18,14 +18,14 @@ const PLAN: HomePlan = {
 	],
 	walls: [{ axis: 'z', at: 3.6, from: 0, to: 4.8 }],
 	openings: [
-		{ id: 'awning', name: 'Awning', kind: 'casement', placement: { facade: 'north', center: 0.65 }, width: 0.6, height: 0.6, sill: 1.4, maxOpen: 1, anchor: 'bottom' },
+		{ id: 'awning', name: 'Awning', kind: 'casement', placement: { facade: 'north', center: 0.65 }, width: 0.6, height: 0.6, sill: 1.4, maxOpen: OPENING_LIMITS.casement.maxOpen, anchor: 'bottom' },
 		{ id: 'hung', name: 'Double-hung', kind: 'double-hung', placement: { facade: 'north', center: 1.8 }, width: 1, height: 1.2, sill: 0.9, maxOpen: 0.5, anchor: 'bottom' },
 		{ id: 'slider-end', name: 'Slider', kind: 'sliding-door', placement: { facade: 'north', center: 4.5 }, width: 1.6, height: 2.1, sill: 0, maxOpen: 0.5, anchor: 'end' },
 		{ id: 'patio', name: 'Patio door', kind: 'sliding-door', placement: { facade: 'south', center: 1.8 }, width: 1.8, height: 2.1, sill: 0, maxOpen: 0.5, anchor: 'start' },
 		{ id: 'front', name: 'Front door', kind: 'door', placement: { facade: 'south', center: 4.8 }, width: 0.9, height: 2.1, sill: 0, maxOpen: 1, anchor: 'end' },
 		{ id: 'hopper', name: 'Upper sash', kind: 'double-hung', placement: { facade: 'west', center: 3.4 }, width: 0.8, height: 1.2, sill: 0.9, maxOpen: 0.5, anchor: 'top' },
-		{ id: 'side', name: 'Casement', kind: 'casement', placement: { facade: 'west', center: 1.2 }, width: 0.8, height: 1.2, sill: 0.9, maxOpen: 1, anchor: 'start' },
-		{ id: 'east', name: 'Casement', kind: 'casement', placement: { facade: 'east', center: 2.4 }, width: 0.6, height: 1, sill: 1, maxOpen: 1, anchor: 'end' },
+		{ id: 'side', name: 'Casement', kind: 'casement', placement: { facade: 'west', center: 1.2 }, width: 0.8, height: 1.2, sill: 0.9, maxOpen: OPENING_LIMITS.casement.maxOpen, anchor: 'start' },
+		{ id: 'east', name: 'Casement', kind: 'casement', placement: { facade: 'east', center: 2.4 }, width: 0.6, height: 1, sill: 1, maxOpen: OPENING_LIMITS.casement.maxOpen, anchor: 'end' },
 		{ id: 'inner', name: 'Bedroom door', kind: 'door', placement: { axis: 'z', at: 3.6, center: 2.4 }, width: 0.9, height: 2.05, sill: 0, maxOpen: 1, anchor: 'start' }
 	],
 	furniture: [{ id: 'bed', name: 'Bed', x: 4.4, z: 1.2, w: 1.4, d: 1.4, h: 0.55 }]
@@ -84,7 +84,10 @@ test('a lower sash rises, an upper sash lowers, a slider moves away from its anc
 	expect((motion('hopper') as { by: number }).by).toBeLessThan(0);
 	expect((motion('patio') as { by: number }).by).toBeGreaterThan(0);
 	expect((motion('slider-end') as { by: number }).by).toBeLessThan(0);
-	for (const id of ['awning', 'side', 'east', 'front', 'inner']) expect((motion(id) as { angle: number }).angle).toBeCloseTo(Math.PI / 2, 9);
+	// A door opens all of its frame, which is a leaf turned square to its wall. A casement opens 0.8 of it, so its leaf turns less far: seen straight on it
+	// covers the part of the frame the solver keeps shut, and the picture says what the solver does.
+	for (const id of ['front', 'inner']) expect((motion(id) as { angle: number }).angle).toBeCloseTo(Math.PI / 2, 9);
+	for (const id of ['awning', 'side', 'east']) expect((motion(id) as { angle: number }).angle).toBeCloseTo(Math.acos(1 - OPENING_LIMITS.casement.maxOpen), 9);
 	// Casements swing out.
 	expect(motion('side')).toMatchObject({ toward: 1 });
 	expect(motion('east')).toMatchObject({ toward: -1 });

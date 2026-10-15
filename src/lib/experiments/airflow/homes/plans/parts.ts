@@ -37,7 +37,7 @@ export function doubleHung(id: string, name: string, placement: ExteriorPlacemen
 	return { id, name, kind: 'double-hung', placement, width: 0.9, height: 1.4, sill: 0.9, ...frame, maxOpen: OPENING_LIMITS['double-hung'].maxOpen, anchor: 'bottom' };
 }
 
-/** A casement (or a hopper, anchored at the top): the sash swings out, so the whole frame opens. */
+/** A casement (or an awning or hopper, anchored at the bottom or top): the sash swings out and passes `OPENING_LIMITS.casement.maxOpen` of its frame. */
 export function casement(id: string, name: string, placement: ExteriorPlacement, anchor: OpeningSpec['anchor'], frame: Partial<Frame> = {}): OpeningSpec {
 	return { id, name, kind: 'casement', placement, width: 0.6, height: 1.2, sill: 0.9, ...frame, maxOpen: OPENING_LIMITS.casement.maxOpen, anchor };
 }

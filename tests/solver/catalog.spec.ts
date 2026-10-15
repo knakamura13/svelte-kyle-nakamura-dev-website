@@ -4,7 +4,7 @@ import { FAN_MARKS, PURIFIER_MARKS, fanFlow, purifierCadr } from '../../src/lib/
 import { deviceInputs } from '../../src/lib/experiments/airflow/devices/solver';
 import type { DeviceModel } from '../../src/lib/experiments/airflow/devices/types';
 import { rasterizePlan } from '../../src/lib/experiments/airflow/homes/rasterize';
-import type { HomePlan } from '../../src/lib/experiments/airflow/homes/types';
+import { OPENING_LIMITS, type HomePlan } from '../../src/lib/experiments/airflow/homes/types';
 import { AIR } from '../../src/lib/experiments/airflow/solver/types';
 import type { DeviceState } from '../../src/lib/experiments/airflow/state';
 
@@ -44,8 +44,8 @@ const plan: HomePlan = {
 	walls: [],
 	furniture: [],
 	openings: [
-		{ id: 'west', name: 'West window', kind: 'casement', placement: { facade: 'west', center: 1.5 }, width: 1.2, height: 1.2, sill: 0.9, maxOpen: 1, anchor: 'start' },
-		{ id: 'east', name: 'East window', kind: 'casement', placement: { facade: 'east', center: 1.5 }, width: 1.2, height: 1.2, sill: 0.9, maxOpen: 1, anchor: 'start' }
+		{ id: 'west', name: 'West window', kind: 'casement', placement: { facade: 'west', center: 1.5 }, width: 1.2, height: 1.2, sill: 0.9, maxOpen: OPENING_LIMITS.casement.maxOpen, anchor: 'start' },
+		{ id: 'east', name: 'East window', kind: 'casement', placement: { facade: 'east', center: 1.5 }, width: 1.2, height: 1.2, sill: 0.9, maxOpen: OPENING_LIMITS.casement.maxOpen, anchor: 'start' }
 	]
 };
 

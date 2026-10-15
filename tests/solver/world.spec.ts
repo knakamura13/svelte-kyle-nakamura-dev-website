@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { CFM, type DeviceModel } from '../../src/lib/experiments/airflow/devices/types';
 import { FACADE_BEARING, WIND_AT_EAVES, windPressureCoefficient } from '../../src/lib/experiments/airflow/homes/weather';
-import type { HomePlan } from '../../src/lib/experiments/airflow/homes/types';
+import { OPENING_LIMITS, type HomePlan } from '../../src/lib/experiments/airflow/homes/types';
 import { CpuBackend } from '../../src/lib/experiments/airflow/solver/cpu/backend';
 import { AIR } from '../../src/lib/experiments/airflow/solver/types';
 import { World, type BackendFactory } from '../../src/lib/experiments/airflow/sim/world';
@@ -19,8 +19,8 @@ const plan: HomePlan = {
 	walls: [],
 	furniture: [],
 	openings: [
-		{ id: 'west', name: 'West window', kind: 'casement', placement: { facade: 'west', center: 1.5 }, width: 1.2, height: 1.2, sill: 0.9, maxOpen: 1, anchor: 'start' },
-		{ id: 'east', name: 'East window', kind: 'casement', placement: { facade: 'east', center: 1.5 }, width: 1.2, height: 1.2, sill: 0.9, maxOpen: 1, anchor: 'start' }
+		{ id: 'west', name: 'West window', kind: 'casement', placement: { facade: 'west', center: 1.5 }, width: 1.2, height: 1.2, sill: 0.9, maxOpen: OPENING_LIMITS.casement.maxOpen, anchor: 'start' },
+		{ id: 'east', name: 'East window', kind: 'casement', placement: { facade: 'east', center: 1.5 }, width: 1.2, height: 1.2, sill: 0.9, maxOpen: OPENING_LIMITS.casement.maxOpen, anchor: 'start' }
 	]
 };
 
@@ -86,7 +86,7 @@ test.describe('a world for a setup', () => {
 		const dynamic = 0.5 * AIR.rho * eaves * eaves;
 		const windward = dynamic * windPressureCoefficient(270 - FACADE_BEARING.west, 0.5);
 		const leeward = dynamic * windPressureCoefficient(270 - FACADE_BEARING.east, 0.5);
-		const area = 1.2 * 1.2;
+		const area = 1.2 * 1.2 * OPENING_LIMITS.casement.maxOpen;
 		const analytic = AIR.cd * (area / Math.SQRT2) * Math.sqrt((2 * (windward - leeward)) / AIR.rho);
 		const rate = world.raster.openings.find((o) => o.spec.id === 'west')!;
 		const g = world.backend.grid;

@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import { plans } from '../../src/lib/experiments/airflow/homes/plans';
 import { rasterizePlan, type Raster } from '../../src/lib/experiments/airflow/homes/rasterize';
 import {
+	OPENING_LIMITS,
 	PLAN_MODULE,
 	isExterior,
 	squareFeet,
@@ -412,5 +413,38 @@ test.describe('what the scenarios need from the homes', () => {
 
 	test('the one-bedroom has a high window', () => {
 		expect(plan('one-bedroom').openings.some((o) => isWindow(o) && o.sill >= 1.5)).toBe(true);
+	});
+});
+
+test.describe('opening limits', () => {
+	test('a casement opens 0.8 of its frame, in every home, and the other kinds as they were: a double-hung window and a sliding door half, a door all of it', () => {
+		// 0.8 is what the research measured for a single casement sash (78 to 80 %, one vendor bulletin), not the whole frame.
+		expect(OPENING_LIMITS).toEqual({ door: { maxOpen: 1 }, 'sliding-door': { maxOpen: 0.5 }, 'double-hung': { maxOpen: 0.5 }, casement: { maxOpen: 0.8 } });
+		const all = plans.flatMap((plan) => plan.openings.map((spec) => ({ plan: plan.id, spec })));
+		expect(all.filter(({ spec }) => spec.kind === 'casement').length, 'the homes have casements to hold to it').toBeGreaterThan(10);
+		const wrong = all.filter(({ spec }) => spec.maxOpen !== OPENING_LIMITS[spec.kind].maxOpen).map(({ plan, spec }) => `${plan}/${spec.id} is a ${spec.kind} that opens ${spec.maxOpen}`);
+		expect(wrong).toEqual([]);
+	});
+
+	test('a casement at full travel passes 0.8 of its frame in the solver, at any cell size', () => {
+		for (const h of [0.15, 0.2]) {
+			const raster = rasterizePlan(plans.find((p) => p.id === 'house')!, h, { furniture: false });
+			const clerestory = raster.openings.find((o) => o.spec.id === 'clerestory-window')!;
+			expect(clerestory.spec.kind).toBe('casement');
+			// 1.2 m by 0.45 m, hinged at the top: the open part is the top 0.8 of its height, which is 0.36 m of it.
+			expect(Math.abs(clerestory.area(1) - 1.2 * 0.45 * 0.8), `${h} m cells`).toBeLessThan(1e-9);
+		}
+	});
+
+	test('the validator refuses a casement, or any opening, that opens more than its kind does', () => {
+		const home = structuredClone(plans.find((p) => p.id === 'studio')!);
+		expect(validatePlan(home)).toEqual([]);
+		const casement = home.openings.find((o) => o.kind === 'casement')!;
+		casement.maxOpen = 1;
+		expect(validatePlan(home)).toEqual([`${home.id}: ${casement.id} is a casement, which opens at most 0.8 of its frame, not 1`]);
+		casement.maxOpen = 0.8;
+		const hung = home.openings.find((o) => o.kind === 'double-hung')!;
+		hung.maxOpen = 0.8;
+		expect(validatePlan(home)).toEqual([`${home.id}: ${hung.id} is a double-hung, which opens at most 0.5 of its frame, not 0.8`]);
 	});
 });

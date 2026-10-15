@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import type { HomePlan, OpeningSpec } from '../../src/lib/experiments/airflow/homes/types';
+import { OPENING_LIMITS, type HomePlan, type OpeningSpec } from '../../src/lib/experiments/airflow/homes/types';
 import { clampToHome, snapToWindow, tiltFromPointer, windowOpening, wrapDegrees, yawFromPointer } from '../../src/lib/experiments/airflow/scene/deviceMath';
 import { LIMITS, type DeviceState } from '../../src/lib/experiments/airflow/state';
 
@@ -13,7 +13,7 @@ const window = (id: string, kind: OpeningSpec['kind'], placement: OpeningSpec['p
 	width: 0.9,
 	height: 1.2,
 	sill: 0.9,
-	maxOpen: kind === 'double-hung' || kind === 'sliding-door' ? 0.5 : 1,
+	maxOpen: OPENING_LIMITS[kind].maxOpen,
 	anchor
 });
 
@@ -127,7 +127,10 @@ test.describe('snapping a window fan', () => {
 
 	test('a window fan fills the open part of the window at full travel', () => {
 		expect(windowOpening(PLAN.openings[0])).toEqual({ u0: 1.05, u1: 1.95, y0: 0.9, y1: 1.5 });
-		expect(windowOpening(PLAN.openings[1])).toEqual({ u0: 4.05, u1: 4.95, y0: 0.9, y1: 2.1 });
+		// A casement's open part is 0.8 of its frame, grown from its anchor edge.
+		const casement = windowOpening(PLAN.openings[1]);
+		expect(casement).toMatchObject({ u0: 4.05, y0: 0.9, y1: 2.1 });
+		expect(casement.u1).toBeCloseTo(4.05 + 0.9 * OPENING_LIMITS.casement.maxOpen, 9);
 	});
 });
 

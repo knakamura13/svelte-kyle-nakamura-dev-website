@@ -58,12 +58,18 @@ export const isExterior = (placement: Placement): placement is ExteriorPlacement
 /** What can be opened. The kind sets how much of the frame can open at most and how the opening grows. */
 export type OpeningKind = 'door' | 'sliding-door' | 'double-hung' | 'casement';
 
-/** Real limits: a double-hung window or a sliding glass door opens about half its frame, a casement window or a swinging door all of it. */
+/**
+ * How much of its frame each kind opens at most. A double-hung window or a sliding glass door opens about half, because two
+ * panels share the frame and one of them is fixed. A swinging door opens all of it. A casement window opens 0.8: a single sash
+ * passes 78 to 80 % of its frame with the sash perpendicular to the window, the sash and its frame staying in the opening
+ * (one vendor bulletin, measured on Australian aluminium windows: docs/research/airflow/openings-and-wind.md, section 3c).
+ * The plan validator holds every opening to its kind's limit.
+ */
 export const OPENING_LIMITS: Record<OpeningKind, { maxOpen: number }> = {
 	door: { maxOpen: 1 },
 	'sliding-door': { maxOpen: 0.5 },
 	'double-hung': { maxOpen: 0.5 },
-	casement: { maxOpen: 1 }
+	casement: { maxOpen: 0.8 }
 };
 
 export interface OpeningSpec {
