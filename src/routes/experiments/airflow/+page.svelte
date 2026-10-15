@@ -7,6 +7,7 @@
 	import { plans } from '$lib/experiments/airflow/homes/plans';
 	import { linkCatalog, setupFromHash, setupToHash } from '$lib/experiments/airflow/link';
 	import { SCENARIOS } from '$lib/experiments/airflow/scenarios';
+	import Dock from '$lib/experiments/airflow/ui/Dock.svelte';
 	import { detectUnits, formatLength } from '$lib/experiments/airflow/units';
 	import { stage } from '$lib/experiments/ui/stage';
 
@@ -85,30 +86,33 @@
 		</div>
 	</header>
 
-	<figure class="airflow-figure" data-stage-region data-sim={readout.status}>
-		<!-- The view is operated with the arrow keys (see the controller). `application` tells screen readers to pass keys through; Svelte only counts widget roles as interactive. -->
-		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-		<div
-			class="stage-view"
-			role="application"
-			aria-roledescription="3D view"
-			tabindex="0"
-			aria-label="The air in the {experience.plan.name}, drawn as a slice through a cutaway of the home."
-			aria-describedby="stage-help"
-			data-state="pending"
-			use:stage={{ experience, scene: 'airflow', params: experience, readout }}
-		>
-			<div class="stage-labels" aria-hidden="true"></div>
-			<p class="stage-note" data-when="loading">Loading the 3D view…</p>
-			<p class="stage-note" data-when="unsupported">
-				This browser can’t show 3D graphics, so the scene is switched off.
-			</p>
-			<p class="stage-note" data-when="error">The 3D view couldn’t load.</p>
-			<noscript><p class="stage-note stage-note-static">The 3D view needs JavaScript.</p></noscript>
-		</div>
-		<p class="sim-status" role="status" data-status={readout.status}>{status}{#if behind}<span aria-hidden="true" data-behind>{' '}{behind}</span>{/if}</p>
-		<figcaption>{experience.plan.name}. {experience.plan.blurb}</figcaption>
-	</figure>
+	<div class="airflow-card">
+		<figure class="airflow-figure" data-stage-region data-sim={readout.status}>
+			<!-- The view is operated with the arrow keys (see the controller). `application` tells screen readers to pass keys through; Svelte only counts widget roles as interactive. -->
+			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+			<div
+				class="stage-view"
+				role="application"
+				aria-roledescription="3D view"
+				tabindex="0"
+				aria-label="The air in the {experience.plan.name}, drawn as a slice through a cutaway of the home."
+				aria-describedby="stage-help"
+				data-state="pending"
+				use:stage={{ experience, scene: 'airflow', params: experience, readout }}
+			>
+				<div class="stage-labels" aria-hidden="true"></div>
+				<p class="stage-note" data-when="loading">Loading the 3D view…</p>
+				<p class="stage-note" data-when="unsupported">
+					This browser can’t show 3D graphics, so the scene is switched off.
+				</p>
+				<p class="stage-note" data-when="error">The 3D view couldn’t load.</p>
+				<noscript><p class="stage-note stage-note-static">The 3D view needs JavaScript.</p></noscript>
+			</div>
+			<p class="sim-status" role="status" data-status={readout.status}>{status}{#if behind}<span aria-hidden="true" data-behind>{' '}{behind}</span>{/if}</p>
+			<figcaption>{experience.plan.name}. {experience.plan.blurb}</figcaption>
+		</figure>
+		<Dock />
+	</div>
 
 	<div class="case-end">
 		<a class="text-link" href="/experiments"><span aria-hidden="true"><Arrow direction="left" /></span> All experiments</a>

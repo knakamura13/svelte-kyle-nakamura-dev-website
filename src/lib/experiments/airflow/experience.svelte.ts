@@ -57,9 +57,13 @@ export class AirflowExperience extends Experience {
 	/** Particulates in the indoor air when a run starts, ppm. */
 	startingSmoke = $state(0);
 	copied = $state(false);
+	/** Whether the Dock shows the share link to be copied by hand, because the browser would not copy it. The link shown is always the setup's current one. */
+	linkShown = $state(false);
 	readout: AirflowReadout = $state(emptyReadout());
 	bridge: StageBridge = {};
 	private starting: Setup;
+	/** The scenario `starting` is, or null when it is a home the visitor picked or a link's setup. */
+	private startingScenario: string | null = null;
 	private copiedTimer: ReturnType<typeof setTimeout> | undefined;
 
 	constructor(options: AirflowOptions) {
@@ -92,11 +96,16 @@ export class AirflowExperience extends Experience {
 
 	// ---- the home ----
 
+	/** A new home, closed up and empty, in the weather the visitor had. Reset returns to it, not to whatever the visit began with. */
 	selectPlan(id: PlanId) {
 		if (id === this.setup.plan) return;
 		this.setup = { ...blankSetup(id), conditions: { ...this.setup.conditions }, furniture: this.setup.furniture };
+		this.starting = clone(this.setup);
+		this.startingScenario = null;
+		this.startingSmoke = 0;
 		this.scenario = null;
-		this.afterChange(`${this.plans.find((p) => p.id === id)?.name}.`, true);
+		const plan = this.plans.find((p) => p.id === id);
+		this.afterChange(plan ? `${plan.name}. ${plan.blurb}` : '', true);
 	}
 
 	setFurniture(on: boolean) {
@@ -216,16 +225,17 @@ export class AirflowExperience extends Experience {
 
 	// ---- whole-setup actions ----
 
-	/** Starts the simulation over with the same setup: the air is still, the smoke is gone. */
+	/** Starts the simulation over with the same setup: the air is still and the smoke is gone, and the probes stay where they are, reading the new air. */
 	restart() {
-		this.probes = [];
 		this.restarts++;
+		this.announce('Restarted. The air is still and the smoke is gone.');
 		this.wake();
 	}
 
-	/** Back to where this visit started: the scenario, link or blank home it began with. */
+	/** Back to how this home, scenario or link began: its setup as it was first loaded, with the air still. */
 	reset() {
 		this.setup = clone(this.starting);
+		this.scenario = this.startingScenario;
 		this.probes = [];
 		this.selected = null;
 		this.restarts++;
@@ -242,6 +252,7 @@ export class AirflowExperience extends Experience {
 		Object.assign(this.clock, { ...DEFAULT_CLOCK, ...scenario.clock });
 		if (this.reducedMotion) this.clock.paused = true;
 		this.startingSmoke = scenario.smoke ?? 0;
+		this.startingScenario = id;
 		this.probes = [];
 		this.selected = null;
 		this.scenario = id;
@@ -258,6 +269,7 @@ export class AirflowExperience extends Experience {
 	adoptSetup(setup: Setup) {
 		this.setup = clone(setup);
 		this.starting = clone(setup);
+		this.startingScenario = null;
 		this.startingSmoke = 0;
 		this.probes = [];
 		this.selected = null;
@@ -276,22 +288,30 @@ export class AirflowExperience extends Experience {
 		this.wake();
 	}
 
-	/** Copies the link to this setup. Resolves to whether the browser let it. */
+	/** The share link for the setup as it is now, as a full URL. */
+	shareUrl() {
+		return this.options.link(clone(this.setup));
+	}
+
+	/**
+	 * Copies the link to this setup. Resolves to whether the browser let it. When it would not (a page without permission to
+	 * write to the clipboard), `linkShown` turns on, for the Dock to show the link to be copied by hand.
+	 */
 	async copyLink() {
-		const url = this.options.link(clone(this.setup));
 		let ok = false;
 		try {
-			await navigator.clipboard.writeText(url);
+			await navigator.clipboard.writeText(this.shareUrl());
 			ok = true;
 		} catch {
 			ok = false;
 		}
+		clearTimeout(this.copiedTimer);
+		this.linkShown = !ok;
+		this.copied = ok;
 		if (ok) {
-			this.copied = true;
-			clearTimeout(this.copiedTimer);
 			this.copiedTimer = setTimeout(() => (this.copied = false), 2200);
 			this.announce('Link copied.');
-		} else this.announce('The browser would not copy the link. Select it from the address bar instead.');
+		} else this.announce('The browser would not copy the link. It is shown below the buttons, to copy by hand.');
 		return ok;
 	}
 }

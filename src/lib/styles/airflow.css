@@ -2,12 +2,15 @@
 .experiment.airflow { --tint:var(--mist); }
 
 /* The Stage: one live 3D view of the home, in a card. */
-.airflow-figure { margin:0 0 56px; border-radius:22px; background:var(--surface); box-shadow:var(--shadow-card); overflow:clip; }
+/* The card holds the figure (the Stage, where the simulation is, and its caption) and the Dock under it. */
+.airflow-card { margin:0 0 56px; border-radius:22px; background:var(--surface); box-shadow:var(--shadow-card); overflow:clip; }
+.airflow-figure { margin:0; }
 /* The shared Stage rules give it an aspect ratio below 1000px, and with a fixed height that sets its width, so it would overflow its card. */
 .airflow-figure .stage-view { --dock:0px; aspect-ratio:auto; height:clamp(340px,calc(100vh - 190px),660px); }
 .airflow-figure figcaption { padding:0 20px 18px; }
 @media(max-width:700px) {
  .airflow-figure .stage-view { height:min(74vh,560px); }
+ .airflow-dock { padding-inline:16px; }
 }
 
 /* Room names and compass letters are plain text over the picture, so they carry no dot; a probe's label keeps one. */
@@ -15,6 +18,26 @@
 .airflow .stage-label[data-tone="room"]::before,.airflow .stage-label[data-tone="compass"]::before { display:none; }
 .airflow .stage-label[data-tone="compass"] { padding:1px 7px; color:var(--muted); font-size:10px; letter-spacing:.06em; }
 .airflow .stage-label[data-tone="probe"] { --tone:var(--ink); }
+
+/* The Dock: groups of controls under the Stage, each a disclosure that holds a grid of controls. */
+.airflow-dock { gap:0; padding:0 20px 6px; border-top:1px solid var(--rule); }
+.dock-group { border-bottom:1px solid var(--rule); }
+.dock-group:last-child { border-bottom:0; }
+.dock-group>summary { display:flex; align-items:center; gap:12px; min-height:52px; padding:10px 0; list-style:none; cursor:pointer; font-size:13px; font-weight:650; border-radius:8px; }
+.dock-group>summary::-webkit-details-marker { display:none; }
+.dock-group>summary::after { content:''; flex:none; margin-left:auto; width:8px; height:8px; border:solid currentColor; border-width:0 2px 2px 0; transform:rotate(45deg) translateY(-2px); transition:transform 160ms var(--ease); }
+.dock-group[open]>summary::after { transform:rotate(-135deg) translateY(-1px); }
+.dock-group>summary:focus-visible { outline:3px solid var(--focus); outline-offset:2px; }
+.dock-group-hint { font-size:11px; font-weight:500; color:var(--muted); }
+.dock-group-body { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr)); gap:18px 32px; align-items:start; padding:2px 0 22px; }
+.dock-field { display:grid; gap:8px; min-width:0; align-content:start; }
+.dock-label { margin:0; font-size:12px; font-weight:650; }
+.dock-notice { margin:0; font-size:12px; line-height:1.7; color:var(--muted); }
+.dock-notice strong { font-weight:650; color:var(--ink); }
+.dock-link { display:grid; gap:6px; }
+.dock-link input { width:100%; min-height:44px; padding:0 14px; border:0; border-radius:12px; background:var(--dock); box-shadow:inset 0 0 0 1px var(--tile-edge); font:inherit; font-size:12px; color:var(--ink); }
+.dock-link input:focus-visible { outline:3px solid var(--focus); outline-offset:2px; }
+.airflow-dock .dock-actions { justify-content:flex-start; gap:8px; }
 
 /* Where the simulation is, under the Stage. */
 .sim-status { margin:0; padding:12px 20px 14px; font-size:12px; line-height:1.6; color:var(--muted); font-variant-numeric:tabular-nums; }
