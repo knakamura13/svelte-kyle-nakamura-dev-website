@@ -1,9 +1,14 @@
 <script lang="ts">
 	import { useAirflow } from '../experience.svelte';
+	import { MAX_PINS } from '../state';
 	import DevicesPanel from './DevicesPanel.svelte';
 	import DockGroup from './DockGroup.svelte';
+	import Legend from './Legend.svelte';
+	import ViewControls from './ViewControls.svelte';
 	import HomeControls from './HomeControls.svelte';
 	import OpeningsGroup from './OpeningsGroup.svelte';
+	import ProbeControls from './ProbeControls.svelte';
+	import SmokeControls from './SmokeControls.svelte';
 	import TransportBar from './TransportBar.svelte';
 	import WeatherGroup from './WeatherGroup.svelte';
 
@@ -18,13 +23,15 @@
 <div class="dock airflow-dock" role="group" aria-label="Simulation controls">
 	<TransportBar />
 
-	<!-- #51 legend: the scale of the layer on the Slice -->
+	<Legend />
 
 	<DockGroup id="dock-home" title="Home and scenario" hint={experience.plan.name} open>
 		<HomeControls />
 	</DockGroup>
 
-	<!-- #51 View: layer, sensitivity, slice height, toggles, units -->
+	<DockGroup id="dock-view" title="View" open hint="Layer, scale, height, units">
+		<ViewControls />
+	</DockGroup>
 
 	<WeatherGroup />
 
@@ -34,7 +41,11 @@
 		<DevicesPanel />
 	</DockGroup>
 
-	<!-- #54 Probes and smoke -->
+	<DockGroup id="dock-probes" title="Probes and smoke" hint="{experience.probes.length} of {MAX_PINS} probes" open>
+		<ProbeControls>
+			<SmokeControls />
+		</ProbeControls>
+	</DockGroup>
 
 	<!-- #55 Physics -->
 </div>

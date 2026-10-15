@@ -168,7 +168,8 @@
 			{/each}
 		</div>
 		<p class="dock-notice">
-			Rated {ratedText(chosenModel)}.{#if flowNow !== undefined && chosenModel.kind !== 'air-purifier'}
+			Rated {ratedText(chosenModel)}.{#if chosenModel.kind === 'air-purifier'}
+				At this setting it cleans {formatFlow(purifierCadr(chosenModel, chosen.power), units).text}. Only the top speed is published: Sleep, Low and Medium are the top rating times 0.25, 0.5 and 0.75, so a real purifier will differ.{:else if flowNow !== undefined}
 				The solver measures {formatFlow(flowNow, units).text} through its blades now.{/if}
 		</p>
 

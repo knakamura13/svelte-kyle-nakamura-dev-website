@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { DEVICE_MODELS } from '../../src/lib/experiments/airflow/devices/catalog';
 import { plans } from '../../src/lib/experiments/airflow/homes/plans';
 import { World, type BackendFactory } from '../../src/lib/experiments/airflow/sim/world';
 import { CpuBackend } from '../../src/lib/experiments/airflow/solver/cpu/backend';
@@ -101,6 +102,33 @@ for (const plan of plans) {
 					devices: setup.devices.map((d) => ({ ...d, power: rand(), yaw: d.opening || rand() < 0.5 ? d.yaw : Math.floor(rand() * 360) }))
 				};
 				world.apply(changed, 40 * DT);
+				ran = await advance(world, 60, 40, oscillate);
+			}
+			expect.soft(ran, `${where}: the air ran away at step ${ran?.step} (${ran?.fastest} m/s)`).toBeNull();
+			if (!ran) await check(world, where, ['u', 'v', 'w', 'p', 'theta', 'particulates']);
+			world.dispose();
+		}
+	});
+}
+
+/**
+ * The catalog's own purifiers, not the stand-in: the Airmega Mighty's outlet jet is about twice as fast as the stand-in's, and the
+ * Levoit's is a ring. Every size, at any power, among fans, in any weather, changed mid-run, must stay finite too.
+ */
+for (const plan of plans) {
+	test(`${plan.name}: random fans and the catalog's purifiers, at any power, keep the solver finite and divergence-free`, async () => {
+		test.setTimeout(allowed(60000 + 3 * 20000));
+		const catalog = new Map(DEVICE_MODELS.map((m) => [m.id, m]));
+		for (const seed of seeds(60000, plans.indexOf(plan), 0).slice(0, 3)) {
+			const rand = random(seed);
+			const setup: Setup = { ...setupFor(plan, rand), devices: devicesFor(plan, rand, DEVICE_MODELS) };
+			const list = setup.devices.map((d) => `${d.model} at ${d.power.toFixed(2)}${d.opening ? ` in ${d.opening}` : ` at ${d.x.toFixed(1)},${d.z.toFixed(1)}`}`).join('; ');
+			const where = `${plan.id}, seed ${seed}, h ${H}, wind ${setup.conditions.windSpeed} m/s, devices: ${list}`;
+			const world = await World.create(setup, { plans: [plan], models: catalog, make, h: H });
+			const oscillate = (step: number) => world.updateOscillation(step * DT);
+			let ran = await advance(world, 40, 0, oscillate);
+			if (!ran) {
+				world.apply({ ...setup, openings: openingsFor(plan, rand), devices: setup.devices.map((d) => ({ ...d, power: rand() })) }, 40 * DT);
 				ran = await advance(world, 60, 40, oscillate);
 			}
 			expect.soft(ran, `${where}: the air ran away at step ${ran?.step} (${ran?.fastest} m/s)`).toBeNull();

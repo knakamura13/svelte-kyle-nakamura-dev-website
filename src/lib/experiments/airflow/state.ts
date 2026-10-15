@@ -94,7 +94,12 @@ export interface Pin {
 
 export const DEFAULT_CONDITIONS: Conditions = { windFrom: 270, windSpeed: 0, outdoorTemp: 10, indoorTemp: 21, outdoorPm25: 0 };
 
-export const DEFAULT_VIEW: Omit<View, 'units'> = { layer: 'speed', sensitivity: 1, sliceHeight: 1.1, topDown: false, tracers: true, mode: 'look' };
+/**
+ * Sensitivity starts at 0.5, not 1: QA with the visualization harness found that at 1 the speed scale (0 to 3 m/s) shows ordinary
+ * room air nearly the same pale blue as still air, and that 0.5 (0 to 1.5 m/s) shows it better. Below 1 the scale covers less, so
+ * weaker flow shows in stronger color.
+ */
+export const DEFAULT_VIEW: Omit<View, 'units'> = { layer: 'speed', sensitivity: 0.5, sliceHeight: 1.1, topDown: false, tracers: true, mode: 'look' };
 
 export const DEFAULT_CLOCK: Clock = { paused: false, speed: 1 };
 

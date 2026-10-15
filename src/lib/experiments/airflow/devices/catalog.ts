@@ -1,15 +1,17 @@
+import { PURIFIER_MARKS } from './model';
 import { CFM, type DeviceModel, type FanModel, type PurifierModel } from './types';
 
 /**
  * Real fans with the airflow their makers publish, so a device in the sandbox delivers the flow on its spec sheet.
  * Every rating below was read from the cited manufacturer sheet on the date in its `source`, in the units the sheet
- * uses (CFM and inches), and converted here. Nothing is interpolated: a model whose maker publishes only a top-speed
- * figure is left out. The readings, and what could not be confirmed, are in
+ * uses (CFM and inches), and converted here. Nothing is interpolated for a fan: a fan whose maker publishes only a
+ * top-speed figure is left out. The readings, and what could not be confirmed, are in
  * docs/research/airflow/devices-and-particulates.md under "Device ratings".
  *
- * No air purifier is listed yet. `PurifierModel.cadr` needs a clean air delivery rate at Sleep, Low, Medium and High,
- * and the makers and the AHAM Verifide program publish it for the highest speed only (the research note lists the
- * top-speed figures that were confirmed). Adding one needs a decision on where the lower speeds come from.
+ * Three air purifiers are listed, one of each size. Makers and certification listings publish a purifier's clean air delivery
+ * rate (CADR) for the highest speed only, so each model's CADR at Sleep, Low and Medium is DERIVED, not published: the top
+ * speed's figure times the power mark of that speed (0.25, 0.5 and 0.75: `PURIFIER_MARKS`), which takes CADR as proportional to
+ * fan speed. Real units will differ, and each purifier's `source` says what was read, what was derived and what was estimated.
  */
 
 /** Inches in metres. */
@@ -73,8 +75,79 @@ const airKing9155: FanModel = {
 
 export const FAN_MODELS: readonly FanModel[] = [airKing9723, airKing9119, airKing9126, airKing9155];
 
-/** Empty until a purifier's CADR at every speed has a source: see the note at the top. */
-export const PURIFIER_MODELS: readonly PurifierModel[] = [];
+/**
+ * A purifier's CADR at every speed from the one figure its maker or a certification listing publishes, for the highest speed:
+ * Sleep, Low and Medium are that figure times the power mark of the speed. This is an assumption (see the note at the top).
+ */
+const fromTopSpeed = (high: number): PurifierModel['cadr'] => ({
+	sleep: high * PURIFIER_MARKS.sleep,
+	low: high * PURIFIER_MARKS.low,
+	medium: high * PURIFIER_MARKS.medium,
+	high
+});
+
+/**
+ * Levoit Core 300-P (sold as the Core 300), the small one. Smoke CADR 143 cfm at the highest speed: the owner's manual, p. 2,
+ * lists 143 / 153 / 167 cfm for smoke / dust / pollen, and the AHAM record for the Core 300 agrees. "8.7 x 8.7 x 14.2 in" is
+ * read as an upright cylinder 8.7 in across (the drawings, manual pp. 5 and 8). Air goes in through the perforated lower band
+ * all the way round and out through the ring grille on the top face around the control panel (manual p. 5). The sizes of those
+ * openings are not published: the inlet band (about 6 in of the 14.2 in, from just above the base) and the outlet's open area
+ * (a ring 7.8 in across round a 3.6 in disc, as an equivalent round outlet 0.176 m across) are read off an undimensioned drawing.
+ */
+const levoitCore300P: PurifierModel = {
+	id: 'levoit-core-300p',
+	name: 'Levoit Core 300-P air purifier',
+	kind: 'air-purifier',
+	size: 'small',
+	body: { width: 8.7 * IN, depth: 8.7 * IN, height: 14.2 * IN },
+	cadr: fromTopSpeed(143 * CFM),
+	inlet: { from: 0.02, to: 0.02 + 6 * IN },
+	outletDiameter: 0.176,
+	source:
+		'Levoit Core 300-P owner\'s manual, https://levoit.com/cdn/shop/files/HEAPAPLVNUS0161Y_Core_300-p_Air_Purifier_manual_US_A2-241204_1.pdf (read 2026-10-14): smoke CADR 143 cfm at the highest speed (p. 2, Specifications), size 8.7 x 8.7 x 14.2 in (p. 2), inlet and outlet positions (p. 5). Derived, not published: CADR at Sleep, Low and Medium is the top figure times 0.25, 0.5 and 0.75. Estimated from an undimensioned drawing: the inlet band\'s height and the outlet\'s open area.'
+};
+
+/**
+ * Coway Airmega Mighty AP-1512HH, the medium one. Smoke CADR 233 cfm at the highest speed, as the maker's page and the AHAM
+ * directory (2016 and 2018 editions) print it. "16.8 x 18.3 x 9.6 in (W x H x D)", manual p. 1. The slotted outlet grille is
+ * along the top at the back (manual p. 7); no manual says where the main inlet is, and the filters sit as flat panels behind the
+ * front cover, so air is taken to enter at the front. Opening sizes are not published: the inlet is taken as the lower three
+ * quarters of the body's height, and the outlet as a slot about 11.5 in by 2 in (an equivalent round outlet 0.14 m across).
+ */
+const cowayMighty: PurifierModel = {
+	id: 'coway-ap-1512hh',
+	name: 'Coway Airmega Mighty AP-1512HH air purifier',
+	kind: 'air-purifier',
+	size: 'medium',
+	body: { width: 16.8 * IN, depth: 9.6 * IN, height: 18.3 * IN },
+	cadr: fromTopSpeed(233 * CFM),
+	inlet: { from: 0.03, to: 0.34 },
+	outletDiameter: 0.14,
+	source:
+		'Coway Airmega Mighty AP-1512HH, https://cowaymega.com/products/mighty-air-purifier-ap-1512hh and owner\'s manual https://cdn.shopify.com/s/files/1/0351/1864/5383/files/9240281_AP-1512HH__Manual_US__25.11.13.pdf (read 2026-10-14): smoke CADR 233 cfm at the highest speed (the AHAM directory prints the same, no unit on the maker\'s page), size 16.8 x 18.3 x 9.6 in W x H x D (manual p. 1), outlet grille on the top at the back (p. 7). Derived, not published: CADR at the lower speeds is the top figure times the speed\'s power mark. Not published and estimated: where the inlet is (taken as the front, over the lower three quarters of the body) and the size of both openings.'
+};
+
+/**
+ * Coway Airmega 400, the large one. Smoke CADR 376 cfm at the highest speed, from the ENERGY STAR certified-product data
+ * (AP-2015F, certified through an EPA-recognized body); Coway's own page prints 328 with no unit and no certified record
+ * carries it, and the difference is not explained anywhere. "22.8 x 14.8 x 14.8 in" (manual p. 26). The round louvred outlet
+ * grille fills most of the top (manual p. 9); air enters through the perforated side covers over each filter set (pp. 9 and 14).
+ * Opening sizes are not published: the outlet is taken as a round grille 12 in across, the inlet as the side faces above the legs.
+ */
+const cowayAirmega400: PurifierModel = {
+	id: 'coway-airmega-400',
+	name: 'Coway Airmega 400 air purifier',
+	kind: 'air-purifier',
+	size: 'large',
+	body: { width: 14.8 * IN, depth: 14.8 * IN, height: 22.8 * IN },
+	cadr: fromTopSpeed(376 * CFM),
+	inlet: { from: 0.08, to: 0.52 },
+	outletDiameter: 12 * IN,
+	source:
+		'Coway Airmega 400 (AP-2015F): smoke CADR 376 cfm at the highest speed, ENERGY STAR certified-product data, https://data.energystar.gov/resource/gaa3-swy6.json?pd_id=4512742 (read 2026-10-14; Coway\'s page https://cowaymega.com/products/airmega-400 prints 328, no unit, with no certified record behind it); size 22.8 x 14.8 x 14.8 in H x W x D (owner\'s manual https://original.accentuate.io/4791712645255/1590201445072/Coway-Airmega-300-400-Series-Manual.pdf p. 26); outlet grille on top and perforated side covers (pp. 9 and 14). Derived, not published: CADR at Sleep, Low and Medium is the top figure times 0.25, 0.5 and 0.75. Not published and estimated: the sizes of the inlet and outlet.'
+};
+
+export const PURIFIER_MODELS: readonly PurifierModel[] = [levoitCore300P, cowayMighty, cowayAirmega400];
 
 /** Every model the sandbox offers, in picker order. */
 export const DEVICE_MODELS: readonly DeviceModel[] = [...FAN_MODELS, ...PURIFIER_MODELS];
