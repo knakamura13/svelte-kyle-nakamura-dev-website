@@ -101,12 +101,11 @@
 </div>
 
 <style>
-	/* The shared controls are 40px tall, and the Dock asks for 44px to touch. */
-	.view-layer :global(.segment span),
-	.view-units :global(.segment span) {
-		min-height: 44px;
-	}
+	/* The shared slider is 40px tall, and the Dock asks for 44px to touch; its focus ring stands off it as far as the Dock's other controls'. */
 	.view-range :global(input[type='range']) {
 		height: 44px;
+	}
+	.view-range :global(input[type='range']:focus-visible) {
+		outline-offset: 3px;
 	}
 </style>

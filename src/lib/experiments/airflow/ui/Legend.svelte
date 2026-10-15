@@ -14,67 +14,76 @@
 	);
 	/** The ticks in order along the bar, with the temperature scale's neutral middle among them. */
 	const marks = $derived<DockTick[]>([...legend.ticks, ...(legend.midpoint ? [legend.midpoint] : [])].sort((a, b) => a.at - b.at));
-	/** A label at either end lines up with the bar's edge, so that it never hangs outside the Dock. */
-	const edge = (at: number) => (at < 0.04 ? 'start' : at > 0.96 ? 'end' : 'middle');
+	/** How many characters a tick's label is wide, for keeping it on the bar: the longer of its two rows. */
+	const chars = (tick: DockTick) => Math.max(tick.label.value.length, tick.second?.value.length ?? 0);
 </script>
 
 <!--
-	The legend of the Layer on the Slice, always in view: the Stage's scale in the units the visitor reads. The bar is a picture, so its
-	name says the scale in words; the tick labels stay text outside it, with their units for a screen reader (the unit is said once, beside
-	the title, so that the ticks are bare numbers). Direction has no bar: a wheel of headings with the compass letters around it and a ring at
-	each speed, so that a heading can be read from where it sits and not only from its color.
+	The legend of the Layer on the Slice: the Stage's scale in the units the visitor reads. The bar is a picture, so its name says the scale
+	in words; the tick labels stay text outside it, with their units for a screen reader (the unit is said once, beside the title, so that the
+	ticks are bare numbers). Direction has no bar: a wheel of headings with the compass letters around it and a ring at each speed, so that a
+	heading can be read from where it sits and not only from its color. Its layout follows its own width, not the window's, because the Dock
+	is a narrow column beside the Stage on a wide screen and the whole width of the card under it on a narrow one.
 -->
 <div class="dock-legend" role="group" aria-labelledby="airflow-legend-title" data-layer={legend.layer}>
-	<div class="legend-head">
-		<p class="legend-title" id="airflow-legend-title">{legend.title}</p>
-		<p class="legend-unit">{legend.unit}</p>
-	</div>
-
-	{#if legend.wheel}
-		{@const wheel = legend.wheel}
-		<div class="legend-wheel">
-			<div class="wheel-face" role="img" aria-label={legend.description}>
-				<span class="wheel-disc" style:background={wheel.background}></span>
-				<svg class="wheel-rings" viewBox="-50 -50 100 100" aria-hidden="true" focusable="false">
-					{#each wheel.rings as ring (ring.at)}<circle r={ring.at * 50} />{/each}
-				</svg>
-			</div>
-			{#each wheel.headings as heading (heading.label)}
-				<span class="wheel-letter" data-heading={heading.label}><span aria-hidden="true">{heading.label}</span><span class="sr-only">{heading.spoken}</span></span>
-			{/each}
+	<div class="legend-grid" data-layer={legend.layer}>
+		<div class="legend-head">
+			<p class="legend-title" id="airflow-legend-title">{legend.title}</p>
+			<p class="legend-unit">{legend.unit}</p>
 		</div>
-	{:else}
-		<div class="legend-scale">
-			<div class="legend-bar" role="img" aria-label={legend.description} style:background={legend.gradient}></div>
-			<ol class="legend-ticks" data-rows={legend.ticks.some((tick) => tick.second) ? 2 : 1}>
-				{#each marks as tick (tick.at)}
-					<li style:--at={tick.at} data-edge={edge(tick.at)} data-neutral={tick === legend.midpoint ? '' : undefined}>
-						<span class="tick-number">{tick.label.value}</span><span class="sr-only"> {tick.label.unit}</span>
-						{#if tick.second}<span class="tick-second">{tick.second.value}</span><span class="sr-only"> {tick.second.unit}</span>{/if}
-					</li>
-				{/each}
-			</ol>
-		</div>
-	{/if}
 
-	<div class="legend-caption">
-		<p>{legend.caption}</p>
 		{#if legend.wheel}
-			<p class="legend-rings">
-				Rings, from the centre out:
-				{#each legend.wheel.rings as ring, n (ring.at)}<span class="ring-label">{ring.label.text}</span>{n < legend.wheel.rings.length - 1 ? ', ' : '.'}{/each}
-			</p>
+			{@const wheel = legend.wheel}
+			<div class="legend-wheel">
+				<div class="wheel-face" role="img" aria-label={legend.description}>
+					<span class="wheel-disc" style:background={wheel.background}></span>
+					<svg class="wheel-rings" viewBox="-50 -50 100 100" aria-hidden="true" focusable="false">
+						{#each wheel.rings as ring (ring.at)}<circle r={ring.at * 50} />{/each}
+					</svg>
+				</div>
+				{#each wheel.headings as heading (heading.label)}
+					<span class="wheel-letter" data-heading={heading.label}><span aria-hidden="true">{heading.label}</span><span class="sr-only">{heading.spoken}</span></span>
+				{/each}
+			</div>
+		{:else}
+			<div class="legend-scale">
+				<div class="legend-bar" role="img" aria-label={legend.description} style:background={legend.gradient}></div>
+				<div class="legend-marks" aria-hidden="true">
+					{#each marks as tick (tick.at)}<span class="tick-mark" style:--at={tick.at} data-neutral={tick === legend.midpoint ? '' : undefined}></span>{/each}
+				</div>
+				<ol class="legend-ticks" data-rows={legend.ticks.some((tick) => tick.second) ? 2 : 1}>
+					{#each marks as tick (tick.at)}
+						<li style:--at={tick.at} style:--chars={chars(tick)} data-neutral={tick === legend.midpoint ? '' : undefined}>
+							<span class="tick-number">{tick.label.value}</span><span class="sr-only">{' '}{tick.label.unit}</span>
+							{#if tick.second}<span class="tick-second">{tick.second.value}</span><span class="sr-only">{' '}{tick.second.unit}</span>{/if}
+						</li>
+					{/each}
+				</ol>
+			</div>
 		{/if}
+
+		<div class="legend-caption">
+			<p>{legend.caption}</p>
+			{#if legend.wheel}
+				<p class="legend-rings">
+					Rings, from the centre out:
+					{#each legend.wheel.rings as ring, n (ring.at)}<span class="ring-label">{ring.label.text}</span>{n < legend.wheel.rings.length - 1 ? ', ' : '.'}{/each}
+				</p>
+			{/if}
+		</div>
 	</div>
 </div>
 
 <style>
 	.dock-legend {
+		container-type: inline-size;
+		padding: 16px 0 18px;
+		border-bottom: 1px solid var(--rule);
+	}
+	.legend-grid {
 		display: grid;
 		grid-template-areas: 'head' 'scale' 'caption';
 		gap: 12px 32px;
-		padding: 16px 0 18px;
-		border-bottom: 1px solid var(--rule);
 	}
 	.legend-head {
 		grid-area: head;
@@ -98,6 +107,7 @@
 		display: grid;
 		gap: 4px;
 		align-content: start;
+		min-width: 0;
 	}
 	.legend-caption p {
 		margin: 0;
@@ -110,16 +120,41 @@
 		font-variant-numeric: tabular-nums;
 	}
 
-	/* A bar with ticks under it. The ticks stand at their place along it; the labels at either end keep to its edges. */
+	/* A bar with ticks under it: a mark at each value, and its label under it. */
 	.legend-scale {
 		grid-area: scale;
+		position: relative;
 		min-width: 0;
+		max-width: 560px;
 	}
 	.legend-bar {
 		height: 12px;
 		border-radius: 6px;
 		/* The palest end of a scale is close to the page's white, so the bar carries a faint outline. */
 		box-shadow: inset 0 0 0 1px #20322626;
+	}
+	.legend-marks {
+		position: absolute;
+		left: 0;
+		right: 0;
+		top: 12px;
+		height: 0;
+	}
+	.tick-mark {
+		position: absolute;
+		top: 1px;
+		left: calc(var(--at) * 100%);
+		width: 1px;
+		height: 5px;
+		margin-left: -0.5px;
+		background: var(--ink);
+		opacity: 0.55;
+	}
+	/* Where the diverging scale is neutral: its mark is taller, running up through the bar, and its label bolder, so that it reads without the color. */
+	.tick-mark[data-neutral] {
+		top: -12px;
+		height: 18px;
+		opacity: 0.8;
 	}
 	.legend-ticks {
 		position: relative;
@@ -131,49 +166,21 @@
 	.legend-ticks[data-rows='2'] {
 		height: 42px;
 	}
+	/* A label is centered under its mark, but never nearer an end of the bar than half its width (a digit is a ch wide), so that it stays on the bar. */
 	.legend-ticks li {
 		position: absolute;
 		top: 0;
-		left: calc(var(--at) * 100%);
+		left: clamp(calc(var(--chars) * 0.5ch), calc(var(--at) * 100%), calc(100% - var(--chars) * 0.5ch));
 		padding-top: 8px;
 		font-size: 11px;
 		line-height: 1.35;
 		white-space: nowrap;
 		font-variant-numeric: tabular-nums;
+		text-align: center;
 		transform: translateX(-50%);
 	}
-	.legend-ticks li::before {
-		content: '';
-		position: absolute;
-		top: 1px;
-		left: 50%;
-		width: 1px;
-		height: 5px;
-		background: var(--ink);
-		opacity: 0.55;
-	}
-	.legend-ticks li[data-edge='start'] {
-		transform: none;
-	}
-	.legend-ticks li[data-edge='start']::before {
-		left: 0;
-	}
-	.legend-ticks li[data-edge='end'] {
-		transform: translateX(-100%);
-		text-align: right;
-	}
-	.legend-ticks li[data-edge='end']::before {
-		left: auto;
-		right: 0;
-	}
-	/* Where the diverging scale is neutral: its tick is taller and its label bolder, so it reads without the color. */
 	.legend-ticks li[data-neutral] {
 		font-weight: 650;
-	}
-	.legend-ticks li[data-neutral]::before {
-		top: -12px;
-		height: 17px;
-		opacity: 0.8;
 	}
 	.tick-second {
 		display: block;
@@ -184,8 +191,8 @@
 	.legend-wheel {
 		grid-area: scale;
 		position: relative;
-		width: 128px;
-		height: 128px;
+		width: 152px;
+		height: 152px;
 		justify-self: start;
 	}
 	.wheel-face {
@@ -220,30 +227,39 @@
 		line-height: 1;
 	}
 	.wheel-letter[data-heading='N'] {
-		top: 5px;
+		top: 6px;
 		left: 50%;
 		transform: translateX(-50%);
 	}
 	.wheel-letter[data-heading='S'] {
-		bottom: 5px;
+		bottom: 6px;
 		left: 50%;
 		transform: translateX(-50%);
 	}
 	.wheel-letter[data-heading='E'] {
-		right: 6px;
+		right: 7px;
 		top: 50%;
 		transform: translateY(-50%);
 	}
 	.wheel-letter[data-heading='W'] {
-		left: 5px;
+		left: 6px;
 		top: 50%;
 		transform: translateY(-50%);
 	}
 
-	@media (min-width: 760px) {
-		.dock-legend {
-			grid-template-areas: 'head scale' 'caption scale';
+	/* Room for a wheel and its words side by side, in a column about as wide as the Dock is beside the Stage. */
+	@container (min-width: 340px) and (max-width: 619px) {
+		.legend-grid[data-layer='direction'] {
+			grid-template-columns: auto minmax(0, 1fr);
+			grid-template-areas: 'head head' 'scale caption';
+			align-items: center;
+		}
+	}
+	/* The whole width of a card under the Stage: the title and what the colors mean to the left, the scale to the right. */
+	@container (min-width: 620px) {
+		.legend-grid {
 			grid-template-columns: minmax(200px, 260px) minmax(0, 560px);
+			grid-template-areas: 'head scale' 'caption scale';
 			grid-template-rows: auto 1fr;
 			align-items: start;
 		}
