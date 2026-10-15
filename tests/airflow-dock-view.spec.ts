@@ -216,6 +216,25 @@ test.describe('the View group and the legend', () => {
 		await expect(probe.locator('.stage-label-value')).toHaveText(/\smph$/);
 	});
 
+	test('a Scenario that shows another Layer moves the picker and the legend with it, and the picker still works afterwards', async ({ page }) => {
+		await openAirflow(page);
+		const legend = legendOf(page);
+		await expect(page.getByRole('radio', { name: 'Speed', exact: true })).toBeChecked();
+		// The visitor picks a Layer of their own, then a Scenario that shows a different one.
+		await page.getByRole('radio', { name: 'Particulates', exact: true }).check();
+		await expect(legend.locator('.legend-title')).toHaveText('Particulates (PM2.5)');
+		await page.getByRole('button', { name: 'Stack effect', exact: true }).click();
+		await expect(page.getByRole('radio', { name: 'Temperature', exact: true })).toBeChecked();
+		await expect(legend).toHaveAttribute('data-layer', 'temperature');
+		await expect(legend.locator('.legend-title')).toHaveText('Temperature');
+		await page.getByRole('radio', { name: 'Direction', exact: true }).check();
+		await expect(legend).toHaveAttribute('data-layer', 'direction');
+		await page.getByRole('button', { name: 'Cross-ventilation', exact: true }).click();
+		await expect(page.getByRole('radio', { name: 'Speed', exact: true })).toBeChecked();
+		await expect(legend).toHaveAttribute('data-layer', 'speed');
+		await expect(legend.locator('.legend-title')).toHaveText('Air speed');
+	});
+
 	test('colour sensitivity rescales the legend, shows its value, and announces once, after the visitor stops moving it', async ({ page }) => {
 		await openAirflow(page);
 		const slider = sliderOf(page, 'Colour sensitivity');

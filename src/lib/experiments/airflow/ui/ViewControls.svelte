@@ -93,8 +93,8 @@
 </div>
 
 <div class="dock-field">
-	<Switch bind:checked={() => view.topDown, setTopDown} label="Top-down view" />
-	<Switch bind:checked={() => view.tracers, setTracers} label="Tracers" />
+	<Switch checked={view.topDown} onchange={setTopDown} label="Top-down view" />
+	<Switch checked={view.tracers} onchange={setTracers} label="Tracers" />
 	<p class="dock-notice">Tracers are the little dots that drift with the air.</p>
 </div>
 
