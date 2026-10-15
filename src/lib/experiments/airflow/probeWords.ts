@@ -44,7 +44,7 @@ export interface ReadingRow {
 }
 
 export interface Spot {
-	/** "Probe 1", "Under the pointer". */
+	/** "Probe 1". Empty for a point that is named where it is shown (the readout under the pointer), which a screen reader hears the name of before it hears the sentence. */
 	name: string;
 	place: Place;
 	/** The readings, labelled, for the eye. Empty when there is nothing to read: see `message`. */
@@ -70,7 +70,7 @@ export const NOT_IN_AIR = 'This spot is furniture or outside the home, so there 
  */
 export function describeSpot(name: string, point: Point, reading: AirReading | null | undefined, units: UnitSystem): Spot {
 	const place = describePlace(point, units);
-	const head = `${name}, ${place.spoken}.`;
+	const head = name ? `${name}, ${place.spoken}.` : `${place.spoken[0].toUpperCase()}${place.spoken.slice(1)}.`;
 	if (!reading || !reading.inAir) {
 		const message = reading ? NOT_IN_AIR : WAITING;
 		return { name, place, rows: [], message, sentence: `${head} ${message}` };

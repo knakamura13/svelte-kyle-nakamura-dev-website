@@ -48,6 +48,8 @@
 				</li>
 			{/each}
 		</ul>
+		<!-- What the slider is about, for the eye: a screen reader has it already, in the slider's value. -->
+		<p class="smoke-near" aria-hidden="true">{words.near.charAt(0).toUpperCase() + words.near.slice(1)}</p>
 	</div>
 	<p class="dock-notice smoke-about">
 		Strength is how much PM2.5 the source releases each minute, in milligrams, with {how} real sources marked. Press and hold on the air with a mouse to release smoke. With a finger or the keyboard, choose Emit mode above.
@@ -154,6 +156,11 @@
 	}
 	.marks button[aria-pressed='true'] .mark-rate {
 		color: #fff;
+	}
+	.smoke-near {
+		margin: 0;
+		font-size: 12px;
+		font-weight: 650;
 	}
 	.smoke-about {
 		margin-top: 2px;

@@ -62,6 +62,12 @@ test.describe('what the air does at a point', () => {
 		expect(words.place.text).toContain('3.40');
 	});
 
+	test('leaves out the name for a point that is named where it is shown, and starts with where it is', () => {
+		const words = describeSpot('', spot, air(), 'metric');
+		expect(words.sentence.startsWith('1.20 metres east and 3.40 metres south of the north-west corner, at a height of 1.10 metres. Air moving')).toBe(true);
+		expect(words.name).toBe('');
+	});
+
 	test('follows the unit system: miles per hour, degrees Fahrenheit and feet, with the particulates in the same ppm and µg/m³', () => {
 		const words = describeSpot('Probe 2', spot, air({ u: 0.4470, speed: 0.447, averageSpeed: 0.2235, temperature: 21.5 }), 'imperial');
 		expect(words.rows.map((row) => row.value)).toEqual([`toward the east, level`, `1.0${nb}mph`, `0.50${nb}mph`, `70.7${nb}°F`, `0.012${nb}ppm (14${nb}µg/m³)`]);

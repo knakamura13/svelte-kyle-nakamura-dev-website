@@ -46,7 +46,7 @@
 
 	// What is under the pointer or the keyboard cursor, from the scene. It changes with every move, so it is never a live region.
 	const hover = $derived(experience.readout.hover);
-	const hoverSpot = $derived(hover ? describeSpot('Under the pointer', hover, hover, units) : null);
+	const hoverSpot = $derived(hover ? describeSpot('', hover, hover, units) : null);
 
 	// One row for each pinned Probe, by number (a Probe pinned in the place of one that was removed takes its number and its row), whose
 	// reading arrives a few times a second. A reading belongs to a Probe only while it is for the same point: a Probe removed and

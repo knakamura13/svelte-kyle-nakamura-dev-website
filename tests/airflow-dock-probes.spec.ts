@@ -221,7 +221,8 @@ test.describe('with a mouse and no mode', () => {
 		await expect(tile.locator('.spot-facts dt')).toHaveText(FIVE);
 		await expect(tile.locator('.spot-place')).toContainText('of the north-west corner');
 		await expect(tile.locator('[data-key="speed"] dd')).toHaveText(/^\d+(\.\d+)? m\/s$/);
-		await expect(tile.locator('.sr-only')).toHaveText(new RegExp(`^Under the pointer, ${METRES} east and ${METRES} south of the north-west corner`));
+		// Its sentence follows its label ("Under the pointer") and does not say it again.
+		await expect(tile.locator('.sr-only')).toHaveText(new RegExp(`^${METRES} east and ${METRES} south of the north-west corner, at a height of ${METRES}\\. Air `));
 		// Leaving the Stage puts the empty state back.
 		await page.mouse.move(2, 2);
 		await expect(tile).toHaveAttribute('data-state', 'empty');
@@ -421,6 +422,7 @@ test.describe('the Smoke strength', () => {
 		const start = describeStrength(0.5);
 		await expect(range).toHaveAttribute('aria-valuetext', start.spoken);
 		await expect(page.locator('#dock-probes .smoke .field-value')).toHaveText(start.rate.text);
+		await expect(page.locator('#dock-probes .smoke-near'), 'and the eye is told the nearest real source in words').toHaveText('About incense');
 
 		const heard = await record(page, LIVE);
 		await range.focus();
@@ -435,6 +437,10 @@ test.describe('the Smoke strength', () => {
 		await expect(page.locator('#dock-probes .smoke .field-value')).toHaveText(words.rate.text);
 		expect(await heard(), 'one announcement for three presses').toEqual([words.announcement]);
 
+		// Between two sources it says so, and does not claim to be one of them.
+		await range.fill('0.2');
+		await expect(page.locator('#dock-probes .smoke-near')).toHaveText('Between a candle and incense');
+		await expect(live(page)).toHaveText('Smoke strength between a candle and incense, 0.069 milligrams per minute');
 		// At the far ends it is a candle and a cooking burst.
 		await range.fill('0');
 		await expect(live(page)).toHaveText('Smoke strength about a candle, 0.02 milligrams per minute');
@@ -483,9 +489,10 @@ test.describe('the Smoke strength', () => {
 			await expect(pressed).toHaveCount(1);
 			await expect(button).toHaveAttribute('aria-pressed', 'true');
 		}
-		// Frying is announced the way the Dock words it.
+		// Frying is announced the way the Dock words it, and the eye reads it under the marks.
 		await page.getByRole('button', { name: /^Frying / }).click();
 		await expect(live(page)).toHaveText('Smoke strength about frying, 2 milligrams per minute');
+		await expect(page.locator('#dock-probes .smoke-near')).toHaveText('About frying');
 		expect(describeStrength(emissionPosition(2)).announcement).toBe('Smoke strength about frying, 2 milligrams per minute');
 		// Moving the slider off a mark releases the mark.
 		await slider(page).focus();
