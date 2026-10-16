@@ -44,10 +44,10 @@
 .personal .compact-entry,.personal .portfolio-background,.personal .personal-contact,.case-sections>section { transition:opacity 500ms var(--ease),transform 500ms var(--ease); }
 /* Capped stagger (#16 C2): three records, then the story example just after its paragraph. */
 #about .record { transition:opacity 500ms var(--ease),transform 500ms var(--ease); }
-#about.reveal-pending .record { opacity:0; transform:translateY(18px); }
+#about.reveal-pending .record { opacity:0; }
 #about .background-copy .record:nth-child(3) { transition-delay:var(--stagger); }
 #about .background-copy .record:nth-child(4) { transition-delay:calc(var(--stagger) * 2); }
-.case-sections>section.reveal-pending .case-example { opacity:0; transform:translateY(18px); }
+.case-sections>section.reveal-pending .case-example { opacity:0; }
 .case-example { transition:opacity 500ms var(--ease) var(--stagger),transform 500ms var(--ease) var(--stagger); }
 .discover { position:relative; display:inline-block; }
 .discover svg { position:absolute; inset:-6px; width:calc(100% + 12px); height:calc(100% + 12px); overflow:visible; }
