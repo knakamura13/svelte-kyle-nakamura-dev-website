@@ -21,6 +21,25 @@ export function isEligible(from: URL | undefined, to: URL | undefined): boolean 
 	return eligible.has(from.pathname) && eligible.has(to.pathname);
 }
 
+const SHARED = 'korean-project';
+
+function onScreen(el: Element): boolean {
+	const box = el.getBoundingClientRect();
+	return box.width > 0 && box.height > 0 && box.bottom > 0 && box.top < innerHeight && box.right > 0 && box.left < innerWidth;
+}
+
+/** The compact thumbnail or the story figure, when it is already decoded and in view. Never the Project Stack copy. */
+function readyImage(pathname: string): HTMLImageElement | null {
+	const selector = pathname === '/' ? '#korean .korean-thumbnail img' : pathname === STORY ? '.case-figure img' : '';
+	const img = selector ? document.querySelector(selector) : null;
+	if (!(img instanceof HTMLImageElement) || !img.complete || img.naturalWidth <= 0 || !onScreen(img)) return null;
+	return img;
+}
+
+function clearSharedNames() {
+	for (const img of document.images) if (img.style.viewTransitionName === SHARED) img.style.viewTransitionName = '';
+}
+
 let current = 0;
 // The page's own inline scroll-behavior, saved by the first of any overlapping transitions so a
 // later one never "restores" the temporary value an earlier one set.
@@ -69,6 +88,8 @@ export function routeTransition(navigation: OnNavigate): Promise<void> | void {
 			if (id !== current) return;
 			delete root.dataset.routeTransition;
 			delete root.dataset.routeIdentity;
+			delete root.dataset.sharedImage;
+			clearSharedNames();
 			root.style.scrollBehavior = savedScrollBehavior ?? '';
 			savedScrollBehavior = null;
 		};
@@ -89,12 +110,31 @@ export function routeTransition(navigation: OnNavigate): Promise<void> | void {
 			if (identity && identity.bottom > 0 && identity.top < innerHeight) root.dataset.routeIdentity = '';
 			// Smooth scrolling would animate SvelteKit's scroll reset inside the snapshot.
 			root.style.scrollBehavior = 'auto';
+			const from = navigation.from?.url;
+			const to = navigation.to?.url;
+			const pair = !!from && !!to && isHomeStoryPair(from, to);
+			// Name the source before the old snapshot. The destination is named only after scroll restoration,
+			// and only when that image is also ready; otherwise the crossfade stays a plain one.
+			const source = pair ? readyImage(from.pathname) : null;
+			if (source) source.style.viewTransitionName = SHARED;
 			viewTransition = document.startViewTransition(async () => {
 				if (dropped) return;
 				clearTimeout(safety);
 				release();
 				// A superseded navigation may never complete; stop waiting so the next transition can run.
-				await Promise.race([navigation.complete, stopWaiting]);
+				try {
+					await Promise.race([navigation.complete, stopWaiting]);
+				} finally {
+					if (dropped || id !== current) clearSharedNames();
+				}
+				if (dropped || id !== current || !source || !to) return;
+				const destination = readyImage(to.pathname);
+				if (!destination) {
+					clearSharedNames();
+					return;
+				}
+				destination.style.viewTransitionName = SHARED;
+				root.dataset.sharedImage = '';
 			});
 			if (dropped) viewTransition.skipTransition();
 			// A skipped transition rejects `ready`; make sure the route still renders.

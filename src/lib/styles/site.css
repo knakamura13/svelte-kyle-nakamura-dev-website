@@ -6,7 +6,7 @@
  --rule:#d9ded6; --tile-edge:#e2e7de; --focus:#376ce4; --selection:#cbe6b5;
  --sage:#e1e9d9; --sage-card:#dfe9d3; --cream:#f0e3cf; --sand:#f4e9d8; --butter:#f5e1bb; --peach:#f1dfcd;
  --shadow-card:0 12px 30px #2032260c; --shadow-card-raised:0 24px 45px #20322620;
- --ease:cubic-bezier(.22,1,.36,1); --ease-stack:cubic-bezier(.22,.75,.25,1);
+ --ease:cubic-bezier(.22,1,.36,1); --ease-stack:cubic-bezier(.22,.75,.25,1); --stagger:50ms;
 }
 
 body:has(.concept) { background:var(--canvas); background-image:none; }
@@ -68,8 +68,14 @@ body:has(.concept)::after { display:none; }
 .text-link::after { content:''; position:absolute; bottom:7px; left:0; right:0; height:1px; background:currentColor; transform:scaleX(0); transform-origin:left; transition:transform 180ms var(--ease); }
 .text-link:hover::after,.text-link:focus-visible::after { transform:scaleX(1); }
 .text-link span { transition:transform 180ms var(--ease); }
-.text-link:hover span { transform:translate(2px,-2px); }
+.text-link svg,.intro-about svg,.source-link svg,.stack-title svg,.email-link svg { transition:transform 180ms var(--ease); }
+.text-link:is(:hover,:focus-visible) svg[data-arrow="up-right"],.source-link:is(:hover,:focus-visible) svg[data-arrow="up-right"],.email-link:is(:hover,:focus-visible) svg[data-arrow="up-right"] { transform:translate(2px,-2px); }
+.text-link:is(:hover,:focus-visible) svg[data-arrow="left"] { transform:translate(-2px,0); }
+.intro-about:is(:hover,:focus-visible) svg[data-arrow="down"] { transform:translate(0,2px); }
+.stack-card:is(:hover,:focus-visible) svg[data-arrow="down-right"] { transform:translate(2px,2px); }
 .source-link { font-size:11px; min-height:44px; padding-block:13px; color:var(--muted)!important; }
+.source-link:is(:hover,:focus-visible) { color:var(--ink)!important; }
+.capsule>a:active,.capsule>button:active,.close-contact:active,.contact-options button:active { scale:.97; transition:scale 120ms var(--ease); }
 
 .concept-footer { margin:0 5%; padding:28px 0 95px; border-top:1px solid var(--rule); display:flex; justify-content:space-between; align-items:center; font-size:12px; }
 .concept-footer>a { font-weight:650; }
@@ -133,7 +139,7 @@ button.stack-card { background:none; padding:0; text-align:left; }
 @media(prefers-reduced-motion:reduce) {
  .concept *, .concept *::before, .concept *::after { animation:none!important; transition:none!important; scroll-behavior:auto!important; }
  .concept .reveal-pending { opacity:1; transform:none; }
- .stack-card:active .stack-face { scale:1; }
+ .stack-card:active .stack-face,.capsule>a:active,.capsule>button:active,.close-contact:active,.contact-options button:active { scale:1; }
 }
 
 /*
@@ -155,3 +161,15 @@ button.stack-card { background:none; padding:0; text-align:left; }
 @keyframes route-out { to { opacity:0; } }
 @keyframes route-in { from { opacity:0; } }
 @media(prefers-reduced-motion:reduce) { ::view-transition-group(*),::view-transition-old(*),::view-transition-new(*) { animation:none!important; } }
+
+/*
+ * Shared image (#43). The name exists only for one home ↔ story navigation, and only when both
+ * captures were eligible (routeTransition.ts). Left-aligned cover keeps the crop coherent while the
+ * square thumbnail becomes the wide story figure. Without data-shared-image the named snapshot, if
+ * any, does not travel on its own.
+ */
+::view-transition-group(korean-project) { animation-duration:240ms; animation-timing-function:var(--ease); }
+::view-transition-image-pair(korean-project) { overflow:clip; }
+::view-transition-old(korean-project),::view-transition-new(korean-project) { height:100%; width:auto; max-width:none; object-fit:cover; object-position:left center; overflow:clip; }
+:root:not([data-shared-image]) ::view-transition-old(korean-project),
+:root:not([data-shared-image]) ::view-transition-new(korean-project) { animation:none; opacity:0; }

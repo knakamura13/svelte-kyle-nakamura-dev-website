@@ -20,7 +20,7 @@
 .compact-entry { display:grid; grid-template-columns:135px 1fr; gap:25px; border-top:1px solid var(--rule); margin-top:38px; padding-top:35px; align-items:start; }
 .compact-image { padding:12px; background:var(--cream); border-radius:10px; overflow:hidden; }
 .compact-image img { border-radius:3px; transition:transform 350ms var(--ease); }
-.compact-image:hover img { transform:scale(1.04); }
+.compact-image:is(:hover,:focus-visible) img { transform:scale(1.02); }
 .personal .compact-entry h3 { font-size:29px; margin:0 0 11px; }
 .compact-entry p { font-size:12px; line-height:1.85; color:var(--muted); }
 .compact-links { display:flex; align-items:center; flex-wrap:wrap; gap:17px; margin-top:10px; }
@@ -42,6 +42,19 @@
 .personal-contact a { text-decoration:underline; text-decoration-color:#97ac96; text-underline-offset:5px; overflow-wrap:anywhere; }
 .personal .portfolio-footer { max-width:1116px; margin:auto; }
 .personal .compact-entry,.personal .portfolio-background,.personal .personal-contact,.case-sections>section { transition:opacity 500ms var(--ease),transform 500ms var(--ease); }
+/* Capped stagger (#16 C2): three records, then the story example just after its paragraph. */
+#about .record { transition:opacity 500ms var(--ease),transform 500ms var(--ease); }
+#about.reveal-pending .record { opacity:0; transform:translateY(18px); }
+#about .background-copy .record:nth-child(3) { transition-delay:var(--stagger); }
+#about .background-copy .record:nth-child(4) { transition-delay:calc(var(--stagger) * 2); }
+.case-sections>section.reveal-pending .case-example { opacity:0; transform:translateY(18px); }
+.case-example { transition:opacity 500ms var(--ease) var(--stagger),transform 500ms var(--ease) var(--stagger); }
+.discover { position:relative; display:inline-block; }
+.discover svg { position:absolute; inset:-6px; width:calc(100% + 12px); height:calc(100% + 12px); overflow:visible; }
+.discover rect { fill:none; stroke:#8eaf7e; stroke-width:1; stroke-dasharray:160; stroke-dashoffset:160; }
+.case-sections>section:not(.reveal-pending) .discover rect { animation:letter-stroke 500ms var(--ease) forwards; }
+@keyframes letter-stroke { to { stroke-dashoffset:0; } }
+@media(prefers-reduced-motion:reduce) { .discover rect { stroke-dashoffset:0; animation:none; } }
 
 /* Page intro: the opening of every page except home. Content remains legible without JavaScript or motion. */
 .page-intro { padding-top:18px; }
@@ -123,7 +136,7 @@
  .case-end { gap:15px; padding-bottom:32px; }
 }
 @media(max-width:360px) { .personal-intro h1 { font-size:51px; } .personal main { padding-inline:20px; } .compact-entry { grid-template-columns:65px 1fr; gap:14px; } .personal .page-intro h1 { font-size:37px; } }
-@media(prefers-reduced-motion:reduce) { .personal .compact-image:hover img { transform:none; } }
+@media(prefers-reduced-motion:reduce) { .personal .compact-image:is(:hover,:focus-visible) img { transform:none; } }
 
 /* The opening is a compact invitation; project evidence has its own reading space. */
 .personal .portfolio-work { padding:35px 0 65px; border-top:1px solid var(--rule); }

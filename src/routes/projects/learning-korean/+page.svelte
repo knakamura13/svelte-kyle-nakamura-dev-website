@@ -80,7 +80,7 @@
 				<p>The first lab asks you to make a sound and locate it on a mouth diagram. An explanation follows your answer. Later steps ask you to change a letter, build a syllable, or read unfamiliar text.</p>
 				<p>This sequence reflects a requirement in the project brief: lessons should be interactive, with explanations arriving as feedback. Each explanation has an immediate connection to something the learner has just tried.</p>
 				<div class="case-example">
-					<p>Make the sound <em>mmm</em> → identify where your mouth closes → discover the letter <span lang="ko">ㅁ</span>.</p>
+					<p>Make the sound <em>mmm</em> → identify where your mouth closes → discover the letter <span class="discover"><span lang="ko">ㅁ</span><svg aria-hidden="true" viewBox="0 0 40 40" focusable="false"><rect x="1" y="1" width="38" height="38" /></svg></span>.</p>
 				</div>
 				<p>The same idea applies to building syllables. Korean packs each one into a square block, and the vowel decides where the consonant goes.</p>
 				<SyllableBuilder />
