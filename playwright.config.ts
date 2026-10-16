@@ -1,5 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
+// The preview process loads the GitHub stub through this variable. A server that is already
+// listening does not inherit it; webServer.url below is how the suite tells those apart.
 const nodeOptions = [process.env.NODE_OPTIONS, '--require ./tests/stub-github-fetch.cjs']
 	.filter((value) => value)
 	.join(' ');
@@ -19,11 +21,12 @@ export default defineConfig({
 	reporter: 'list',
 	use: { baseURL: 'http://127.0.0.1:4173' },
 	webServer: {
-		command: 'yarn build && yarn preview --port 4173 --strictPort --host 127.0.0.1',
-		url: 'http://127.0.0.1:4173',
+		command: 'node tests/ensure-stubbed-preview.mjs',
+		// 200 only when tests/stub-github-fetch.cjs is loaded. Local reuse keeps a listener
+		// only in that case. The command replaces a preview from this repo that does not answer.
+		url: 'http://127.0.0.1:4173/__github_stub_ready__',
 		reuseExistingServer: !process.env.CI,
 		timeout: 120_000,
-		// The repositories route calls GitHub. Stub that host so the suite does not spend the unauthenticated rate limit.
 		env: webServerEnv()
 	},
 	projects: [
