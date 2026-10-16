@@ -1,0 +1,44 @@
+[
+	{
+		"name": "alpha",
+		"html_url": "https://github.com/knakamura13/alpha",
+		"description": "A public repository",
+		"stargazers_count": 4,
+		"private": false
+	},
+	{
+		"name": "beta",
+		"html_url": "https://github.com/knakamura13/beta",
+		"description": null,
+		"stargazers_count": 0
+	},
+	{
+		"name": "gamma",
+		"html_url": "https://github.com/knakamura13/gamma",
+		"stargazers_count": 1
+	},
+	{
+		"name": "delta",
+		"html_url": "https://github.com/knakamura13/delta",
+		"description": "",
+		"stargazers_count": 2
+	},
+	{
+		"name": "epsilon",
+		"html_url": "https://github.com/knakamura13/epsilon",
+		"description": "Fifth",
+		"stargazers_count": null
+	},
+	{
+		"name": "zeta",
+		"html_url": "https://github.com/knakamura13/zeta",
+		"description": "Sixth",
+		"stargazers_count": 8
+	},
+	{
+		"name": "eta",
+		"html_url": "https://github.com/knakamura13/eta",
+		"description": "Seventh, past the limit",
+		"stargazers_count": 9
+	}
+]
