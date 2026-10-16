@@ -158,6 +158,21 @@
 		let last = window.scrollY;
 		let travel = 0;
 		let direction = 0;
+		// WebKit can still be coasting downward when the visitor wheels up. Those scroll
+		// events stay positive, so the nav would remain hidden. Hold it open until the
+		// coasting stops or a new downward wheel begins.
+		let holdShown = false;
+		let coastTimer: ReturnType<typeof setTimeout> | undefined;
+		const onWheel = (event: WheelEvent) => {
+			if (event.deltaY < 0) {
+				hidden = false;
+				travel = 0;
+				direction = 0;
+				holdShown = true;
+			} else if (event.deltaY > 0) {
+				holdShown = false;
+			}
+		};
 		const onScroll = () => {
 			const current = Math.max(0, window.scrollY);
 			const delta = current - last;
@@ -165,6 +180,14 @@
 			if (current < 80 || contactOpen || menuOpen || nav?.matches(':hover, :focus-within')) {
 				hidden = false;
 				travel = 0;
+				holdShown = false;
+				return;
+			}
+			if (holdShown && delta > 0) {
+				clearTimeout(coastTimer);
+				coastTimer = setTimeout(() => {
+					holdShown = false;
+				}, 200);
 				return;
 			}
 			if (Math.sign(delta) !== direction) {
@@ -183,10 +206,14 @@
 			}
 		};
 		window.addEventListener('scroll', onScroll, { passive: true });
+		window.addEventListener('wheel', onWheel, { passive: true });
 		document.addEventListener('pointerdown', outside);
 		return () => {
 			cancelled = true;
+			holdShown = false;
+			clearTimeout(coastTimer);
 			window.removeEventListener('scroll', onScroll);
+			window.removeEventListener('wheel', onWheel);
 			document.removeEventListener('pointerdown', outside);
 			attempt++;
 			clearTimeout(copyTimer);
@@ -212,7 +239,7 @@
 			class="floating-nav"
 			onfocusin={() => (hidden = false)}
 		>
-			<div class="capsule" class:pill-ready={pillReady} bind:this={capsule} onpointerleave={() => (hovered = null)}>
+			<div class="capsule" role="presentation" class:pill-ready={pillReady} bind:this={capsule} onpointerleave={() => (hovered = null)}>
 				<span class="nav-pill" class:moves={pillMoves} class:shown={pillReady} style={pillStyle} aria-hidden="true"></span>
 				<a class="desktop-nav" href="/#work" bind:this={linkEls.work} data-resting={resting === 'work' ? '' : undefined} onclick={closePanels} onpointerenter={pointerOn('work')} onfocus={focusOn('work')} onblur={() => (focused = null)}>Work</a>
 				<a class="desktop-nav" href="/#about" bind:this={linkEls.about} data-resting={resting === 'about' ? '' : undefined} onclick={closePanels} onpointerenter={pointerOn('about')} onfocus={focusOn('about')} onblur={() => (focused = null)}>About</a>

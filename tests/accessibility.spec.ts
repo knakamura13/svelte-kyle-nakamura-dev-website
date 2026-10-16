@@ -11,6 +11,9 @@ for (const path of pages) {
 				await page.setViewportSize({ width, height: 900 });
 				await page.emulateMedia({ reducedMotion: 'reduce' });
 				await page.goto(path);
+				// Contrast is measured against the real type. A fallback font still loading
+				// makes axe report the text as unmeasured.
+				await page.evaluate(() => document.fonts.ready);
 				const { violations, incomplete } = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
 				expect(violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`)).toEqual([]);
 				if (width !== 390) return;
