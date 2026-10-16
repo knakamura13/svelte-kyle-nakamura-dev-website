@@ -1,11 +1,23 @@
 import type { OnNavigate } from '@sveltejs/kit';
 
-/** Routes that take part. The homepage stays out until #16's homepage freeze is lifted. */
+/** Routes that take part with each other. The homepage only pairs with the Learning Korean story. */
 const eligible = new Set(['/projects/learning-korean', '/resume', '/send-money']);
+const STORY = '/projects/learning-korean';
+
+/**
+ * Home to the story, and the story back to `/` or `/#work`. Any position on the home page may be the
+ * starting point. Other home journeys and same-page hash links stay ordinary navigation.
+ */
+function isHomeStoryPair(from: URL, to: URL): boolean {
+	if (from.pathname === '/' && to.pathname === STORY) return !to.hash;
+	if (from.pathname === STORY && to.pathname === '/') return to.hash === '' || to.hash === '#work';
+	return false;
+}
 
 export function isEligible(from: URL | undefined, to: URL | undefined): boolean {
-	if (!from || !to || from.origin !== to.origin) return false;
-	if (from.hash || to.hash || from.pathname === to.pathname) return false;
+	if (!from || !to || from.origin !== to.origin || from.pathname === to.pathname) return false;
+	if (isHomeStoryPair(from, to)) return true;
+	if (from.hash || to.hash) return false;
 	return eligible.has(from.pathname) && eligible.has(to.pathname);
 }
 
@@ -22,7 +34,9 @@ const GATE_TIMEOUT_MS = 500;
  * Progressive same-document View Transition for eligible client-side route changes. The route
  * renders as soon as the browser has captured the old state; the animation never holds input.
  * Every path (unsupported, reduced motion, a thrown or rejected transition, a superseded one)
- * releases the navigation and clears only this navigation's temporary state.
+ * releases the navigation and clears only this navigation's temporary state. A Back or Forward
+ * that arrives while the gate is still held does not release it: doing so would paint the page
+ * being left. That popstate renders the restored page, and the temporary state is cleared.
  */
 export function routeTransition(navigation: OnNavigate): Promise<void> | void {
 	if (typeof document.startViewTransition !== 'function') return;
@@ -41,16 +55,33 @@ export function routeTransition(navigation: OnNavigate): Promise<void> | void {
 	const stopWaiting = new Promise<void>((resolve) => (supersede = resolve));
 
 	return new Promise<void>((release) => {
-		const safety = setTimeout(release, GATE_TIMEOUT_MS);
-		const cleanup = () => {
+		// Set when Back/Forward arrives before this link navigation has committed. Releasing the gate
+		// after that commits the page being left (SvelteKit updates the DOM before it notices the
+		// popstate invalidated the navigation). The popstate navigation renders the restored page.
+		let dropped = false;
+		let viewTransition: ViewTransition | undefined;
+		const safety = setTimeout(() => {
+			if (!dropped) release();
+		}, GATE_TIMEOUT_MS);
+		const restore = () => {
 			clearTimeout(safety);
-			release();
+			window.removeEventListener('popstate', onPop, true);
 			if (id !== current) return;
 			delete root.dataset.routeTransition;
 			delete root.dataset.routeIdentity;
 			root.style.scrollBehavior = savedScrollBehavior ?? '';
 			savedScrollBehavior = null;
 		};
+		const onPop = () => {
+			dropped = true;
+			viewTransition?.skipTransition();
+			restore();
+		};
+		const cleanup = () => {
+			if (!dropped) release();
+			restore();
+		};
+		window.addEventListener('popstate', onPop, true);
 		try {
 			root.dataset.routeTransition = '';
 			// Hold the identity still only if the reader can see it; otherwise it fades with the screen.
@@ -58,22 +89,26 @@ export function routeTransition(navigation: OnNavigate): Promise<void> | void {
 			if (identity && identity.bottom > 0 && identity.top < innerHeight) root.dataset.routeIdentity = '';
 			// Smooth scrolling would animate SvelteKit's scroll reset inside the snapshot.
 			root.style.scrollBehavior = 'auto';
-			const transition = document.startViewTransition(async () => {
+			viewTransition = document.startViewTransition(async () => {
+				if (dropped) return;
 				clearTimeout(safety);
 				release();
 				// A superseded navigation may never complete; stop waiting so the next transition can run.
 				await Promise.race([navigation.complete, stopWaiting]);
 			});
+			if (dropped) viewTransition.skipTransition();
 			// A skipped transition rejects `ready`; make sure the route still renders.
-			transition.ready.catch(release);
-			transition.updateCallbackDone.catch(() => {});
-			transition.finished.then(cleanup, cleanup);
+			viewTransition.ready.catch(() => {
+				if (!dropped) release();
+			});
+			viewTransition.updateCallbackDone.catch(() => {});
+			viewTransition.finished.then(cleanup, cleanup);
 			const reduce = matchMedia('(prefers-reduced-motion: reduce)');
-			const skip = () => transition.skipTransition();
+			const skip = () => viewTransition?.skipTransition();
 			const unlisten = () => reduce.removeEventListener('change', skip);
 			reduce.addEventListener('change', skip, { once: true });
 			// `finished` rejects when the navigation fails; handle both outcomes so nothing goes unhandled.
-			transition.finished.then(unlisten, unlisten);
+			viewTransition.finished.then(unlisten, unlisten);
 		} catch {
 			cleanup();
 		}

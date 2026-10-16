@@ -133,13 +133,28 @@
 	let copyStatus = $derived(copyState === 'success' ? 'Email copied' : copyState === 'failure' ? copyFailure : '');
 
 	onMount(() => {
-		// Measure after fonts load and whenever the capsule changes size (zoom, breakpoint, font swap).
-		// The first placement is instant; travel is enabled only once a position exists.
-		const observer = new ResizeObserver(measure);
+		// A measurement taken while the fallback font is still in use is several pixels
+		// off once the variable font applies. Keep the pill hidden until that settles,
+		// then place it once, and only then allow it to travel.
+		let fontsReady = false;
+		let cancelled = false;
+		const measureIfReady = () => {
+			if (fontsReady) measure();
+		};
+		const observer = new ResizeObserver(measureIfReady);
 		if (capsule) observer.observe(capsule);
-		void document.fonts.ready.then(measure);
-		measure();
-		const enableTravel = requestAnimationFrame(() => requestAnimationFrame(() => (pillMoves = true)));
+		let enableTravel = 0;
+		const place = () => {
+			if (cancelled) return;
+			fontsReady = true;
+			measure();
+			enableTravel = requestAnimationFrame(() => {
+				enableTravel = requestAnimationFrame(() => {
+					if (!cancelled) pillMoves = true;
+				});
+			});
+		};
+		void document.fonts.ready.then(place);
 		let last = window.scrollY;
 		let travel = 0;
 		let direction = 0;
@@ -170,6 +185,7 @@
 		window.addEventListener('scroll', onScroll, { passive: true });
 		document.addEventListener('pointerdown', outside);
 		return () => {
+			cancelled = true;
 			window.removeEventListener('scroll', onScroll);
 			document.removeEventListener('pointerdown', outside);
 			attempt++;
