@@ -126,6 +126,50 @@ test.describe('shared image', () => {
 		await expect.poll(() => named(page)).toEqual([]);
 	});
 
+	test('an ineligible destination keeps the named source snapshot fading with the page', async ({ page }) => {
+		await page.setViewportSize({ width: 390, height: 500 });
+		await page.addInitScript((name) => {
+			const native = document.startViewTransition?.bind(document);
+			Object.defineProperty(document, 'startViewTransition', {
+				configurable: true,
+				value: (update: () => Promise<void> | void) => {
+					const sourceNamed = [...document.images].some((img) => img.style.viewTransitionName === name && !!img.closest('.korean-thumbnail'));
+					if (!native) {
+						void update?.();
+						return { ready: Promise.resolve(), updateCallbackDone: Promise.resolve(), finished: Promise.resolve(), skipTransition() {} };
+					}
+					const transition = native(async () => {
+						await update?.();
+					});
+					const sample = transition.ready.then(() => {
+						const old = getComputedStyle(document.documentElement, `::view-transition-old(${name})`);
+						const rootOld = getComputedStyle(document.documentElement, '::view-transition-old(root)');
+						return {
+							sourceNamed,
+							opacity: old.opacity,
+							animationName: old.animationName,
+							rootAnimationName: rootOld.animationName,
+							shared: document.documentElement.hasAttribute('data-shared-image')
+						};
+					});
+					Object.defineProperty(window, '__fallback', { configurable: true, value: sample });
+					return transition;
+				}
+			});
+		}, SHARED);
+		await page.goto('/#work');
+		await page.locator('#korean h3 a').click();
+		await expect(page).toHaveURL(/\/projects\/learning-korean$/);
+		const figureTop = await page.locator('.case-figure img').evaluate((img) => img.getBoundingClientRect().top);
+		expect(figureTop).toBeGreaterThan(500);
+		const sample = await page.evaluate(async () => Reflect.get(window, '__fallback') as Promise<{ sourceNamed: boolean; opacity: string; animationName: string; rootAnimationName: string; shared: boolean }>);
+		expect(sample.sourceNamed).toBe(true);
+		expect(sample.shared).toBe(false);
+		expect(sample.opacity).not.toBe('0');
+		expect(sample.animationName).toBe(sample.rootAnimationName);
+		expect(sample.rootAnimationName).not.toBe('none');
+	});
+
 	test('reduced motion does not name either image', async ({ page }) => {
 		await page.emulateMedia({ reducedMotion: 'reduce' });
 		const shots = await watchShared(page);
