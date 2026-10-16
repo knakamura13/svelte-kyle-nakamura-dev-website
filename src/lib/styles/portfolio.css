@@ -68,7 +68,7 @@
 .case-sections section>p { font-size:15px; line-height:1.9; margin-bottom:18px; }
 .case-example { border-left:2px solid #8eaf7e; padding:8px 0 8px 25px; margin:30px 0 0; }
 .case-example p:last-child { font-size:16px; line-height:1.8; }
-.case-example [lang="ko"] { font-size:25px; }
+.case-example [lang="ko"] { font-size:25px; line-height:1; display:inline-block; }
 .case-end { border-top:1px solid var(--rule); padding:30px 0 50px; display:flex; justify-content:space-between; gap:20px; }
 @media(max-width:1000px) {
  .portfolio-opening,.portfolio-background { gap:7%; grid-template-columns:minmax(220px,.76fr) minmax(0,1.24fr); }
