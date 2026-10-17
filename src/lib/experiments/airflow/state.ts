@@ -12,6 +12,24 @@ export type LayerId = 'speed' | 'direction' | 'particulates' | 'temperature';
 /** What a drag or a press on the Stage does. A mouse needs no mode (hover reads, a click pins, a hold emits, a drag orbits); touch and keyboard use this toggle. */
 export type PointerMode = 'look' | 'probe' | 'emit';
 
+/** What a click on the 3D world does, picked in the HUD's tool rail. Each tool also sets `View.mode`, which a finger and the keys follow. */
+export type Tool = 'select' | 'build' | 'probe' | 'smoke';
+
+/** Something in the Home the visitor can choose, by id: a door or window, a fan or purifier, or a Probe. */
+export interface Target {
+	kind: 'opening' | 'device' | 'probe';
+	id: string;
+}
+
+/** What the HUD's overlay switcher tints the rooms with: nothing, or one field. */
+export type OverlayId = 'off' | 'speed' | 'temperature' | 'smoke';
+
+/** How the walls stand (the HUD's bottom bar): full height, cut away between the camera and the room it looks into, or down. */
+export type WallMode = 'up' | 'cutaway' | 'down';
+
+/** The graphics quality tier the Advanced panel asks for. `auto` lets the page pick one for the device. */
+export type Quality = 'auto' | 'low' | 'medium' | 'high';
+
 export type UnitSystem = 'imperial' | 'metric';
 
 /** The weather outside and the starting state inside. */
@@ -76,6 +94,12 @@ export interface View {
 	tracers: boolean;
 	mode: PointerMode;
 	units: UnitSystem;
+	/** The HUD's overlay. Until the overlays are drawn, Air speed, Temperature and Smoke pick the slice's layer, and Off hides the slice. */
+	overlay: OverlayId;
+	/** The HUD's wall mode, for the cutaway walls to follow. */
+	walls: WallMode;
+	/** The HUD's graphics quality, for the lighting and post-processing to follow. */
+	quality: Quality;
 }
 
 export interface Clock {
@@ -98,8 +122,11 @@ export const DEFAULT_CONDITIONS: Conditions = { windFrom: 270, windSpeed: 0, out
  * Sensitivity starts at 0.5, not 1: QA with the visualization harness found that at 1 the speed scale (0 to 3 m/s) shows ordinary
  * room air nearly the same pale blue as still air, and that 0.5 (0 to 1.5 m/s) shows it better. Below 1 the scale covers less, so
  * weaker flow shows in stronger color.
+ *
+ * The overlay starts on Air speed, which is today's slice, so the page looks as it did before the HUD. The redesign wants it Off
+ * (the streaks show the air on their own); that is the default to set once the streaks are drawn.
  */
-export const DEFAULT_VIEW: Omit<View, 'units'> = { layer: 'speed', sensitivity: 0.5, sliceHeight: 1.1, topDown: false, tracers: true, mode: 'look' };
+export const DEFAULT_VIEW: Omit<View, 'units'> = { layer: 'speed', sensitivity: 0.5, sliceHeight: 1.1, topDown: false, tracers: true, mode: 'look', overlay: 'speed', walls: 'cutaway', quality: 'auto' };
 
 export const DEFAULT_CLOCK: Clock = { paused: false, speed: 1 };
 
