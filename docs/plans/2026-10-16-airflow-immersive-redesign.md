@@ -113,3 +113,80 @@ Decided by the agent from those answers (Kyle asked for no more questions, and t
 - #61 to #64 and #68 are re-scoped to the new page.
 - #58, #59, #60, #65 and #69 are unchanged.
 - New sub-issues for milestones 1 to 5 are added to #30 after the first check-in confirms the direction.
+
+## Where it stands (2026-10-16, paused)
+
+Kyle paused the project after the first build round. The three milestone agents stopped early, and their work is merged into the working branch, but nothing new is on screen yet: `/experiments/airflow` still shows the Dock page. So the first check-in (screenshots of the new look) has not happened. It comes after milestone 1's rendering is wired in.
+
+**Milestone 1 (look and camera): about a quarter done.**
+- **Done and tested:**
+  - `scene/camera/sims.ts`, the orbit maths. Zoom 0 is eye level at 1.6 m, looking 5° down; zoom 1 is bird's-eye at 75°. The pitch follows the zoom, with a tilt of up to 24° either way. The focus is kept 0.5 m off the walls close in. Motion uses critically damped springs.
+  - `scene/camera/controls.ts` (`SimsCamera`): every input in the spec.
+  - `scene/walls/cutaway.ts`: up, cutaway and down. A wall drops to 0.4 m when the line of sight to the focus crosses it, with hysteresis.
+  - `scene/look/quality.ts`, with `?quality=` to override.
+  - Tests: `tests/solver/sims-camera.spec.ts` and `walls-cutaway.spec.ts`.
+- **Written but never rendered:** `scene/walls/walls.ts` and `scene/look/{boxes,materials,textures}.ts`. They cover per-room paint, skirting, siding, window frames, sills and glass, panelled doors, and procedural oak, tile, plaster, siding, paving, grass and fabric.
+- **Next, in order:**
+  1. `look/lighting.ts`, `post.ts`, `floors.ts`, `furniture.ts`, and a `look/home.ts` that replaces the old dollhouse in `airflowScene.ts`.
+  2. `look/stage.ts`, an airflow-only input host. It needs one type-only change to `EngineLoader` in `engine/experience.svelte.ts`.
+  3. A `slice` view field, off by default.
+  4. The full-screen route. A layout reset cannot escape the root layout, so `src/routes/+layout.svelte` must skip `PortfolioShell` when `page.data.immersive` is set.
+  5. Tests, then the screenshots for the first check-in.
+- **Open:**
+  - In the default view the cutaway rule leaves the west wall standing.
+  - The "Look mode" sentence in `probeWords.ts` will be wrong once the arrow keys pan.
+
+**Milestone 2 (air): the data side done.**
+- **Done and tested: the volume snapshot** (`solver/volume.ts`).
+  - It holds velocity, air share, temperature and PM2.5, averaged over blocks of at most 64,000 cells, with strides chosen per axis. No block is over 0.3 m on any grid the tuner picks.
+  - On the worker it is sent as transferred buffers. On the GPU a `volume` kernel writes it, read back through one reused buffer.
+  - The session opts in with `volume: true`: up to 10 a second while running, once when paused. `particles: false` turns off the old tracers.
+  - Cost per snapshot: on the GPU, +0.06 ms (two-bedroom at 0.15 m) to +0.31 ms (house at 0.075 m); on the worker, +0.33 to +0.75 ms.
+  - Tests: `tests/solver/volume.spec.ts` and `tests/gpu/volume.gpu.ts`. The GPU matches the CPU within 2e-7.
+- **Fixed: a GPU snapshot race.**
+  - A snapshot read `fanCount`, the time, the steps and dt after its `await`, so a fan added mid-read made it read a null buffer. Before the fix, 6 of 25 rounds threw and 17 more returned the wrong fan count.
+  - Regression test: `tests/gpu/snapshots.gpu.ts`.
+- **Not started:** `scene/air/` (streaks, the smoke volume and puffs, the overlays, `createAir`) and its hook in `airflowScene.ts`.
+- **Plan for the renderers:**
+  - The CPU picks spawn points, weighted by speed and by open windows with inflow, and uploads them as a texture.
+  - A full-resolution wall mask is built from `raster.geometry` and rebuilt when `World.revision` changes.
+  - One depth pre-pass is shared by the smoke and overlay ray-marches.
+
+**Milestone 3 (HUD): the logic done.**
+- **Done and tested:**
+  - `scene/selection.ts`. It picks the door, window, device or probe under the pointer from the plan's geometry, anchors menus, outlines the chosen and hovered thing, and draws the carried ghost, which R rotates. `ToolInput` routes clicks by tool. It is not yet connected to `airflowScene.ts`.
+  - `state.ts`: `Tool` and `Target`, plus `overlay`, `walls` and `quality` in the view state. `overlay` starts on Air speed so today's page is unchanged.
+  - `ui/hud/{tools,presets,compass,menus,layout,catalog}.ts`.
+  - Tests: `tests/solver/hud.spec.ts`.
+- **To check before launch:** the outdoor air presets (0, 35, 150 and 350 µg/m³) and the wind speeds were picked from the US EPA bands and the Beaufort scale from memory, not looked up.
+- **Not started:**
+  - Every Svelte component: the top bar, the tool rail, the catalog drawer with thumbnails and dragging, the context menus, the inspector, the weather widget, the bottom bar, About, Advanced, the probe cards, the smoke chips and the phone layout.
+  - The page mount and `tests/airflow-hud.spec.ts`.
+- **Resume in order:**
+  1. The store: tool, selection, hover and menu state, and `yaw` and `moving` on the drag preview.
+  2. The scene wiring, about 8 lines in `airflowScene.ts`.
+  3. The components.
+- **Open:** until the cutaway hook is connected, picking can select something behind a full-height wall, or inside a wall that is cut away.
+
+**Assets (milestone 4): researched, nothing downloaded.** The recommended CC0 set, with every link, licence and size, is in `docs/research/airflow/cc0-assets.md`:
+
+| Asset | Download size |
+| --- | --- |
+| Kenney Furniture Kit | about 5.0 MB |
+| Kenney Nature Kit | about 9.8 MB |
+| Poly Haven Laminate Floor 02, Interior Tiles and Beige Wall 001, at 1K | 3.78 MB together |
+| ambientCG Grass004 at 1K (or a procedural lawn) | 11.0 MB |
+| Poly Haven Kloppenheim 06 pure-sky HDRI at 1K | 1.17 MB |
+| **Total** | **about 30.7 MB** |
+
+What the page itself loads is an estimated 10 to 15 MB. The downloads wait for Kyle's explicit OK.
+
+**Checks on the merged tree (2026-10-16):**
+- The type check is at its baseline.
+- The full Node suite: 453 passed, 1 skipped.
+- Every airflow e2e spec, in Chromium on a production build: 130 passed.
+- The GPU suite: 37 passed on the milestone 2 branch. It was not rerun after merging milestones 1 and 3, which do not touch the GPU code.
+
+**Notes for the agents that resume this:**
+- A worktree may start from `main`, where merging this branch conflicts (`playwright.config.ts`, `RangeField.svelte`). Point the empty branch at this branch's tip instead.
+- Vite refuses to serve a `node_modules` that is a symlink into another worktree. Either allow it in a scratch config (`server.fs.allow`), as the milestone 3 agent did, or install `node_modules` in the worktree.

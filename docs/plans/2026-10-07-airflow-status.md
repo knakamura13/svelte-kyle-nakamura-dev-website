@@ -1,5 +1,7 @@
 # Airflow experiment (issue #30): status and how to resume
 
+> 2026-10-16: the page is being redesigned as a full-screen, Sims 4-like experience. `docs/plans/2026-10-16-airflow-immersive-redesign.md` has the decisions, the milestones and where each one stands, and it supersedes everything below about the page and the Dock. What this doc says about the engine, the Homes, the Devices and the Scenarios still holds.
+
 First written 2026-10-07, rewritten 2026-10-09 at the end of a one-hour session, updated 2026-10-12 after step 1 of the resume order, given decisions for known issues 2, 3 and 4 on 2026-10-14, and updated again that day after step 2, #47 and #48. It supersedes the Phases checklist in [2026-10-07-airflow-experiment.md](2026-10-07-airflow-experiment.md), which still shows the original plan.
 
 Branch. All the work is on `knakamura/issue-30-completion-7a3fb7`, in the worktree `.claude/worktrees/funny-bassi-7c3d37`. It is the only worktree for this issue: on 2026-10-09 the original issue-30 worktree and the 13 agent worktrees were removed, after their commits were merged here and their uncommitted changes were either brought across or recorded in known issue 11. The branch is pushed to origin and a draft pull request carries it. Do not merge that pull request until the page exists, because the experiment is not reachable from the site yet.
