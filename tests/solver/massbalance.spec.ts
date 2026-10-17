@@ -1,9 +1,11 @@
 import { expect, test } from '@playwright/test';
-import { CPU_CELL } from '../../src/lib/experiments/airflow/sim/backends';
 import { WorkerBackend } from '../../src/lib/experiments/airflow/solver/cpu/proxy';
 import { inMemoryWorker } from './channel';
 import { expectBalance } from './massBalanceChecks';
 import { runBalance } from './massBalanceScenario';
+
+/** A cell size the page's tuner settles the larger Homes on when the solver runs in a worker (the Studio gets 0.15 m there). */
+const CELL = 0.2;
 
 /**
  * The particulate mass balance through `World` on the CPU solver behind a Web Worker, which is what the page runs where there is no
@@ -17,11 +19,11 @@ import { runBalance } from './massBalanceScenario';
 test.describe('the particulate mass balance through World', () => {
 	test.describe.configure({ timeout: 300_000 });
 
-	test(`on the CPU solver behind a worker at ${CPU_CELL} m, the cell size the page uses there: smoke in, released, carried out, cleaned and settled all add up`, async () => {
+	test(`on the CPU solver behind a worker at ${CELL} m, a cell size the tuner settles the larger Homes on there: smoke in, released, carried out, cleaned and settled all add up`, async () => {
 		const worker = inMemoryWorker();
-		const run = await runBalance({ make: (config, initial) => WorkerBackend.create(worker.port, config, initial), h: CPU_CELL, seconds: 180, every: 1 });
+		const run = await runBalance({ make: (config, initial) => WorkerBackend.create(worker.port, config, initial), h: CELL, seconds: 180, every: 1 });
 		expect(run.kind).toBe('cpu');
-		expectBalance(run, `worker ${CPU_CELL} m`);
+		expectBalance(run, `worker ${CELL} m`);
 		expect(worker.terminated, 'the world was disposed, and that stopped the worker').toBe(true);
 	});
 });
