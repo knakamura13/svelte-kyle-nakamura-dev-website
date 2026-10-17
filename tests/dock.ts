@@ -29,9 +29,9 @@ export async function dockGroup(page: Page, title: string): Promise<Locator> {
 	const group = page.locator('.dock-group', { has: page.locator('summary', { hasText: title }) });
 	await expect(group, `a group called ${title}`).toHaveCount(1);
 	if ((await group.getAttribute('open')) === null) {
-		await group.locator('summary').click();
-		// A click makes the browser take the next focus for a pointer's, which shows no ring: a key press says the keyboard is in use again, as it is for a test that tabs.
-		await page.keyboard.press('Shift');
+		// Opened the way a keyboard opens it. A click would make the browser take the next focus for a pointer's, which shows no ring (Chromium takes a lone Shift as the keyboard being back, but Firefox and WebKit do not), and the specs that follow check the ring.
+		await group.locator('summary').focus();
+		await page.keyboard.press('Enter');
 	}
 	await expect(group).toHaveAttribute('open', '');
 	return group;

@@ -339,8 +339,10 @@ test.describe('the Probe list', () => {
 		await remove.click();
 		await expect(note).toHaveCount(0);
 		await expect(count(page)).toHaveText(`3 of ${MAX_PINS} probes`);
+		// The page has scrolled to the Remove button, so the Stage is somewhere else on the screen: find air again, as the fifth click did. The first spot that had air is 3 cm from a wall, and a pixel's difference in where the Stage sits puts a click on the wall in Firefox and WebKit.
+		const free = await hoverAir(page);
 		await page.waitForTimeout(700);
-		const second = await stageAt(page, spot);
+		const second = await stageAt(page, free);
 		await page.mouse.click(second.x, second.y);
 		await expect(rows(page)).toHaveCount(MAX_PINS);
 		await expect(rows(page).locator('.probe-name'), 'the number that was free is the one it takes, and the list is in order').toHaveText(['Probe 1', 'Probe 2', 'Probe 3', 'Probe 4']);
