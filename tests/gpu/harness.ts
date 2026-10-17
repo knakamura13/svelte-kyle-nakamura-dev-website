@@ -6,10 +6,10 @@ const ROOT = resolve(import.meta.dirname, '../..');
 /** Any port: requests never leave the browser, they are answered by `page.route`. */
 const ORIGIN = 'http://127.0.0.1:4999';
 
-/** Bundles a browser entry (a file in tests/gpu/entries) with `$lib` resolved, as one ES module. */
+/** Bundles a browser entry (a file in tests/gpu/entries, or any file of the repo given by its path from the root) with `$lib` resolved, as one ES module. */
 export async function bundle(entry: string) {
 	const result = await build({
-		entryPoints: [resolve(ROOT, 'tests/gpu/entries', entry)],
+		entryPoints: [entry.includes('/') ? resolve(ROOT, entry) : resolve(ROOT, 'tests/gpu/entries', entry)],
 		bundle: true,
 		format: 'esm',
 		write: false,
@@ -22,13 +22,15 @@ export async function bundle(entry: string) {
 
 /**
  * Opens a blank page at a 127.0.0.1 origin (a secure context, so WebGPU is exposed) with the bundled entry loaded,
- * and fails unless a real adapter is present.
+ * and fails unless a real adapter is present. `scripts` are more bundled files the entry loads by path (a Web Worker's script),
+ * keyed by the path they are served at: `{ '/worker.js': await bundle('src/.../worker.ts') }`.
  */
-export async function openHarness(page: Page, entry: string) {
+export async function openHarness(page: Page, entry: string, scripts: Record<string, string> = {}) {
 	const script = await bundle(entry);
 	await page.route(`${ORIGIN}/**`, (route) => {
 		const url = new URL(route.request().url());
 		if (url.pathname === '/entry.js') return route.fulfill({ contentType: 'text/javascript', body: script });
+		if (url.pathname in scripts) return route.fulfill({ contentType: 'text/javascript', body: scripts[url.pathname] });
 		return route.fulfill({ contentType: 'text/html', body: '<!doctype html><meta charset="utf-8"><title>gpu</title><script type="module" src="/entry.js"></script>' });
 	});
 	const errors: string[] = [];

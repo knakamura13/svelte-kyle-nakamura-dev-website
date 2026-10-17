@@ -26,7 +26,7 @@ test.beforeAll(async ({ browser }) => {
 const run = (options: Omit<BalanceOptions, 'make'>) =>
 	page.evaluate((options) => (window as unknown as { balance: { run(options: object): Promise<BalanceRun> } }).balance.run(options), options);
 
-test('the Studio at 0.15 m, the cell size the page uses on the GPU: smoke in, released, carried out, cleaned and settled all add up', async () => {
+test('the Studio at 0.15 m, a cell size the page runs on the GPU: smoke in, released, carried out, cleaned and settled all add up', async () => {
 	const result = await run({ h: 0.15, seconds: 180 });
 	expect(result.kind).toBe('webgpu');
 	expectBalance(result, 'GPU 0.15 m');
