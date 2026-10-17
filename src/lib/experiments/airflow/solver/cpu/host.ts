@@ -80,8 +80,8 @@ export class SolverHost {
 }
 
 /** Every array in a snapshot is a fresh copy the solver does not keep, so all of them can move. */
-function snapshotBuffers({ slice, tracers, smoke, fanFlow }: Snapshot) {
-	return transferList(slice?.u, slice?.v, slice?.w, slice?.speed, slice?.theta, slice?.particulates, slice?.fluid, tracers, smoke, fanFlow);
+function snapshotBuffers({ slice, tracers, smoke, volume, fanFlow }: Snapshot) {
+	return transferList(slice?.u, slice?.v, slice?.w, slice?.speed, slice?.theta, slice?.particulates, slice?.fluid, tracers, smoke, volume?.flow, volume?.scalars, fanFlow);
 }
 
 function fieldBuffers({ u, v, w, p, theta, particulates }: FieldState) {

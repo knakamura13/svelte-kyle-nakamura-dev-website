@@ -4,6 +4,7 @@ import { emissionRate } from '../emission';
 import type { AirflowReadout, HoverReading, ProbeReading, RoomReading } from '../readouts';
 import { BackendUnavailable, type BackendFailure, type Snapshot } from '../solver/backend';
 import { POINT_FIELDS, type Slice } from '../solver/types';
+import type { Volume } from '../solver/volume';
 import type { Clock, Pin, Setup, View } from '../state';
 import { RollingMean, SliceHistory } from './history';
 import type { Tuning } from './tuner';
@@ -39,6 +40,13 @@ export interface SessionOptions {
 	 * `cellSize` is how that size is asked for, so it must be the choice that this tuner belongs to. Absent, the grid stays as `cellSize` gave it.
 	 */
 	tuning?: Tuning;
+	/**
+	 * Read the whole box at a coarser grid (`latest.volume`) for renderers that fill the rooms: up to ten times a second while the
+	 * clock runs, and once more for the moment it stopped at. Off unless asked for, because it is a pass over the grid and a read of up to 1.5 MB.
+	 */
+	volume?: boolean;
+	/** Keep the backend's own tracers and smoke particles and read them back with each snapshot (`latest.tracers`, `latest.smoke`). On unless turned off. */
+	particles?: boolean;
 }
 
 /** Longest real time one frame's steps may take before the session lets the simulation run slower than real time, s. */
@@ -53,6 +61,8 @@ const MAX_CELLS_PER_STEP = 3;
 /** Real seconds between snapshot reads, and between per-room reads (which cost a pass over the grid). */
 const SNAPSHOT_INTERVAL = 1 / 20;
 const ROOM_INTERVAL = 0.5;
+/** Real seconds between volume reads while the clock runs: the renderers that draw it blend from one to the next, and ten a second is as often as they need. */
+export const VOLUME_INTERVAL = 0.1;
 /** Real seconds between writes of the numbers the Dock shows, so a reactive page is not rewritten every frame. */
 const READOUT_INTERVAL = 0.12;
 
@@ -66,14 +76,29 @@ export const SMOKE = 6_000;
  */
 export const SMOKE_DENSE = 0.3;
 
+/** The newest reads of the running world, for the scene to draw. */
+export interface Latest {
+	slice: Slice | null;
+	tracers: Float32Array | null;
+	smoke: Float32Array | null;
+	/** The whole box on a coarser grid, when the session reads it (`SessionOptions.volume`). */
+	volume: Volume | null;
+	/** The simulated second `volume` shows. */
+	volumeAt: number;
+	version: number;
+}
+
 /**
  * Owns the running simulation for the page: builds a world for the setup, keeps it in step with changes, steps it
  * each drawn frame, reads back snapshots and turns them into the readouts the page shows. The scene draws from
  * `latest` and asks for hover readings; nothing here touches three.js.
  */
 export class SimulationSession {
-	/** What the scene draws: the newest slice and particles. `version` bumps when they change. */
-	latest: { slice: Slice | null; tracers: Float32Array | null; smoke: Float32Array | null; version: number } = { slice: null, tracers: null, smoke: null, version: 0 };
+	/**
+	 * What the scene draws: the newest slice, particles and volume, all of the running world (they are cleared when another world takes
+	 * over). `version` bumps when any of them changes; `volumeAt` is the simulated second the volume shows.
+	 */
+	latest: Latest = { slice: null, tracers: null, smoke: null, volume: null, volumeAt: 0, version: 0 };
 	world: World | null = null;
 	/** Simulated seconds since the world was built. */
 	simTime = 0;
@@ -97,6 +122,9 @@ export class SimulationSession {
 	private pending = false;
 	private sinceSnapshot = 1;
 	private sinceRooms = 1;
+	private sinceVolume = 1;
+	/** The simulated moment the last volume read was asked for, as text; empty when none has been, or the last one came back without a volume. */
+	private volumeKey = '';
 	private sinceReadout = 1;
 	private stepCost = 0.002;
 	private rate = 0;
@@ -161,6 +189,7 @@ export class SimulationSession {
 				this.failedKey = '';
 				// A new world has no picture yet: ask for one at once, paused or not.
 				this.requestKey = '';
+				this.volumeKey = '';
 				this.appliedSignature = JSON.stringify(setup);
 				this.simTime = 0;
 				this.owed = 0;
@@ -168,7 +197,7 @@ export class SimulationSession {
 				this.history.clear();
 				this.probeHistory.clear();
 				this.lastEmission = '';
-				this.latest = { slice: null, tracers: null, smoke: null, version: this.latest.version + 1 };
+				this.latest = { slice: null, tracers: null, smoke: null, volume: null, volumeAt: 0, version: this.latest.version + 1 };
 				const { readout } = this.options;
 				readout.physics = { ...readout.physics, backend: world.backend.kind, cellSize: world.raster.spec.h, cells: world.backend.fluidCells, time: 0, mass: null, reducedDetail: world.backend.kind === 'cpu' };
 				readout.status = this.params.clock.paused ? 'paused' : 'running';
@@ -176,7 +205,7 @@ export class SimulationSession {
 				this.retuned = this.retuning;
 				this.retuning = '';
 				this.sayTuning(this.options.tuning?.note(world.backend.kind) ?? '');
-				world.backend.configureParticles({ tracers: TRACERS, smoke: SMOKE, scale: SMOKE_DENSE, seed: 1 });
+				if (this.options.particles !== false) world.backend.configureParticles({ tracers: TRACERS, smoke: SMOKE, scale: SMOKE_DENSE, seed: 1 });
 				this.unwatch = world.backend.onFailure?.((failure) => this.lose(world, failure)) ?? null;
 				old?.dispose();
 				this.pending = false;
@@ -363,7 +392,7 @@ export class SimulationSession {
 			this.stepCost = 0.8 * this.stepCost + 0.2 * (spent / steps);
 		}
 		this.owed = Math.min(Math.max(0, this.owed - steps * dt), stable);
-		backend.stepParticles(Math.min(real, 0.05));
+		if (this.options.particles !== false) backend.stepParticles(Math.min(real, 0.05));
 		// Simulated seconds sent per real second, averaged over `RATE_WINDOW`: what the Physics panel and the clock show.
 		if (real > 0) this.rate += (1 - Math.exp(-real / RATE_WINDOW)) * ((steps * dt) / real - this.rate);
 	}
@@ -371,27 +400,43 @@ export class SimulationSession {
 	private requestSnapshot(world: World, dtReal: number) {
 		this.sinceSnapshot += dtReal;
 		this.sinceRooms += dtReal;
+		this.sinceVolume += dtReal;
 		const { params } = this;
-		// What the visitor has just asked to see (a probe pinned, the slice moved, a new world's first picture) is read at
-		// once. The throttle below counts drawn frames, and a paused page draws none, so it would never get there.
+		const paused = params.clock.paused;
+		// The volume, like the slice, is keyed by what it would show: here the simulated moment. While the clock runs it is read ten
+		// times a second; once the clock stops it is read once more, at once, for the moment it stopped at, and not again until the
+		// air moves (a new world's key is empty, so its first picture includes one).
+		const moment = String(this.simTime);
+		const volume = this.options.volume === true && moment !== this.volumeKey && (paused || this.volumeKey === '' || this.sinceVolume >= VOLUME_INTERVAL);
+		// What the visitor has just asked to see (a probe pinned, the slice moved, a new world's first picture, the air where it stopped) is
+		// read at once. The throttle below counts drawn frames, and a paused page draws none, so it would never get there.
 		const wants = `${params.view.sliceHeight}|${params.probes.map((p) => `${p.id}@${p.x},${p.y},${p.z}`).join(';')}`;
-		const asked = wants !== this.requestKey;
+		const asked = wants !== this.requestKey || (paused && volume);
 		if (this.pending || (!asked && this.sinceSnapshot < SNAPSHOT_INTERVAL)) return;
 		this.requestKey = wants;
 		this.sinceSnapshot = 0;
 		const wantRooms = this.sinceRooms >= ROOM_INTERVAL;
 		if (wantRooms) this.sinceRooms = 0;
+		if (volume) {
+			this.volumeKey = moment;
+			this.sinceVolume = 0;
+		}
 		const generation = this.generation;
 		const probes = params.probes.map((p) => ({ ...p }));
 		const points = new Float32Array(probes.flatMap((p) => [p.x, p.y, p.z]));
+		const at = this.simTime;
+		const revision = world.revision;
 		this.pending = true;
-		const snapshot = world.backend.snapshot({ sliceY: params.view.sliceHeight, particles: true, rooms: wantRooms });
+		const snapshot = world.backend.snapshot({ sliceY: params.view.sliceHeight, particles: this.options.particles !== false, rooms: wantRooms, volume });
 		const sampled = probes.length ? world.backend.samplePoints(points) : Promise.resolve(new Float32Array(0));
 		void Promise.all([snapshot, sampled])
 			.then(([shot, values]) => {
 				if (this.disposed || generation !== this.generation || world !== this.world) return;
-				// Readouts are throttled while frames come; a paused page asks for few reads, so each one is shown.
-				this.take(world, shot, probes, values, asked || params.clock.paused);
+				// A backend still reading the last volume back leaves this one out: ask again with the next snapshot.
+				if (volume && !shot.volume && this.volumeKey === moment) this.volumeKey = '';
+				// Readouts are throttled while frames come; a paused page asks for few reads, so each one is shown. The fan flows are in the
+				// order of the fans the world had when the read was asked for, so they are only matched to devices if the setup is still that one.
+				this.take(world, shot, probes, values, asked || params.clock.paused, at, revision === world.revision);
 				// A paused page draws a frame only when told something changed, and a new reading is a change.
 				this.options.invalidate();
 			})
@@ -405,14 +450,25 @@ export class SimulationSession {
 			});
 	}
 
-	/** Turns a snapshot into what the scene draws and what the page shows. */
-	private take(world: World, shot: Snapshot, probes: Pin[], values: Float32Array, show: boolean) {
+	/**
+	 * Turns a snapshot into what the scene draws and what the page shows. `at` is the simulated second it was asked for, and `sameFans`
+	 * whether the world's devices are still the ones it was asked with (otherwise the device flows wait for the next snapshot).
+	 */
+	private take(world: World, shot: Snapshot, probes: Pin[], values: Float32Array, show: boolean, at: number, sameFans: boolean) {
 		const { readout } = this.options;
 		const reference = world.current.conditions.indoorTemp;
-		if (shot.slice) {
-			this.latest = { slice: shot.slice, tracers: shot.tracers ?? this.latest.tracers, smoke: shot.smoke ?? this.latest.smoke, version: this.latest.version + 1 };
-			this.history.push(this.simTime, shot.slice);
-		} else if (shot.tracers) this.latest = { ...this.latest, tracers: shot.tracers, smoke: shot.smoke ?? null, version: this.latest.version + 1 };
+		if (shot.slice || shot.tracers || shot.volume) {
+			const { latest } = this;
+			this.latest = {
+				slice: shot.slice ?? latest.slice,
+				tracers: shot.tracers ?? latest.tracers,
+				smoke: shot.smoke ?? latest.smoke,
+				volume: shot.volume ?? latest.volume,
+				volumeAt: shot.volume ? at : latest.volumeAt,
+				version: latest.version + 1
+			};
+		}
+		if (shot.slice) this.history.push(this.simTime, shot.slice);
 
 		// Probes: their readings now and their ten-second means.
 		const stride = POINT_FIELDS.length;
@@ -456,12 +512,14 @@ export class SimulationSession {
 			mass: d.mass,
 			rate: this.params.clock.paused ? 0 : this.rate
 		};
-		const flows: Record<string, number> = {};
-		for (const device of world.current.devices) {
-			const index = world.fanIndexOf(device.id);
-			if (index !== undefined && shot.fanFlow[index] !== undefined) flows[device.id] = shot.fanFlow[index];
+		if (sameFans) {
+			const flows: Record<string, number> = {};
+			for (const device of world.current.devices) {
+				const index = world.fanIndexOf(device.id);
+				if (index !== undefined && shot.fanFlow[index] !== undefined) flows[device.id] = shot.fanFlow[index];
+			}
+			readout.deviceFlow = flows;
 		}
-		readout.deviceFlow = flows;
 		if (shot.rooms) {
 			const names = world.raster.plan.rooms;
 			readout.rooms = shot.rooms.map(

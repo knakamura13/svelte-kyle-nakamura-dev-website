@@ -58,6 +58,8 @@ export function effectiveOpenings(plan: Pick<HomePlan, 'openings'>, setup: Setup
 export class World {
 	readonly raster: Raster;
 	readonly fluid: FluidProperties;
+	/** Bumps whenever the setup is applied, which may open or close faces of `raster.geometry`: what draws from the geometry knows to look again. */
+	revision = 0;
 	private setup: Setup;
 	private inputs: DeviceInputs | null = null;
 	private emitterCells: number | null = null;
@@ -113,6 +115,7 @@ export class World {
 			const open = axis === 0 ? au : axis === 1 ? av : aw;
 			for (let n = 0; n < indices.length; n++) open[indices[n]] = values[n];
 		}
+		this.revision++;
 		const exterior = exteriorState(this.raster, this.setup.conditions, this.setup.conditions.indoorTemp, this.fluid);
 		this.inputs = deviceInputs({ devices: this.setup.devices, models: this.options.models, raster: this.raster, fluid: this.fluid, time });
 		for (const fan of this.inputs.windowFans)

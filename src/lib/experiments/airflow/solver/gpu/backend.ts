@@ -1,5 +1,6 @@
 import type { BackendFailure, BackendUpdate, FieldState, FlowBackend, Snapshot, SnapshotRequest } from '../backend';
 import { POINT_FIELDS, type Diagnostics, type RoomStats, type Slice, type SolverConfig } from '../types';
+import { volumeCells, type Volume } from '../volume';
 import { GpuContext } from './context';
 import { GpuSolver, LOG_CAPACITY, PROFILE_GROUPS, PROFILE_SLOT_BYTES, PROFILE_STEPS, packPair, packVelocity, unpackPair, unpackVelocity, type ProfileGroup } from './solver';
 import { ROOMS_PER_PASS } from './shaders/readouts';
@@ -20,6 +21,16 @@ export const GPU_MAX_IN_FLIGHT = 8;
 interface Pending {
 	staging: GpuBuffer;
 	bytes: number;
+}
+
+/** The backend's state when a snapshot's reads were encoded, which is what the snapshot reports, however much has changed by the time it is read. */
+interface Moment {
+	time: number;
+	steps: number;
+	/** The last step's length, s, for the CFL number. */
+	dt: number;
+	/** Fans whose flows the snapshot copied. */
+	fans: number;
 }
 
 /**
@@ -56,6 +67,12 @@ export class GpuBackend implements FlowBackend {
 	private particleScale = 1;
 	private frame = 0;
 	private readonly roomBuffers: { uniform: GpuBuffer; partials: GpuBuffer }[] = [];
+	/**
+	 * Where the volume snapshot is read back: one buffer, reused, because a read of up to 1.5 MB ten times a second is not worth a new
+	 * buffer each time. One volume is on its way back at a time; a snapshot asked for meanwhile comes without one (`SnapshotRequest.volume`).
+	 */
+	private volumeStaging: GpuBuffer | null = null;
+	private volumeReading = false;
 	private disposed = false;
 
 	private constructor(
@@ -183,9 +200,15 @@ export class GpuBackend implements FlowBackend {
 		}
 	}
 
+	/**
+	 * Encodes the reads at once and resolves when the GPU has caught up to them. The page goes on stepping and changing the setup
+	 * meanwhile (a fan added sets a new `fanCount`), so everything the snapshot reports about the solver's state is taken now, at the
+	 * moment its reads were encoded, and nothing after the wait reads the solver's current state.
+	 */
 	async snapshot(request: SnapshotRequest): Promise<Snapshot> {
 		const s = this.solver;
 		const { grid } = s;
+		const moment: Moment = { time: this.time, steps: this.steps, dt: this.lastDt, fans: s.fanCount };
 		const encoder = s.device.createCommandEncoder({ label: 'snapshot' });
 		const pass = encoder.beginComputePass({ label: 'snapshot' });
 		s.measure(pass);
@@ -201,6 +224,8 @@ export class GpuBackend implements FlowBackend {
 			s.rooms(pass, first, count, this.roomBuffers[n].uniform, this.roomBuffers[n].partials);
 			chunks.push({ first, count, partials: this.roomBuffers[n].partials });
 		}
+		const volume = request.volume && !this.volumeReading;
+		if (volume) s.volume(pass);
 		pass.end();
 
 		const groups = s.cellGroups[0] * s.cellGroups[1];
@@ -211,13 +236,14 @@ export class GpuBackend implements FlowBackend {
 		const logs = [firstRun > 0 ? this.copy(encoder, s.log, 32 * firstRun, 32 * logStart) : null, unread > firstRun ? this.copy(encoder, s.log, 32 * (unread - firstRun), 0) : null];
 		const slice = layer >= 0 ? this.copy(encoder, s.sliceOut, 32 * grid.nx * grid.nz) : null;
 		const roomReads = chunks.map((chunk) => this.copy(encoder, chunk.partials, 4 * s.roomGroups * ROOMS_PER_PASS * 5));
-		const fans = s.fanCount ? this.copy(encoder, s.fanStateBuffer, 16 * s.fanCount) : null;
+		const fans = moment.fans ? this.copy(encoder, s.fanStateBuffer, 16 * moment.fans) : null;
 		const tracers = request.particles && s.tracers ? this.copy(encoder, s.tracers.parts, 16 * s.tracers.count) : null;
 		const smoke = request.particles && s.smoke ? this.copy(encoder, s.smoke.parts, 16 * s.smoke.count) : null;
+		if (volume) this.copyVolume(encoder);
 		s.device.queue.submit([encoder.finish()]);
 		this.logged = this.steps;
 
-		const [measured, logA, logB, sliced, fanState, tracerData, smokeData, ...roomData] = await Promise.all([
+		const [measured, logA, logB, sliced, fanState, tracerData, smokeData, volumeData, ...roomData] = await Promise.all([
 			this.read(measure),
 			this.read(logs[0]),
 			this.read(logs[1]),
@@ -225,6 +251,7 @@ export class GpuBackend implements FlowBackend {
 			this.read(fans),
 			this.read(tracers),
 			this.read(smoke),
+			volume ? this.readVolume() : null,
 			...roomReads.map((r) => this.read(r))
 		]);
 		for (const log of [logA, logB]) {
@@ -238,13 +265,41 @@ export class GpuBackend implements FlowBackend {
 			}
 		}
 		return {
-			diagnostics: this.diagnostics(measured!, groups),
+			diagnostics: this.diagnostics(measured!, groups, moment),
 			slice: sliced ? this.toSlice(sliced, layer) : undefined,
 			tracers: tracerData ?? undefined,
 			smoke: smokeData ?? undefined,
 			rooms: request.rooms ? this.toRooms(chunks, roomData as Float32Array[]) : undefined,
-			fanFlow: Float64Array.from({ length: s.fanCount }, (_, n) => fanState![4 * n])
+			volume: volumeData ?? undefined,
+			// The fans the backend had when the read was encoded: a fan added or removed since has its own flow in the next snapshot.
+			fanFlow: Float64Array.from({ length: moment.fans }, (_, n) => fanState![4 * n])
 		};
+	}
+
+	/** Queues the copy of the volume kernel's two outputs into the volume's staging buffer, one after the other. */
+	private copyVolume(encoder: GpuCommandEncoder) {
+		const s = this.solver;
+		const cells = volumeCells(s.volumeSpec);
+		this.volumeStaging ??= s.device.createBuffer({ label: 'volume readback', size: 24 * cells, usage: READBACK });
+		encoder.copyBufferToBuffer(s.volumeFlow, 0, this.volumeStaging, 0, 16 * cells);
+		encoder.copyBufferToBuffer(s.volumeScalars, 0, this.volumeStaging, 16 * cells, 8 * cells);
+		this.volumeReading = true;
+	}
+
+	/** The volume copied by `copyVolume`, once the GPU has caught up to it. */
+	private async readVolume(): Promise<Volume> {
+		const s = this.solver;
+		const staging = this.volumeStaging!;
+		const cells = volumeCells(s.volumeSpec);
+		try {
+			await staging.mapAsync(MapMode.READ);
+			const bytes = staging.getMappedRange(0, 24 * cells);
+			const volume = { ...s.volumeSpec, flow: new Float32Array(bytes.slice(0, 16 * cells)), scalars: new Float32Array(bytes.slice(16 * cells, 24 * cells)) };
+			staging.unmap();
+			return volume;
+		} finally {
+			this.volumeReading = false;
+		}
 	}
 
 	/**
@@ -318,6 +373,7 @@ export class GpuBackend implements FlowBackend {
 		this.unfinished = 0;
 		for (const buffers of this.roomBuffers) buffers.uniform.destroy();
 		this.cflStaging.destroy();
+		this.volumeStaging?.destroy();
 		this.solver.dispose();
 		this.ownedContext?.dispose();
 	}
@@ -337,8 +393,8 @@ export class GpuBackend implements FlowBackend {
 		return data;
 	}
 
-	/** cpu/solver.ts `measure` and `diagnostics`, from the per-workgroup partials. */
-	private diagnostics(partials: Float32Array, groups: number): Diagnostics {
+	/** cpu/solver.ts `measure` and `diagnostics`, from the per-workgroup partials, for the moment they were measured at. */
+	private diagnostics(partials: Float32Array, groups: number, moment: Moment): Diagnostics {
 		const { grid, fluid } = this.solver;
 		let sumSquares = 0;
 		let cells = 0;
@@ -354,16 +410,20 @@ export class GpuBackend implements FlowBackend {
 			cflSpeed = Math.max(cflSpeed, partials[8 * g + 4]);
 			particulates += partials[8 * g + 5];
 		}
-		this.cflSpeed = cflSpeed;
-		this.cflMeasuredAt = this.steps;
+		// The reading is of the fields as they stood when the snapshot was encoded, so it is as old as that, and it replaces only an older
+		// one: steps sent while it was on its way back have made it stale, and a step's own CFL read may have come back fresher.
+		if (moment.steps >= this.cflMeasuredAt) {
+			this.cflSpeed = cflSpeed;
+			this.cflMeasuredAt = moment.steps;
+		}
 		const reference = Math.max(Math.sqrt(squares / Math.max(cells, 1)), 0.01);
 		const rho = fluid.rho;
 		return {
-			time: this.time,
-			steps: this.steps,
+			time: moment.time,
+			steps: moment.steps,
 			maxSpeed: fastest,
 			divergence: cells ? Math.sqrt(sumSquares / cells) / reference : 0,
-			cfl: (fastest * this.lastDt) / grid.h,
+			cfl: (fastest * moment.dt) / grid.h,
 			mass: {
 				initial: this.initialMass,
 				emitted: this.tally.emitted * rho,
