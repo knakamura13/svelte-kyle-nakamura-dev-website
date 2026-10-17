@@ -265,5 +265,57 @@ fn main(@builtin(local_invocation_index) lid: u32, @builtin(workgroup_id) wid: v
 }`
 };
 
-export const READOUT_KERNELS = [measure, measureFinish, slice, sample, rooms];
+/**
+ * solver/volume.ts `extractVolume`: one thread per volume cell, which sums the block of solver cells it covers in the CPU's order,
+ * over the air only. `flow` gets (u, v, w, share of air) and `scalars` (θ, particulates), both zero for a block with no air.
+ */
+export const volume: KernelSource = {
+	name: 'volume',
+	bindings: [uniform('C', 'Consts'), uniform('V', 'Volume'), read('vel', VEC4), read('geo', VEC4), read('scal', VEC2), write('flow', VEC4), write('scalars', VEC2)],
+	code: `${ENTRY} {
+	${LINEAR}
+	if (id >= V.nx * V.ny * V.nz) {
+		return;
+	}
+	let I = id % V.nx;
+	let rest = id / V.nx;
+	let J = rest % V.ny;
+	let K = rest / V.ny;
+	let i0 = I * V.sx;
+	let j0 = J * V.sy;
+	let k0 = K * V.sz;
+	let i1 = min(i0 + V.sx, C.nx);
+	let j1 = min(j0 + V.sy, C.ny);
+	let k1 = min(k0 + V.sz, C.nz);
+	var sum = vec3<f32>(0.0);
+	var both = vec2<f32>(0.0);
+	var air = 0.0;
+	var count = 0.0;
+	for (var k = k0; k < k1; k = k + 1) {
+		for (var j = j0; j < j1; j = j + 1) {
+			for (var i = i0; i < i1; i = i + 1) {
+				count = count + 1.0;
+				let c = i + C.sx * j + C.sxy * k;
+				if (geo[c].w <= 0.0) {
+					continue;
+				}
+				let here = vel[c];
+				sum = sum + vec3<f32>(0.5 * (here.x + vel[c + 1].x), 0.5 * (here.y + vel[c + C.sx].y), 0.5 * (here.z + vel[c + C.sxy].z));
+				both = both + scal[c];
+				air = air + 1.0;
+			}
+		}
+	}
+	var first = vec4<f32>(0.0);
+	var second = vec2<f32>(0.0);
+	if (air > 0.0) {
+		first = vec4<f32>(sum / air, air / count);
+		second = both / air;
+	}
+	flow[id] = first;
+	scalars[id] = second;
+}`
+};
+
+export const READOUT_KERNELS = [measure, measureFinish, slice, sample, rooms, volume];
 void VEC2;

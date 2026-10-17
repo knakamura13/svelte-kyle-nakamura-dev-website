@@ -15,9 +15,10 @@ import {
 	type Turbulence
 } from '../types';
 import type { FaceUpdate } from '../backend';
+import { volumeCells, volumeSpec, type VolumeSpec } from '../volume';
 import type { GpuContext } from './context';
 import { GpuSolverError } from './errors';
-import { CONSTS, COUNTS, LEVEL, PARTICLES, SIDE as SIDE_LAYOUT, STEP, type UniformLayout } from './layout';
+import { CONSTS, COUNTS, LEVEL, PARTICLES, SIDE as SIDE_LAYOUT, STEP, VOLUME, type UniformLayout } from './layout';
 import { WG } from './shaders/common';
 import { ROOMS_PER_PASS, ROOM_CELLS_PER_THREAD } from './shaders/readouts';
 import { BufferUsage, type GpuBindGroup, type GpuBuffer, type GpuCommandEncoder, type GpuComputePassEncoder, type GpuQuerySet } from './webgpu';
@@ -83,8 +84,8 @@ export function gpuMemoryEstimate(spec: { nx: number; ny: number; nz: number }) 
 	// Four velocity sets (vec4), geometry (vec4), two scalar sets and the source/sink rates (vec2), eddy viscosity and the two start pressures.
 	let bytes = size * (4 * 16 + 16 + 3 * 8 + 3 * 4);
 	for (const level of multigridLevels(spec.nx, spec.ny, spec.nz)) bytes += (level.nx + 1) * (level.ny + 1) * (level.nz + 1) * 20;
-	// Reduction partials, places, slice output: small next to the fields.
-	bytes += Math.ceil(size / WG) * 64 + spec.nx * spec.ny * spec.nz * 4 + spec.nx * spec.nz * 32;
+	// Reduction partials, places, slice output and the volume snapshot's: small next to the fields.
+	bytes += Math.ceil(size / WG) * 64 + spec.nx * spec.ny * spec.nz * 4 + spec.nx * spec.nz * 32 + 24 * volumeCells(volumeSpec({ ...spec, h: 1 }));
 	return bytes;
 }
 
@@ -276,6 +277,11 @@ export class GpuSolver {
 	readonly sliceOut: GpuBuffer;
 	readonly roomPartials: GpuBuffer;
 	readonly roomGroups: number;
+	/** The volume snapshot's grid and its two outputs, (u, v, w, share of air) and (θ, particulates) per volume cell. */
+	readonly volumeSpec: VolumeSpec;
+	readonly volumeFlow: GpuBuffer;
+	readonly volumeScalars: GpuBuffer;
+	private readonly volumeUniform: GpuBuffer;
 	places: GpuBuffer | null = null;
 	tracers: ParticleBuffers | null = null;
 	smoke: ParticleBuffers | null = null;
@@ -430,6 +436,12 @@ export class GpuSolver {
 		this.sliceOut = this.storage('sliceOut', 32 * nx * nz);
 		this.roomGroups = Math.ceil(size / (64 * ROOM_CELLS_PER_THREAD));
 		this.roomPartials = this.storage('roomPartials', 4 * this.roomGroups * ROOMS_PER_PASS * 5);
+		this.volumeSpec = volumeSpec(this.grid);
+		this.volumeFlow = this.storage('volumeFlow', 16 * volumeCells(this.volumeSpec));
+		this.volumeScalars = this.storage('volumeScalars', 8 * volumeCells(this.volumeSpec));
+		this.volumeUniform = this.uniform('volume', VOLUME);
+		const v = this.volumeSpec;
+		device.queue.writeBuffer(this.volumeUniform, 0, VOLUME.writer().set('nx', v.nx).set('ny', v.ny).set('nz', v.nz).set('sx', v.sx).set('sy', v.sy).set('sz', v.sz).data);
 		this.setCount('cellPartials', partialCount);
 		this.setCount('meanPartials', meanGroups[0] * meanGroups[1]);
 
@@ -976,6 +988,11 @@ export class GpuSolver {
 	slice(pass: GpuComputePassEncoder, layer: number) {
 		const N = this.setCount('slice', layer);
 		this.run(pass, 'slice', { C: this.consts, N, vel: this.vel, geo: this.geo, scal: this.scal, out: this.sliceOut }, this.groups(this.grid.nx * this.grid.nz));
+	}
+
+	/** Averages the fields onto the volume grid, into `volumeFlow` and `volumeScalars`. */
+	volume(pass: GpuComputePassEncoder) {
+		this.run(pass, 'volume', { C: this.consts, V: this.volumeUniform, vel: this.vel, geo: this.geo, scal: this.scal, flow: this.volumeFlow, scalars: this.volumeScalars }, this.groups(volumeCells(this.volumeSpec)));
 	}
 
 	/** Uploads points and encodes the sampler; returns the output buffer to copy from. */

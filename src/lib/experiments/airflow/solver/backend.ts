@@ -1,5 +1,6 @@
 import type { Grid } from './grid';
 import type { Diagnostics, Emitter, Exterior, FanDisk, RoomStats, Slice } from './types';
+import type { Volume } from './volume';
 
 /**
  * What the page talks to. Three things implement it: the CPU reference (cpu/backend.ts), the same solver behind a
@@ -117,11 +118,18 @@ export interface SnapshotRequest {
 	particles?: boolean;
 	/** Include per-room averages. They need a pass over the whole grid, so ask only a few times a second. */
 	rooms?: boolean;
+	/**
+	 * Include the whole box at a coarser grid (volume.ts), for the renderers that fill the rooms. It is a pass over the grid and up to
+	 * 1.5 MB to move, so ask for it no more than ten times a second. A backend that is still reading the last one back may leave it out.
+	 */
+	volume?: boolean;
 }
 
 export interface Snapshot {
 	diagnostics: Diagnostics;
 	slice?: Slice;
+	/** The whole box on the grid `volumeSpec` picks for the backend's grid, when the request asked for it. */
+	volume?: Volume;
 	/** x, y, z in metres and the air speed in m/s, four numbers per tracer. */
 	tracers?: Float32Array;
 	/** x, y, z in metres and the particulate concentration in ppm, four numbers per smoke particle. */

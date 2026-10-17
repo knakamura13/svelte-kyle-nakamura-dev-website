@@ -1,5 +1,6 @@
 import type { BackendUpdate, FieldState, FlowBackend, Snapshot, SnapshotRequest } from '../backend';
 import type { SolverConfig } from '../types';
+import { extractVolume, volumeSpec, type VolumeSpec } from '../volume';
 import type { Particles } from './particles';
 import { CpuSolver } from './solver';
 
@@ -7,12 +8,15 @@ import { CpuSolver } from './solver';
 export class CpuBackend implements FlowBackend {
 	readonly kind = 'cpu';
 	readonly solver: CpuSolver;
+	/** The grid the volume snapshot is averaged onto. */
+	readonly volumeSpec: VolumeSpec;
 	private particles: Particles | null = null;
 	private particleScale = 1;
 
 	constructor(config: SolverConfig, initial?: { theta?: number; particulates?: number }) {
 		this.solver = new CpuSolver(config);
 		this.solver.fill(initial?.theta ?? 0, initial?.particulates ?? 0);
+		this.volumeSpec = volumeSpec(this.solver.grid);
 	}
 
 	get grid() {
@@ -53,8 +57,15 @@ export class CpuBackend implements FlowBackend {
 			tracers: request.particles && this.particles ? this.particles.tracers.slice() : undefined,
 			smoke: request.particles && this.particles ? this.particles.smoke.slice() : undefined,
 			rooms: request.rooms ? this.solver.rooms() : undefined,
+			volume: request.volume ? this.volume() : undefined,
 			fanFlow: this.solver.fanFlow.slice()
 		};
+	}
+
+	/** The whole box on the volume grid: fresh arrays, so the worker can move them to the page. */
+	volume() {
+		const { solver } = this;
+		return extractVolume(solver.grid, solver.geometry, solver.vel, solver.theta, solver.c, this.volumeSpec);
 	}
 
 	async samplePoints(points: Float32Array) {

@@ -167,4 +167,7 @@ export const COUNTS = new UniformLayout('Counts', [i('a'), i('b'), i('c'), i('d'
 /** The particles: how many, how many cells to respawn into, the step and the smoke scale. `mode` 0 places them, 1 moves them. */
 export const PARTICLES = new UniformLayout('Particles', [u('count'), u('places'), u('seed'), u('mode'), f('dt'), f('scale'), u('frame'), u('pad0')]);
 
-export const UNIFORM_STRUCTS = [CONSTS, STEP, LEVEL, SIDE, COUNTS, PARTICLES].map((layout) => layout.wgsl()).join('\n');
+/** The volume snapshot's grid (solver/volume.ts `VolumeSpec`): its cells along each axis, and the solver cells each one averages. */
+export const VOLUME = new UniformLayout('Volume', [i('nx'), i('ny'), i('nz'), i('sx'), i('sy'), i('sz'), i('pad0'), i('pad1')]);
+
+export const UNIFORM_STRUCTS = [CONSTS, STEP, LEVEL, SIDE, COUNTS, PARTICLES, VOLUME].map((layout) => layout.wgsl()).join('\n');
