@@ -58,6 +58,8 @@
 				return readout.note;
 		}
 	});
+	// Why the grid is what it is (what the auto-tuner just did, or a note for a phone) goes with the cell size. The session announces it once, so it is outside the live region too.
+	const tuning = $derived(readout.status === 'running' || readout.status === 'paused' ? readout.tuning : '');
 	// A backend that cannot keep up runs the simulation slower than the clock asks. The rate changes as it goes, so it is kept out of the live region: a screen reader hears the status once, not every few seconds. The Dock's clock says it in the same words.
 	const behind = $derived(shortfall(readout.status, readout.physics.rate, experience.clock.speed));
 </script>
@@ -106,7 +108,7 @@
 				<p class="stage-note" data-when="error">The 3D view couldn’t load.</p>
 				<noscript><p class="stage-note stage-note-static">The 3D view needs JavaScript.</p></noscript>
 			</div>
-			<p class="sim-status" role="status" data-status={readout.status}>{status}{#if behind}<span aria-hidden="true" data-behind>{' '}{behind}</span>{/if}</p>
+			<p class="sim-status" role="status" data-status={readout.status}>{status}{#if tuning}<span aria-hidden="true" data-tuning>{' '}{tuning}</span>{/if}{#if behind}<span aria-hidden="true" data-behind>{' '}{behind}</span>{/if}</p>
 			<figcaption>{experience.plan.name}. {experience.plan.blurb}</figcaption>
 		</figure>
 		<Dock />

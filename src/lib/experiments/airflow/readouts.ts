@@ -65,6 +65,8 @@ export interface AirflowReadout {
 	status: RunStatus;
 	/** A sentence for the Stage's note when it is not running. */
 	note: string;
+	/** Why the simulation runs the grid it does, for the status line: what the auto-tuner just did, or a note for a device that runs the coarsest grid. Empty when there is nothing to say. */
+	tuning: string;
 	hover: HoverReading | null;
 	probes: ProbeReading[];
 	rooms: RoomReading[];
@@ -76,6 +78,7 @@ export interface AirflowReadout {
 export const emptyReadout = (): AirflowReadout => ({
 	status: 'idle',
 	note: '',
+	tuning: '',
 	hover: null,
 	probes: [],
 	rooms: [],

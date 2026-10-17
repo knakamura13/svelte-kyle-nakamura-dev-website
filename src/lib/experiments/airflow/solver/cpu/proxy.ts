@@ -26,6 +26,11 @@ export function portOfWorker(worker: Worker): WorkerPort {
 
 /** Particle steps the page asks for while the worker is still on the last one are added together, up to this much simulated time, s. */
 const MAX_PARTICLE_STEP = 0.1;
+/**
+ * Most steps the page leaves unfinished with the worker (`FlowBackend.maxInFlight`). Two keep it busy: the next step is already
+ * waiting when it finishes one, and a snapshot asked for now is not behind more than two steps. More would only make the picture late.
+ */
+export const WORKER_MAX_IN_FLIGHT = 2;
 
 /**
  * The CPU solver in a Web Worker, behind the backend interface (host.ts is the worker's end). Nothing here computes: every
@@ -37,6 +42,7 @@ const MAX_PARTICLE_STEP = 0.1;
  */
 export class WorkerBackend implements FlowBackend {
 	readonly kind = 'cpu';
+	readonly maxInFlight = WORKER_MAX_IN_FLIGHT;
 	readonly grid: Grid;
 	private cells = 0;
 	private unfinished = 0;

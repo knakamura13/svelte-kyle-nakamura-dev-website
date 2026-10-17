@@ -14,12 +14,19 @@ export interface FlowBackend {
 	readonly fluidCells: number;
 
 	/**
-	 * Steps given to the backend that it has not finished, for a backend that works in the background (the worker). The
-	 * page sends no more while this is at its limit, so a backend that cannot keep up makes the simulation run slower than
-	 * real time instead of falling further behind. Absent where `step` does its work before it returns (the CPU in the page,
-	 * which the page times instead) or where the device queues the work (the GPU).
+	 * Steps given to the backend that it has not finished, for a backend that works in the background: the worker, and the GPU,
+	 * whose queue would otherwise grow without limit. The page sends no more while this is at `maxInFlight`, so a backend that
+	 * cannot keep up makes the simulation run slower than real time (`physics.rate` says by how much) instead of falling further
+	 * behind. Absent where `step` does its work before it returns (the CPU in the page, which the page times instead).
 	 */
 	readonly stepsInFlight?: number;
+
+	/**
+	 * The most unfinished steps the page leaves with this backend, for one that reports `stepsInFlight`; the page's own limit of 2
+	 * where it says nothing. The limit is how deep the backend's queue may be: deep enough that a fast backend reaches the clock's
+	 * fastest speed in the steps one frame asks for, and shallow enough that a read asked for now is not far behind.
+	 */
+	readonly maxInFlight?: number;
 
 	/**
 	 * Calls `listener` once if the backend can no longer run: the GPU device was lost, or the worker crashed. Whatever it is

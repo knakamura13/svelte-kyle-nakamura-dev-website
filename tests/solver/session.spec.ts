@@ -2,13 +2,16 @@ import { expect, test } from '@playwright/test';
 import { planById, plans } from '../../src/lib/experiments/airflow/homes/plans';
 import type { HomePlan } from '../../src/lib/experiments/airflow/homes/types';
 import { emptyReadout } from '../../src/lib/experiments/airflow/readouts';
-import { SimulationSession, type SessionParams } from '../../src/lib/experiments/airflow/sim/session';
+import { DEVICE_MODELS } from '../../src/lib/experiments/airflow/devices/catalog';
+import { chooseBackend } from '../../src/lib/experiments/airflow/sim/backends';
+import { SimulationSession, type SessionOptions, type SessionParams } from '../../src/lib/experiments/airflow/sim/session';
+import { Tuner, type BackendKind, type FrameSample, type Retune, type Tuning } from '../../src/lib/experiments/airflow/sim/tuner';
 import type { BackendFactory } from '../../src/lib/experiments/airflow/sim/world';
 import { BackendUnavailable, type BackendFailure } from '../../src/lib/experiments/airflow/solver/backend';
 import { CpuBackend } from '../../src/lib/experiments/airflow/solver/cpu/backend';
 import { WorkerBackend } from '../../src/lib/experiments/airflow/solver/cpu/proxy';
 import { GpuSolverError } from '../../src/lib/experiments/airflow/solver/gpu/errors';
-import { blankSetup, DEFAULT_CLOCK, DEFAULT_VIEW } from '../../src/lib/experiments/airflow/state';
+import { blankSetup, DEFAULT_CLOCK, DEFAULT_VIEW, type Setup } from '../../src/lib/experiments/airflow/state';
 import { inMemoryWorker } from './channel';
 
 /** The page's runtime driver, run with a fake clock: each `update(dt)` is one drawn frame of `dt` real seconds. */
@@ -17,7 +20,12 @@ const make: BackendFactory = (config, initial) => new CpuBackend({ ...config, sc
 const studio = planById('studio')!;
 const FRAME = 1 / 60;
 
-const makeSession = (tweak?: (params: SessionParams) => void, factory: BackendFactory = make, cellSize: (plan: HomePlan) => number | Promise<number> = () => 0.2) => {
+const makeSession = (
+	tweak?: (params: SessionParams) => void,
+	factory: BackendFactory = make,
+	cellSize: (plan: HomePlan) => number | Promise<number> = () => 0.2,
+	extra: Partial<SessionOptions> = {}
+) => {
 	const params: SessionParams = {
 		setup: blankSetup('studio'),
 		view: { ...DEFAULT_VIEW, units: 'metric' },
@@ -31,7 +39,7 @@ const makeSession = (tweak?: (params: SessionParams) => void, factory: BackendFa
 	const readout = emptyReadout();
 	const invalidated = { count: 0 };
 	const announced: string[] = [];
-	const session = new SimulationSession({ params, plans, models: [], make: factory, cellSize, readout, invalidate: () => invalidated.count++, reducedMotion: () => false, announce: (message) => announced.push(message) });
+	const session = new SimulationSession({ params, plans, models: [], make: factory, cellSize, readout, invalidate: () => invalidated.count++, reducedMotion: () => false, announce: (message) => announced.push(message), ...extra });
 	return { session, params, readout, invalidated, announced };
 };
 
@@ -740,6 +748,451 @@ test.describe('simulation session', () => {
 				log.restore();
 				session.dispose();
 			}
+		});
+	});
+
+	/** A backend whose steps queue and are finished by the test, as the GPU's are: it says how many are unfinished and how many it may be given. */
+	class Queued extends CpuBackend {
+		inFlight = 0;
+		maxInFlight = 8;
+		steps: number[] = [];
+		get stepsInFlight() {
+			return this.inFlight;
+		}
+		override step(dt: number) {
+			this.steps.push(dt);
+			this.inFlight++;
+		}
+		finish(count = Infinity) {
+			this.inFlight = Math.max(0, this.inFlight - count);
+		}
+	}
+	/** The same device before it reported anything, as the GPU's backend was: its steps queue and nothing says how deep the queue is. */
+	class Unreported extends Queued {
+		override get stepsInFlight(): number {
+			return undefined as unknown as number;
+		}
+	}
+	const queued = <T extends Queued>(Kind: new (config: ConstructorParameters<typeof CpuBackend>[0], initial?: ConstructorParameters<typeof CpuBackend>[1]) => T) => {
+		const made: T[] = [];
+		const factory: BackendFactory = (config, initial) => {
+			const backend = new Kind(config, initial);
+			made.push(backend);
+			return backend;
+		};
+		return { made, factory };
+	};
+
+	test.describe('a backend that queues its steps and reports how many are unfinished, as the GPU does', () => {
+		/** Draws `frames` frames at 60 fps of a clock at `speed`, the device finishing `finishes` steps (all of them when it is Infinity) before each. Returns the simulated seconds sent per real second, and the deepest queue seen. */
+		const run = async (backend: Queued, session: SimulationSession, frames: number, finishes: number) => {
+			const from = backend.steps.length;
+			let deepest = 0;
+			for (let frame = 0; frame < frames; frame++) {
+				backend.finish(finishes);
+				session.update(FRAME);
+				deepest = Math.max(deepest, backend.inFlight);
+			}
+			return { speed: sum(backend.steps.slice(from)) / (frames * FRAME), deepest };
+		};
+
+		test('it is given no more than its own limit, which is deeper than the worker’s: eight at once, and then it waits', async () => {
+			const { made, factory } = queued(Queued);
+			const { session } = makeSession((p) => (p.clock.speed = 20), factory);
+			await start(session);
+			const device = made[0];
+			for (let n = 0; n < 40; n++) session.update(FRAME);
+			expect(device.steps, 'seven stable steps cover the first frame at 20 times real time, and one more fills the queue').toHaveLength(8);
+			expect(device.stepsInFlight).toBe(8);
+			device.finish(3);
+			session.update(FRAME);
+			expect(device.steps, 'a finished step makes room for exactly one').toHaveLength(11);
+			expect(device.stepsInFlight).toBe(8);
+			session.dispose();
+		});
+
+		test('one that keeps up reaches the fastest clock, 20 times real time at 60 frames a second, and the readout says so', async () => {
+			const { made, factory } = queued(Queued);
+			const { session, readout } = makeSession((p) => (p.clock.speed = 20), factory);
+			await start(session);
+			const device = made[0];
+			const { speed, deepest } = await run(device, session, 120, Infinity);
+			expect(speed, 'sent as much as the clock asked').toBeGreaterThan(19);
+			expect(speed).toBeLessThanOrEqual(20 + 1e-6);
+			expect(deepest, 'in seven steps a frame, inside its limit').toBeLessThanOrEqual(8);
+			for (let n = 0; n < 12; n++) {
+				device.finish();
+				session.update(FRAME);
+				await settle();
+			}
+			expect(readout.physics.rate).toBeGreaterThan(18);
+			session.dispose();
+		});
+
+		test('one that cannot keep up runs the simulation slower than the clock and says by how much, and its queue stays inside its limit', async () => {
+			const { made, factory } = queued(Queued);
+			const { session, readout } = makeSession((p) => (p.clock.speed = 20), factory);
+			await start(session);
+			const device = made[0];
+			// It finishes three steps a frame, 0.05 s each: 9 seconds of the air's time for every second that goes by, not 20.
+			const { speed, deepest } = await run(device, session, 300, 3);
+			expect(speed).toBeGreaterThan(8);
+			expect(speed).toBeLessThan(10.5);
+			expect(deepest, 'the queue is bounded').toBeLessThanOrEqual(8);
+			for (let n = 0; n < 12; n++) {
+				device.finish(3);
+				session.update(FRAME);
+				await settle();
+			}
+			expect(readout.physics.rate, 'the Physics panel and the tuner see what the device really did').toBeGreaterThan(7.5);
+			expect(readout.physics.rate).toBeLessThan(11);
+			session.dispose();
+		});
+
+		test('the same device with no count of what is unfinished is sent everything the clock asks, however far behind it falls: the rate then says nothing', async () => {
+			const { made, factory } = queued(Unreported);
+			const { session, readout } = makeSession((p) => (p.clock.speed = 20), factory);
+			await start(session);
+			const device = made[0];
+			const { speed, deepest } = await run(device, session, 300, 3);
+			expect(speed, 'as much as the clock asks').toBeGreaterThan(19);
+			expect(deepest, 'while its queue grows without bound').toBeGreaterThan(1000);
+			for (let n = 0; n < 12; n++) {
+				device.finish(3);
+				session.update(FRAME);
+				await settle();
+			}
+			expect(readout.physics.rate, 'and the page calls that real time').toBeGreaterThan(18);
+			session.dispose();
+		});
+
+		test('at real time, one step a frame, a device that finishes each one in time is never held back, and one that takes two frames for a step runs at half speed with longer steps', async () => {
+			const keeping = queued(Queued);
+			const first = makeSession(undefined, keeping.factory);
+			await start(first.session);
+			const fast = await run(keeping.made[0], first.session, 120, Infinity);
+			expect(fast.speed).toBeGreaterThan(0.99);
+			expect(fast.speed).toBeLessThanOrEqual(1 + 1e-9);
+			first.session.dispose();
+
+			const slow = queued(Queued);
+			const second = makeSession(undefined, slow.factory);
+			await start(second.session);
+			// A step takes 33 ms of the device's time, so it can finish one every other frame: the steps grow to the 50 ms stable one only if asked to, so it keeps up at real time here.
+			let sent = 0;
+			for (let frame = 0; frame < 300; frame++) {
+				if (frame % 2 === 0) slow.made[0].finish(1);
+				second.session.update(FRAME);
+			}
+			sent = sum(slow.made[0].steps) / (300 * FRAME);
+			expect(sent).toBeGreaterThan(0.93);
+			second.session.dispose();
+		});
+	});
+
+	/** Stands in for the auto-tuner: it is told every frame, says nothing until the test gives it a retune to say, and has the note it was made with. */
+	const scripted = (note = '') => {
+		const told: { kind: BackendKind; sample: FrameSample }[] = [];
+		let ready: Retune | null = null;
+		const tuning: Tuning = {
+			observe: (kind, sample) => {
+				told.push({ kind, sample });
+				const retune = ready;
+				ready = null;
+				return retune;
+			},
+			note: () => note
+		};
+		return { tuning, told, ask: (retune: Retune) => (ready = retune) };
+	};
+	const retune = (size: number): Retune => ({ size, direction: 'finer', message: 'Restarted on a finer grid: the device has room to spare.' });
+	/** Draws frames the way the Stage does until `done`, letting the build and the reads proceed. */
+	const until = async (session: SimulationSession, done: () => boolean, what: string) => {
+		const deadline = Date.now() + 30000;
+		while (!done()) {
+			if (Date.now() > deadline) throw new Error(`Timed out waiting for ${what}.`);
+			session.update(FRAME);
+			await pause(5);
+		}
+	};
+	const fan = (): Setup['devices'][number] => ({ id: 'f1', model: DEVICE_MODELS[0].id, x: 2.4, z: 2.4, y: 0, yaw: 90, tilt: 0, power: 1, height: 0, oscillation: { on: false, sweep: 90, period: 8 } }) as unknown as Setup['devices'][number];
+
+	test.describe('the auto-tuner', () => {
+		test('is told how every frame went while the clock runs: the real time it took, the rate the solver achieved, and which kind of backend it is on', async () => {
+			const tuner = scripted();
+			const { session, readout } = makeSession(undefined, make, () => 0.3, { tuning: tuner.tuning });
+			await start(session);
+			await draw(session, 12);
+			expect(tuner.told.length, 'a frame is one call').toBeGreaterThanOrEqual(10);
+			expect(tuner.told.every((frame) => frame.kind === 'cpu' && !frame.sample.paused)).toBe(true);
+			expect(tuner.told.every((frame) => Math.abs(frame.sample.dt - FRAME) < 1e-12)).toBe(true);
+			expect(tuner.told.at(-1)!.sample.rate, 'the achieved rate, the one the Physics panel shows').toBeCloseTo(readout.physics.rate!, 1);
+			session.dispose();
+		});
+
+		test('a new size restarts the world there, with the Probes and Devices kept, and the screen reader and the status line are told once', async () => {
+			const tuner = scripted();
+			let size = 0.3;
+			const { session, params, readout, announced } = makeSession(
+				(p) => {
+					p.probes = [{ id: 'p1', x: 5.1, y: 1.1, z: 2.7 }];
+					p.setup = { ...p.setup, devices: [fan()] };
+				},
+				make,
+				() => size,
+				{ models: DEVICE_MODELS, tuning: tuner.tuning }
+			);
+			await start(session);
+			await draw(session, 10);
+			const first = session.world!;
+			expect(first.raster.spec.h).toBe(0.3);
+			expect(readout.tuning, 'nothing to say yet').toBe('');
+			expect(announced).toEqual([]);
+
+			const message = retune(0.2).message;
+			size = 0.2;
+			tuner.ask({ ...retune(0.2) });
+			await until(session, () => session.world !== first, 'the world at the new size');
+			expect(session.world!.raster.spec.h).toBe(0.2);
+			expect(readout.physics.cellSize, 'the Physics panel and the status line show the new size').toBe(0.2);
+			expect(readout.tuning, 'and why').toBe(message);
+			expect(announced, 'said once, politely').toEqual([message]);
+			expect(session.simTime, 'the air starts again from rest').toBeLessThan(1);
+			expect(first.backend === session.world!.backend, 'the old world is let go, and the new one has a solver of its own').toBe(false);
+
+			// What the visitor set up is in the params, so the new world has it: the Probe reads the new air, and the fan is in the new solver.
+			expect(params.probes).toEqual([{ id: 'p1', x: 5.1, y: 1.1, z: 2.7 }]);
+			expect(params.setup.devices.map((d) => d.id)).toEqual(['f1']);
+			expect(session.world!.current.devices.map((d) => d.id)).toEqual(['f1']);
+			expect(session.world!.fanIndexOf('f1'), 'the fan is part of the new solver').toBeDefined();
+			await draw(session, 12, 0.3);
+			expect(readout.probes.map((p) => p.id)).toEqual(['p1']);
+			expect(Number.isFinite(readout.probes[0].speed)).toBe(true);
+			expect(Object.keys(readout.deviceFlow)).toEqual(['f1']);
+			expect(announced, 'and no second time').toEqual([message]);
+			expect(readout.tuning, 'it stays while the world runs').toBe(message);
+			session.dispose();
+		});
+
+		test('a restart by the visitor is on the size the tuner has settled on, and says nothing of the retune that came before', async () => {
+			const tuner = scripted();
+			let size = 0.3;
+			const { session, params, readout, announced } = makeSession(undefined, make, () => size, { tuning: tuner.tuning });
+			await start(session);
+			await draw(session, 4);
+			const first = session.world!;
+			size = 0.2;
+			tuner.ask(retune(0.2));
+			await until(session, () => session.world !== first, 'the retune');
+			expect(readout.tuning).not.toBe('');
+			const second = session.world!;
+			params.restarts++;
+			await until(session, () => session.world !== second, 'the restart');
+			expect(session.world!.raster.spec.h).toBe(0.2);
+			expect(readout.tuning, 'a restart is not a retune').toBe('');
+			expect(announced, 'only the retune was announced').toHaveLength(1);
+			session.dispose();
+		});
+
+		test('while the new world is being built the old one runs on, and its frames are not told to the tuner, which has already begun counting the new one', async () => {
+			const tuner = scripted();
+			let size = 0.3;
+			// Choosing the backend takes a moment (the tuner's `pick` is called at its start, so it has started counting the new world by then): here it takes as long as the test likes.
+			let release: () => void = () => {};
+			let gate: Promise<void> | null = null;
+			const { session, readout } = makeSession(
+				undefined,
+				make,
+				async () => {
+					if (gate) await gate;
+					return size;
+				},
+				{ tuning: tuner.tuning }
+			);
+			await start(session);
+			await draw(session, 6);
+			const first = session.world!;
+			const before = tuner.told.length;
+			expect(before).toBeGreaterThan(0);
+			size = 0.2;
+			gate = new Promise<void>((resolve) => (release = resolve));
+			tuner.ask(retune(0.2));
+			// The frame that was told it returned the retune; from then on the old world is not observed until the new one is on show.
+			session.update(FRAME);
+			expect(tuner.told).toHaveLength(before + 1);
+			const time = session.simTime;
+			for (let n = 0; n < 12; n++) {
+				session.update(FRAME);
+				await pause(5);
+			}
+			expect(session.world === first, 'the new world is not ready yet').toBe(true);
+			expect(session.simTime, 'the old one is still running').toBeGreaterThan(time);
+			expect(tuner.told, 'but it is not being counted').toHaveLength(before + 1);
+			expect(readout.tuning, 'and the status line does not say it restarted before it has').toBe('');
+
+			release();
+			await until(session, () => session.world !== first, 'the world at the new size');
+			const counted = tuner.told.length;
+			await draw(session, 6);
+			expect(tuner.told.length, 'the new world is told its own frames').toBeGreaterThan(counted);
+			session.dispose();
+		});
+
+		test('nothing is told to it, and nothing can be asked of it, while the clock is paused', async () => {
+			const tuner = scripted();
+			let size = 0.3;
+			const { session, params, announced } = makeSession((p) => (p.clock.paused = true), make, () => size, { tuning: tuner.tuning });
+			await start(session);
+			await draw(session, 30);
+			expect(tuner.told, 'a paused clock measures nothing').toHaveLength(0);
+			// A retune that is already waiting is not made while paused either.
+			tuner.ask(retune(0.2));
+			size = 0.2;
+			const first = session.world!;
+			await draw(session, 30);
+			expect(session.world === first, 'no new world while paused').toBe(true);
+			expect(announced).toEqual([]);
+
+			params.clock.paused = false;
+			await until(session, () => session.world !== first, 'the retune, once the clock runs');
+			expect(session.world!.raster.spec.h).toBe(0.2);
+			expect(tuner.told.length).toBeGreaterThan(0);
+			expect(tuner.told.every((frame) => !frame.sample.paused)).toBe(true);
+			session.dispose();
+		});
+
+		test('a world that cannot be built at the new size says nothing, is not tried again every frame, and leaves the old one running', async () => {
+			const tuner = scripted();
+			let size = 0.3;
+			let builds = 0;
+			const factory: BackendFactory = async (config, initial) => {
+				builds++;
+				if (builds === 2) throw new Error('out of memory');
+				return make(config, initial);
+			};
+			const { session, readout, announced } = makeSession(undefined, factory, () => size, { tuning: tuner.tuning });
+			const log = listen();
+			try {
+				await start(session);
+				await draw(session, 4);
+				const first = session.world!;
+				size = 0.2;
+				tuner.ask(retune(0.2));
+				for (let n = 0; n < 40; n++) {
+					session.update(FRAME);
+					await pause(5);
+				}
+				expect(builds, 'tried once').toBe(2);
+				expect(session.world === first, 'the old world is still the one running').toBe(true);
+				expect(readout.tuning).toBe('');
+				expect(announced).toEqual([]);
+				expect(log.said.errors).toHaveLength(1);
+			} finally {
+				log.restore();
+				session.dispose();
+			}
+		});
+
+		test('a phone or a small tablet: the coarsest grid from the first world, the note in the readout and said once, and nothing measured however long it runs or often it restarts', async () => {
+			const log = listen();
+			// The real choice, with no graphics card (Node has none) and a device that is small: the grid and the note are its.
+			const choice = chooseBackend({ small: true, openGpu: () => Promise.reject(new GpuSolverError('no-webgpu', 'no')) });
+			try {
+				const { session, params, readout, announced } = makeSession(undefined, make, (plan) => choice.cellSize(plan), { tuning: choice });
+				await start(session);
+				expect(readout.physics.cellSize).toBe(0.3);
+				expect(readout.tuning).toBe('Coarsest grid here: best on a laptop.');
+				expect(announced).toEqual([readout.tuning]);
+				const first = session.world!;
+				await draw(session, 20, 0.5);
+				expect(session.world === first, 'it is never measured, so it never changes').toBe(true);
+				params.restarts++;
+				await until(session, () => session.world !== first, 'the restart');
+				expect(readout.physics.cellSize).toBe(0.3);
+				expect(readout.tuning, 'the note is permanent').toBe('Coarsest grid here: best on a laptop.');
+				expect(announced, 'but it is announced once').toHaveLength(1);
+				params.setup = blankSetup('house');
+				await until(session, () => session.world!.raster.plan.id === 'house', 'another Home');
+				expect(readout.physics.cellSize, 'on every Home').toBe(0.3);
+				session.dispose();
+			} finally {
+				choice.dispose();
+				log.restore();
+			}
+		});
+
+		test('a cell size the address asks for pins the grid: the tuner is not asked, so no retune and no note, whatever the frames say', async () => {
+			const log = listen();
+			const choice = chooseBackend({ fixedCell: 0.2, openGpu: () => Promise.reject(new GpuSolverError('no-webgpu', 'no')) });
+			try {
+				const { session, readout, announced } = makeSession(undefined, make, (plan) => choice.cellSize(plan), { tuning: choice });
+				await start(session);
+				expect(readout.physics.cellSize, 'not the 0.15 m the worker’s tuner would start the studio on').toBe(0.2);
+				const first = session.world!;
+				await draw(session, 20, 0.5);
+				expect(session.world === first, 'the grid never changes').toBe(true);
+				expect(readout.tuning).toBe('');
+				expect(announced).toEqual([]);
+				session.dispose();
+			} finally {
+				choice.dispose();
+				log.restore();
+			}
+		});
+
+		test('the real tuner: a world with room to spare is judged on its own five seconds, a finer one is built and said, and the old world’s frames while it is built are not counted toward it', async () => {
+			// A small budget, so the studio starts on coarse cells and the climb is quick.
+			const tuner = new Tuner({ kind: 'cpu', budget: 5000 });
+			let observed = 0;
+			let atVerdict = -1;
+			const tuning: Tuning = {
+				observe: (_kind, sample) => {
+					observed++;
+					const retune = tuner.observe(sample);
+					if (retune) atVerdict = observed;
+					return retune;
+				},
+				note: () => tuner.note ?? ''
+			};
+			// The choice sizes the world when the build starts (that is when the tuner starts counting it), and the world takes a moment to build.
+			// A backend that finishes each step as it is given it, so how fast the test machine is changes nothing the tuner is told.
+			const { made, factory } = queued(Queued);
+			const { session, readout, announced } = makeSession(
+				undefined,
+				factory,
+				(plan) => {
+					const h = tuner.pick(plan);
+					return pause(60).then(() => h);
+				},
+				{ tuning }
+			);
+			await start(session);
+			expect(readout.physics.cellSize).toBe(0.3);
+			const first = session.world!;
+			// Frames of a tenth of a second: two seconds of warm-up and three of a window are about fifty of them.
+			const deadline = Date.now() + 30000;
+			while (session.world === first) {
+				made.at(-1)!.finish();
+				session.update(0.1);
+				await pause(3);
+				if (Date.now() > deadline) throw new Error('Timed out waiting for the finer world.');
+			}
+			expect(atVerdict, 'the verdict came after the warm-up and a window of this world, not sooner').toBeGreaterThanOrEqual(48);
+			expect(atVerdict).toBeLessThanOrEqual(52);
+			expect(observed, 'and none of the old world’s frames while the new one was being built (a dozen of them) were told').toBe(atVerdict);
+			expect(readout.physics.cellSize).toBe(0.2);
+			expect(readout.tuning).toBe('Restarted on a finer grid: the device has room to spare.');
+			expect(announced).toHaveLength(1);
+			const second = session.world!;
+			// Another verdict takes another five seconds of the new world's own frames, and they are counted from its first.
+			for (let n = 0; n < 40; n++) {
+				made.at(-1)!.finish();
+				session.update(0.1);
+				await pause(3);
+			}
+			expect(observed, 'the new world is told its frames').toBeGreaterThan(atVerdict + 30);
+			expect(session.world === second, 'no second change before its own warm-up and window are over').toBe(true);
+			session.dispose();
 		});
 	});
 });
