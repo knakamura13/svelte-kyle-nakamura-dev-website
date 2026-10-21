@@ -153,12 +153,12 @@ Kyle approved check-in 2 on 2026-10-20 and paused the project. Milestones 1 to 3
 - `tests/airflow.spec.ts`, `airflow-tune.spec.ts` and `airflow-hud.spec.ts`: 66 passed in Chromium, Firefox and WebKit at two workers.
 
 **Next, in order:**
-1. **Milestone 4.**
+1. **Milestone 4** (#81 the loading screen, #82 the first 30 seconds, #83 the phone pass, #84 polish from check-in 2).
    - The first-30-seconds opening.
    - A loading screen that compiles the shaders (`compileAsync`) and picks the grid from a warm-up, so the air never restarts in view.
    - A phone pass: the air is faint there, and the 3D view is small under the sheets.
 2. **Milestone 5.** The performance pass against the budgets, the accessibility floor, the issues, and the launch issue (#69).
-3. **Sub-issues.** The new sub-issues for the milestones are still to be added to #30.
+3. **Tracker.** Done on 2026-10-21: #81 to #84 added under #30, #49, #53 and #56 closed, #68 closed as superseded, #61 to #64 re-scoped, and PR #45 rewritten.
 
 **Known weak spots:**
 - Smoke reads as a soft volume, not wisps, because the volume averages blocks of up to 0.3 m.
