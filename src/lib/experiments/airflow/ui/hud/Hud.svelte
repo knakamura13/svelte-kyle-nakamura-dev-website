@@ -156,15 +156,21 @@
 		--hud-danger: #ff9a9d;
 		--hud-danger-fill: #e5484d;
 		--hud-smoke: #f2a35c;
-		--hud-glass: rgb(14 19 17 / 0.86);
-		--hud-glass-deep: rgb(14 19 17 / 0.88);
+		/* A touch more opaque than frosted glass would be, because there is no blur behind it (see --hud-blur). */
+		--hud-glass: rgb(14 19 17 / 0.9);
+		--hud-glass-deep: rgb(14 19 17 / 0.92);
 		--hud-hover: rgb(255 255 255 / 0.08);
 		--hud-press: rgb(255 255 255 / 0.14);
 		--hud-well: rgb(255 255 255 / 0.05);
 		--hud-edge: rgb(255 255 255 / 0.1);
 		--hud-rule: rgb(255 255 255 / 0.09);
 		--hud-shadow: 0 22px 48px rgb(4 9 7 / 0.34), 0 4px 14px rgb(4 9 7 / 0.22);
-		--hud-blur: blur(20px) saturate(1.35);
+		/*
+		 * No backdrop blur. At two device pixels to the CSS pixel, the browser blurring the world behind a dozen panels, every frame of a
+		 * canvas that redraws sixty times a second, cost about one frame in nine on the high tier (54 fps with it, 60 without, at 1440 by
+		 * 900, measured 2026-10-20), and behind glass this opaque it hardly showed.
+		 */
+		--hud-blur: none;
 		--hud-radius: 20px;
 		--hud-radius-sm: 13px;
 		--hud-ease: cubic-bezier(0.22, 1, 0.36, 1);
