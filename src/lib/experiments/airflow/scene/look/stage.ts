@@ -89,20 +89,27 @@ export class AirflowStage implements StageHost {
 		document.addEventListener('visibilitychange', this.onVisibility);
 	}
 
-	/** The tier the visitor asked for (the store's `view.quality`), or what suits the device: `?quality=` in the address wins over the guess. */
+	/**
+	 * The tier the visitor asked for (the store's `view.quality`), or what suits the device: `?quality=` in the address wins over the
+	 * guess. Asked every frame, so the guess is made once.
+	 */
 	private tierFor(options: SlotOptions): QualityTier {
 		const asked = this.asked(options);
 		if (asked) return asked;
-		return chooseQuality({ search: location.search, small: detectSmallDevice(), cores: navigator.hardwareConcurrency, software: this.software });
+		this.guess ??= chooseQuality({ search: location.search, small: detectSmallDevice(), cores: navigator.hardwareConcurrency, software: this.software });
+		return this.guess;
 	}
+	private guess: QualityTier | null = null;
 
 	/** A tier asked for by name, in the store or the address, rather than guessed. */
 	private asked(options: SlotOptions): QualityTier | null {
 		const view = (options.params as { view?: { quality?: string } }).view?.quality;
 		if (view && isTier(view)) return view;
-		const search = new URLSearchParams(location.search).get('quality');
-		return isTier(search) ? search : null;
+		this.searched ??= new URLSearchParams(location.search).get('quality') ?? '';
+		return isTier(this.searched) ? this.searched : null;
 	}
+	/** The address's `?quality=`, read once ('' for none). */
+	private searched: string | null = null;
 
 	/** What a tier draws: its own settings, or the lighter low tier for WebGL in software when nobody asked for a tier by name. */
 	private qualityFor(options: SlotOptions, tier: QualityTier): Quality {
