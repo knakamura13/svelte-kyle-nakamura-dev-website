@@ -274,7 +274,7 @@ export function createAirflowScene(host: WorldHost, params: AirflowSceneParams, 
 		takeShadowChange: () => house.home.takeShadowChange(),
 		aoBox: () => house.home.aoBox(),
 		key(event) {
-			// The temporary C key steps the walls through cutaway, up and down, until the HUD's bottom bar has the toggle.
+			// C steps the walls through cutaway, up and down, as the bottom bar's wall modes do.
 			if (event.key !== 'c' && event.key !== 'C') return false;
 			if (event.altKey || event.ctrlKey || event.metaKey) return false;
 			params.setView({ walls: nextWallMode(params.view.walls) });

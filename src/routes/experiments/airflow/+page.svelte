@@ -108,7 +108,7 @@
 
 		<p id="stage-help" class="sr-only">
 			The 3D view can be focused. When it is, W, A, S and D or the arrow keys move the view across the home, Q and E turn it, plus and
-			minus zoom in and out, and Home goes back to the first view. With the Probe or the Smoke tool, the arrow keys move a cursor over the
+			minus zoom in and out, Home goes back to the first view, and C steps the walls through cut away, up and down. With the Probe or the Smoke tool, the arrow keys move a cursor over the
 			air instead: Enter pins a probe, or starts and stops smoke, at the cursor, Shift makes the steps bigger, and Escape puts the cursor
 			away. With a mouse, drag with the right button to turn the view, drag with the middle button to move it, and scroll to zoom.
 			Everything in the home can also be chosen and changed from the Inspector.

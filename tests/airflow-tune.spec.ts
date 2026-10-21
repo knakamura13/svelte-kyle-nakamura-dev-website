@@ -64,38 +64,6 @@ test.describe('on a phone', () => {
 	});
 });
 
-/**
- * The status line shares the pinned figure with the Stage, and the Dock is under the figure on a narrow screen, so a note that made the line taller
- * would move the Dock. The figure keeps room for it. Each width has its own context, because Firefox cannot resize a mobile one.
- */
-for (const width of [360, 390]) {
-	test.describe(`on a phone ${width} wide`, () => {
-		test.use({ viewport: { width, height: 844 }, hasTouch: true, isMobile: true });
-
-		test('the note makes the figure no taller, so the Dock under it does not move when the note appears', async ({ page }) => {
-			test.skip(true, 'The old article layout (the Dock under a pinned figure that holds the status line): the status line now floats over the world, and the HUD replaces the Dock in milestone 3.');
-			test.setTimeout(120_000);
-			const measure = async () =>
-				page.evaluate(() => ({
-					figure: Math.round(document.querySelector('.airflow-figure')!.getBoundingClientRect().height),
-					dock: Math.round(document.querySelector('.airflow-dock')!.getBoundingClientRect().top + scrollY),
-					lines: Math.round((document.querySelector('.sim-status')!.getBoundingClientRect().height - 14) / 19.2)
-				}));
-			// With the grid asked for there is no note: the line holds the cell size and, on a processor, how far behind the clock it runs.
-			await openAirflow(page, '/experiments/airflow?cell=0.3');
-			await started(page, COARSEST);
-			await expect(status(page)).not.toContainText(NOTE);
-			const plain = await measure();
-			await openAirflow(page);
-			await started(page, COARSEST);
-			await expect(status(page)).toContainText(NOTE);
-			const noted = await measure();
-			expect(noted.figure, `the figure is as tall with the note (${noted.lines} lines of status) as without (${plain.lines})`).toBe(plain.figure);
-			expect(noted.dock, 'and the Dock starts in the same place').toBe(plain.dock);
-		});
-	});
-}
-
 test.describe('on a small tablet, 820 wide like the iPads up to the tenth generation', () => {
 	test.use({ viewport: { width: 820, height: 1180 }, hasTouch: true, isMobile: true });
 
