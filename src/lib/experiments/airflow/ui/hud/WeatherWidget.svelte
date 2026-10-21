@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { useAirflow } from '../../experience.svelte';
-	import { describeBearing } from '../../readout';
+	import { compassWord, describeBearing } from '../../readout';
 	import { formatPm25, weatherAnnouncement, weatherField, windFromAnnouncement } from '../weather';
 	import { dialRotation, windWords } from './compass';
 	import CompassDial from './CompassDial.svelte';
@@ -31,7 +31,7 @@
 	const calm = $derived(!(conditions.windSpeed > 0));
 	/** The phone's pill in words: what its two lines show, for a screen reader. */
 	const said = $derived(
-		`Weather: ${calm ? 'calm' : `wind from the ${describeBearing(conditions.windFrom).spoken}, ${speed.spoken}`}; ${outdoor.spoken} outside; outdoor air ${(air?.label ?? formatPm25(conditions.outdoorPm25).spoken).toLowerCase()}.`
+		`Weather: ${calm ? 'calm' : `wind from the ${compassWord(conditions.windFrom)} at ${speed.spoken}`}; ${outdoor.spoken} outside; outdoor air ${(air?.label ?? formatPm25(conditions.outdoorPm25).spoken).toLowerCase()}.`
 	);
 
 	/** The camera's turn, so north on the dial is north on screen. */
