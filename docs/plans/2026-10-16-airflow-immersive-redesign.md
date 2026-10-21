@@ -203,3 +203,35 @@ Kyle approved check-in 2 on 2026-10-20 and paused the project. Milestones 1 to 3
 - A later step down resamples the air, but the air's renderers (`scene/air/index.ts`) clear the streaks for any new world, so the streaks re-pour for a moment.
 - The warm-up's half second can be noisy on a busy machine. Before the fastest stretch was used, one run measured the house at 10 ms a step and gave it 15 cm. A GPU that another program holds for the whole half second still gets a grid too coarse, and it keeps it for the visit, since nothing climbs.
 - The hint also goes if a reset raises the device count without a placement.
+
+### Paused 2026-10-21: the phone pass and the polish are built but not merged
+
+Kyle paused the project after milestone 4's three agents finished. The loading screen and the opening (#81, #82) are merged (cdaee6c). The phone pass (#83) and the polish (#84) are built and verified on their own branches, and are not merged yet because they conflict:
+
+| Issue | Branch (local), backup on GitHub | Commits | Verified on its branch |
+| --- | --- | --- | --- |
+| #84 polish | `worktree-agent-ad0836d444136d2f7`, `backup/airflow-84-polish` | 11 (9763108 to 09761fe) | Node 491 passed, GPU 43 + 15 skipped, airflow e2e 66 in three browsers |
+| #83 phone pass | `worktree-agent-ac1363f989a5a5642`, `backup/airflow-83-phone-pass` | 10 (a68df5d to 7f55e28) | phone and HUD specs 63 passed + 18 skipped by design, airflow e2e 66, GPU 43 + 15 skipped |
+
+- **#84 polish:**
+  - removes the dead modules
+  - sources the presets from the EPA AQI technical document (2024 revision) and the Beaufort scale
+  - makes openings in cut-away walls clickable at their cut
+  - adds smoke wisps carried by the solver's air and eye-level streaks that read as moving air
+  - fixes the furniture to keep its proportions, with the dining table, bookcase, cabinets, dresser and wardrobe built at real proportions
+  - fixes six #68 items and records three as no longer applying
+  - Two calls for Kyle:
+    - compass letters N and E hide behind standing walls (the other option is to lift them above the walls)
+    - a model smaller than its box leaves the solver blocking the whole box
+- **#83 phone pass:**
+  - bolder streaks and denser puffs on the low tier, through a new `AirLook` option
+  - sheets that fold to a peek
+  - a two-line weather pill
+  - the camera framed to the free part of the screen
+  - two-finger pinch and twist in every tool
+  - the desktop layout unchanged
+- **Merge plan:**
+  1. Merge #84 first; it merges into the current branch with no conflicts. Run the checks.
+  2. Then merge #83. It conflicts with the current branch in `scene/airflowScene.ts` and `scene/look/stage.ts`, and with #84 in `scene/air/index.ts` and `ui/hud/WeatherWidget.svelte`. Resolve those, run the Node, GPU and three-browser e2e suites, and fix the opening hint's position on a phone, which points between Probe and Smoke.
+  3. Send Kyle check-in 3: the first-30-seconds recording and the phone. Then delete the two backup branches.
+- **Interplay to check after the merges:** a step down after the first minute clears the streaks for a moment (`scene/air/index.ts`), and #84's furniture changes the opening's end pose (its bookcase was a plain box).
