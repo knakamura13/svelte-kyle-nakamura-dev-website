@@ -34,11 +34,11 @@ export const STREAK_COUNTS: Readonly<Record<QualityTier, number>> = { high: 15_0
 /** Seconds of travel a streak's tail shows, and the longest it gets, m. */
 export const TAIL = 0.5;
 const MAX_LENGTH = 0.9;
-/** A streak's width, m, as drawn near; it never draws thinner than 1.2 device pixels or wider than 3.5 (scaled by the pixel ratio). */
-const WIDTH = 0.011;
-const PIXELS: [number, number] = [1.2, 3.5];
-/** Speeds over which a streak fades in, m/s: still air shows nothing, a gentle draught shows fully. */
-const SPEED_FADE: [number, number] = [0.01, 0.12];
+/** A streak's width, m, as drawn near; it never draws thinner than 1.6 CSS pixels or wider than 4 (scaled by the pixel ratio). */
+const WIDTH = 0.014;
+const PIXELS: [number, number] = [1.6, 4];
+/** Speeds over which a streak fades in, m/s: still air shows nothing, the slow drift of a room shows faintly, a draught fully. */
+const SPEED_FADE: [number, number] = [0.02, 0.35];
 /** Lives, s, and the fades at each end. */
 const LIFE: [number, number] = [2.2, 5.5];
 const FADE_IN = 0.35;
@@ -187,7 +187,7 @@ export class Streaks {
 				uSpeedFade: { value: new Vector2(...SPEED_FADE) },
 				uFadeIn: { value: FADE_IN },
 				uFadeOut: { value: FADE_OUT },
-				uOpacity: { value: 0.9 },
+				uOpacity: { value: 0.85 },
 				uPlain: { value: 0 },
 				uPalette: { value: this.palette },
 				uMapping: { value: new Vector2(1, 0) }
