@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { worldShot } from './dock';
 import { planById } from '../src/lib/experiments/airflow/homes/plans';
 import { setupToHash } from '../src/lib/experiments/airflow/link';
 import { blankSetup } from '../src/lib/experiments/airflow/state';
@@ -103,7 +104,7 @@ test.describe('the airflow page', () => {
 		await expect(view.locator('.stage-label[data-tone="room"]')).toContainText(['Living room', 'Bedroom 1']);
 		await expect(view.locator('.stage-label[data-tone="compass"]')).toHaveText(['N', 'E', 'S', 'W']);
 		// The Stage is a picture of something, not a flat tint.
-		expect(await dominantShare(page, await view.screenshot())).toBeLessThan(0.9);
+		expect(await dominantShare(page, await worldShot(page, view))).toBeLessThan(0.9);
 		expect(errors).toEqual([]);
 	});
 
@@ -115,7 +116,7 @@ test.describe('the airflow page', () => {
 		test.skip((await view.getAttribute('data-state')) === 'unsupported', 'This browser has no WebGL.');
 		await expect(page.locator('.sim-status')).toHaveAttribute('data-status', /^(paused|running|unsupported)$/, { timeout: 30_000 });
 		// The world is lawn, sky, wood, plaster and fabric in warm and green tones: nothing in it is magenta, which is what the speckle was.
-		expect(await magentaShare(page, await view.screenshot())).toBeLessThan(0.0005);
+		expect(await magentaShare(page, await worldShot(page, view))).toBeLessThan(0.0005);
 	});
 
 	test('the world fills the window at every size, outside the site’s nav and footer, and nothing scrolls', async ({ page }) => {
@@ -186,9 +187,9 @@ test.describe('the airflow page', () => {
 
 			// The air develops from rest: a picture a few seconds in is not the picture a few seconds later, and neither is a flat tint.
 			await page.waitForTimeout(3000);
-			const early = await view.screenshot();
+			const early = await worldShot(page, view);
 			await page.waitForTimeout(4000);
-			const late = await view.screenshot();
+			const late = await worldShot(page, view);
 			expect(await dominantShare(page, late)).toBeLessThan(0.9);
 			expect(await changedShare(page, early, late), 'the Stage is redrawn from new solver data').toBeGreaterThan(0.002);
 

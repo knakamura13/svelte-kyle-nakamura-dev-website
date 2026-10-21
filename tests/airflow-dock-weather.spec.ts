@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { stubClipboard } from './clipboard';
-import { dockGroup, focusRing, live, openAirflow } from './dock';
+import { dockGroup, focusRing, live, openAirflow, worldShot } from './dock';
 import { DEVICE_MODELS } from '../src/lib/experiments/airflow/devices/catalog';
 import { plans } from '../src/lib/experiments/airflow/homes/plans';
 import { openingsByRoom } from '../src/lib/experiments/airflow/homes/rooms';
@@ -118,10 +118,10 @@ async function changedShare(page: Page, before: Buffer, after: Buffer) {
 /** The Stage's picture once it has stopped changing by itself, so that a change after it is the visitor's. */
 async function settledStage(page: Page) {
 	const stage = page.getByRole('application', { name: /^The air in the/ });
-	let previous = await stage.screenshot();
+	let previous = await worldShot(page, stage);
 	for (let attempt = 0; attempt < 20; attempt++) {
 		await page.waitForTimeout(400);
-		const next = await stage.screenshot();
+		const next = await worldShot(page, stage);
 		if ((await changedShare(page, previous, next)) < 0.00001) return next;
 		previous = next;
 	}
@@ -608,7 +608,7 @@ test.describe('the Openings and furniture group', () => {
 		await dockGroup(page, 'Openings and furniture');
 		const stage = page.getByRole('application', { name: /^The air in the/ });
 		const before = await settledStage(page);
-		expect(await changedShare(page, before, await stage.screenshot()), 'nothing moves by itself while the simulation is paused').toBeLessThan(0.0002);
+		expect(await changedShare(page, before, await worldShot(page, stage)), 'nothing moves by itself while the simulation is paused').toBeLessThan(0.0002);
 		// Shut the six Openings the Scenario opens, and open three more.
 		for (const name of ['Living room window 1', 'Living room window 2', 'Bedroom 1 door, to Hall', 'Bedroom 2 door, to Hall', 'Bedroom 1 window', 'Bedroom 2 window']) await setSlider(page, name, 0);
 		for (const name of ['Kitchen window', 'Dining room window', 'Bathroom window']) await setSlider(page, name, 100);
@@ -630,6 +630,9 @@ test.describe('the Openings and furniture group', () => {
 		await expect(furniture).toHaveAccessibleDescription('Furniture blocks the air and slows it, and the Stage shows it. Changing it starts the air over.');
 		await expect(page.getByRole('button', { name: SCENARIOS[0].name, exact: true })).toHaveAttribute('aria-pressed', 'true');
 		expect((await copiedLink(page, writes)).setup.furniture).toBe(true);
+		// The tracers fill the whole room now, and they start afresh in each new world: they are hidden, so the pictures compare the furniture.
+		await page.getByRole('checkbox', { name: 'Tracers' }).uncheck();
+		await expect(live(page)).toHaveText('Tracers off.');
 		const withFurniture = await settledStage(page);
 		const said = await watchAnnouncements(page);
 
@@ -735,6 +738,7 @@ test.describe('the Openings and furniture group', () => {
 
 	for (const width of [1000, 1440]) {
 		test(`${width}px wide: the list reads down each column and then along, which is the order the keyboard takes`, async ({ page }) => {
+			test.skip(width < 1160, 'The old article layout (a wide Dock under the Stage, with the list in columns): the drawer is one column at every width, and the HUD replaces the Dock in milestone 3.');
 			await page.setViewportSize({ width, height: 900 });
 			await openAirflow(page);
 			await page.getByRole('radio', { name: 'House', exact: true }).check();

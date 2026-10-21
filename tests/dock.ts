@@ -25,8 +25,7 @@ export async function openAirflow(page: Page, path = '/experiments/airflow') {
 
 /**
  * Opens the drawer that holds the Dock, if it is shut, the way a keyboard does: a click would make the browser take the next focus for a
- * pointer's, which shows no ring, and the specs check the rings. It then waits for the drawer to finish sliding in, so a click aimed at a
- * control in it does not land on the world where the control was a moment before.
+ * pointer's, which shows no ring, and the specs check the rings. The drawer fades in where it stands, so its controls can be used at once.
  */
 export async function openDrawer(page: Page) {
 	const toggle = page.locator('.airflow-drawer-toggle');
@@ -36,8 +35,13 @@ export async function openDrawer(page: Page) {
 	}
 	await expect(toggle).toHaveAttribute('aria-expanded', 'true');
 	await expect(page.locator('.airflow-dock')).toBeVisible();
-	await expect(page.locator('.airflow-drawer')).toHaveCSS('transform', 'none');
 }
+
+/**
+ * A picture of the world, with the chips that float over it (the bar at the top and the status line) painted over: the status line's
+ * words change as the simulation runs ("Running at 0.9× real time"), and a comparison of two pictures is about the world.
+ */
+export const worldShot = (page: Page, view: Locator) => view.screenshot({ mask: [page.locator('.airflow-bar'), page.locator('.sim-status')], maskColor: '#000000' });
 
 /** A Dock group by its title. Opens the drawer and the group when they are closed, so its controls can be used. */
 export async function dockGroup(page: Page, title: string): Promise<Locator> {
