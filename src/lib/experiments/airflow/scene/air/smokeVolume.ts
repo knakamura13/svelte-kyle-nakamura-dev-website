@@ -28,8 +28,9 @@ import { ParticleField } from './particles';
  * Smoke: the solver's PM2.5, drawn as a lit volume. A ray from the camera is marched through the box that holds any visible smoke,
  * up to the nearest surface (`depth.ts`), and at each step the smoke takes out some of the light behind it and adds its own: the sky
  * light from all round and the sun's from its direction, dimmed by the smoke between the step and the sun, and brightest when the
- * sun is behind it. How dense it looks follows the concentration on a log scale, from nothing 2.5 decades below `SMOKE_DENSE` to
- * thick at it, as the old smoke puffs did, so a cloud thinning in a draught stays in sight as long as an overlay would show it.
+ * sun is behind it. How much light it takes out grows with the square of the concentration: thick at `SMOKE_DENSE`, so the plume
+ * round a source reads as smoke, while the same smoke mixed through a room (a tenth as strong) is a faint haze that the room reads
+ * through, rather than a fog that whites it out. Smoke too thin to see is what the Smoke overlay is for.
  *
  * At low quality it is puffs instead: soft round billboards carried by the air (`particles.ts`), born where the smoke is, each as
  * opaque as the smoke around it.
@@ -39,11 +40,16 @@ export const SMOKE_LOOK = {
 	/** Concentration that reads as thick smoke, ppm, and how many decades below it smoke still shows. */
 	dense: SMOKE_DENSE,
 	decades: 2.5,
-	/** Extinction of thick smoke, per metre (a third of a metre of it hides nearly everything behind), and how fast it falls off as the smoke thins: a plume reads as smoke and the haze it leaves in a room as haze. */
-	extinction: 10,
-	falloff: 2.2,
-	/** The share of the light smoke scatters, as a colour: a faintly warm grey-white. */
-	albedo: new Color(0.98, 0.97, 0.95),
+	/**
+	 * Extinction of thick smoke (`dense`), per metre, and the power of the concentration it grows with. The plume a cooking burst makes,
+	 * about `dense` near its source and half a metre across, hides most of what is behind it; a room of smoke a tenth as strong tints
+	 * what is behind it by about a fifth across four metres. Above `cap` times `dense` it is no thicker.
+	 */
+	extinction: 8,
+	power: 2,
+	cap: 6,
+	/** The share of the light smoke scatters, as a colour: a cool grey-white, so the late sun on it reads as smoke rather than as the walls' cream. */
+	albedo: new Color(0.8, 0.83, 0.88),
 	/** Henyey-Greenstein asymmetry: a little forward scattering, so smoke glows when the sun is behind it. */
 	anisotropy: 0.35,
 	/** The level below which a cell holds no smoke worth marching through. */
@@ -77,10 +83,10 @@ uniform vec3 uBoxMin;
 uniform vec3 uBoxMax;
 uniform float uStep;
 uniform float uMaxSteps;
-uniform float uDenseLog;
-uniform float uDecades;
 uniform float uExtinction;
-uniform float uFalloff;
+uniform float uPower;
+uniform float uCap;
+uniform float uDense;
 uniform vec3 uAlbedo;
 uniform vec3 uSunDirection;
 uniform vec3 uSunLight;
@@ -100,13 +106,10 @@ float henyeyGreenstein(float cosine, float g) {
 	return (1.0 - g * g) / pow(1.0 + g * g - 2.0 * g * cosine, 1.5);
 }
 
-float smokeLevel(float ppm) {
-	return clamp((log2(max(ppm, 1e-12)) * 0.30102999566 - uDenseLog) / uDecades + 1.0, 0.0, 1.0);
-}
-
-/** Extinction at a point, per metre. */
+/** Extinction at a point, per metre: the square of the concentration as a share of thick smoke, up to the cap. */
 float extinction(vec3 p) {
-	return uExtinction * pow(smokeLevel(airLook(p).b), uFalloff);
+	float share = clamp(airLook(p).b / uDense, 0.0, uCap);
+	return uExtinction * pow(share, uPower);
 }
 
 void main() {
@@ -144,7 +147,7 @@ void main() {
 		t += dt;
 	}
 	float opacity = 1.0 - transmittance;
-	if (opacity < 0.003) discard;
+	if (!(opacity >= 0.003)) discard;
 	// Into the march target (march.ts): linear, and already multiplied by its opacity.
 	gl_FragColor = vec4(light, opacity);
 }
@@ -197,10 +200,10 @@ export class SmokeVolume {
 				uBoxMax: { value: new Vector3(1, 1, 1) },
 				uStep: { value: 0.06 },
 				uMaxSteps: { value: SMOKE_STEPS.high },
-				uDenseLog: { value: Math.log10(SMOKE_LOOK.dense) },
-				uDecades: { value: SMOKE_LOOK.decades },
 				uExtinction: { value: SMOKE_LOOK.extinction },
-				uFalloff: { value: SMOKE_LOOK.falloff },
+				uPower: { value: SMOKE_LOOK.power },
+				uCap: { value: SMOKE_LOOK.cap },
+				uDense: { value: SMOKE_LOOK.dense },
 				uAlbedo: { value: SMOKE_LOOK.albedo.clone() },
 				uSunDirection: { value: new Vector3(0, 1, 0) },
 				uSunLight: { value: new Color(0.6, 0.6, 0.6) },
@@ -272,7 +275,7 @@ void main() {
 	vec4 extra = texelFetch(uExtra, at, 0);
 	float level = clamp((log2(max(airLook(state.xyz).b, 1e-12)) * 0.30102999566 - uDenseLog) / uDecades + 1.0, 0.0, 1.0);
 	float alpha = extra.y < 0.5 ? 0.0 : pow(level, 1.4) * smoothstep(0.0, uFadeIn, state.w) * smoothstep(0.0, uFadeOut, extra.x - state.w);
-	if (alpha < 0.004) {
+	if (!(alpha >= 0.004)) {
 		gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
 		vAlpha = 0.0;
 		return;
@@ -295,7 +298,7 @@ void main() {
 	float r2 = dot(vCorner, vCorner) * 4.0;
 	if (r2 >= 1.0) discard;
 	float alpha = uOpacity * vAlpha * (1.0 - r2) * (1.0 - r2);
-	if (alpha < 0.003) discard;
+	if (!(alpha >= 0.003)) discard;
 	gl_FragColor = vec4(uColor, alpha);
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>

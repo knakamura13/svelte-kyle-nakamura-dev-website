@@ -18,12 +18,11 @@ import type { LayerId } from '../state';
 import { LUT_SIZE, PALETTES, PALETTE_GLSL, isCyclic, scaleMapping, type ScaleOptions } from '../viz/palettes';
 
 /**
- * Draw order among transparent objects: the slice, which writes depth so particles behind it are hidden rather than
- * drawn over it; then the arrows; then the particles; then the markers and the airflow cones of the devices. The
- * dollhouse's opaque pieces draw at 0 and its faded walls at `FADED_ORDER` (20 in `dollhouse.ts`), after all of these,
- * so a wall between the camera and the slice tints what is behind it. Keep any new layer below 20.
+ * Draw order among transparent objects: the old slice, arrows and particles; then the air (`air/index.ts`: the haze and smoke
+ * laid over the world at 15, puffs at 16, the streaks at 17); then the markers, the probes' pins and the devices' rings and
+ * cones at 18, so smoke never veils the marker that says where it comes from, and the handles and outlines over those.
  */
-export const RENDER_ORDER = { slice: 10, arrows: 11, tracers: 12, smoke: 13, markers: 14 } as const;
+export const RENDER_ORDER = { slice: 10, arrows: 11, tracers: 12, smoke: 13, markers: 18 } as const;
 
 /** Overall opacity of the slice, so the dollhouse reads through it. */
 export const SLICE_OPACITY = 0.82;
