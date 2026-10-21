@@ -151,10 +151,10 @@ export class TracerPoints {
 		this.uniforms = {
 			uPalette: { value: this.palette },
 			uMapping: { value: new Vector2(1, 0) },
-			uOpacity: { value: 0.75 },
+			uOpacity: { value: 0.6 },
 			uSize: { value: 0.013 },
 			uHalfHeight: { value: 400 },
-			uPixels: { value: new Vector2(1.3, 4) }
+			uPixels: { value: new Vector2(1.3, 3) }
 		};
 		const material = new ShaderMaterial({
 			uniforms: this.uniforms,
@@ -167,7 +167,7 @@ export class TracerPoints {
 		this.points = new Points(this.particles.geometry, material);
 		this.points.frustumCulled = false;
 		this.points.renderOrder = RENDER_ORDER.tracers;
-		trackSize(this.points, this.uniforms, [1.3, 4]);
+		trackSize(this.points, this.uniforms, [1.3, 3]);
 	}
 
 	/** How many tracers to draw, up to MAX_TRACERS, so the page can scale them to the GPU. */

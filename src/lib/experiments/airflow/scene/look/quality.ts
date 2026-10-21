@@ -23,7 +23,7 @@ export interface Quality {
 }
 
 export const QUALITY: Record<QualityTier, Quality> = {
-	high: { tier: 'high', pixelRatio: 2, shadows: { size: 4096, radius: 3 }, ao: { scale: 0.5, samples: 16 }, bloom: true, smaa: true, anisotropy: 8 },
+	high: { tier: 'high', pixelRatio: 2, shadows: { size: 4096, radius: 3 }, ao: { scale: 1, samples: 16 }, bloom: true, smaa: true, anisotropy: 8 },
 	medium: { tier: 'medium', pixelRatio: 1.5, shadows: { size: 2048, radius: 2.5 }, ao: { scale: 0.5, samples: 8 }, bloom: true, smaa: true, anisotropy: 4 },
 	low: { tier: 'low', pixelRatio: 1.25, shadows: { size: 1024, radius: 1.5 }, ao: null, bloom: false, smaa: true, anisotropy: 2 }
 };
