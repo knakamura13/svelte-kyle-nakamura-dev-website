@@ -47,6 +47,8 @@ export interface World {
 	aoBox(): Box3;
 	/** Keys the world handles itself after the tools and before the camera (the walls' temporary C key). */
 	key?(event: KeyboardEvent): boolean;
+	/** Drops what the tools are doing with a finger, without acting on it: a second finger has made the gesture a pinch for the camera. */
+	cancelTouch?(): void;
 	/** Moves everything one frame on. Returns true while anything is still moving. */
 	update(dt: number): boolean;
 	dispose(): void;
@@ -338,6 +340,10 @@ export class AirflowStage implements StageHost {
 			slot.undo.push(() => target.removeEventListener(type, handler as EventListener, options));
 		};
 		canvas.style.touchAction = 'none';
+		/** The fingers on the world and where each is, so a second finger can hand the first to the camera. */
+		const fingers = new Map<number, { x: number; y: number }>();
+		/** Fingers that have made a pinch: the camera's until they lift, and the tools see no more of them. */
+		const pinched = new Set<number>();
 
 		on(canvas, 'pointerdown', (event) => {
 			// The press itself focuses the world (its mousedown focuses the nearest focusable thing, the view), so the keys reach the camera
@@ -345,6 +351,26 @@ export class AirflowStage implements StageHost {
 			// a blue frame round the whole window after every first click.
 			const ndc = this.ndc(event, canvas);
 			const mouse = event.pointerType === 'mouse';
+			if (event.pointerType === 'touch') fingers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+			// A second finger makes the gesture a pinch and a twist, whatever the tool. The tools let go of the first finger without acting on
+			// it (no probe is pinned, no menu opens, the smoke stops, a dragged fan stays where it is), and the camera takes every finger down.
+			if (event.pointerType === 'touch' && fingers.size >= 2) {
+				if (!pinched.size) {
+					world.cancelTouch?.();
+					slot.claimed = null;
+					for (const [id, at] of fingers) {
+						if (id === event.pointerId) continue;
+						pinched.add(id);
+						if (!slot.camera.has(id) && controls.pointerDown({ pointerId: id, pointerType: 'touch', button: 0, altKey: false, clientX: at.x, clientY: at.y })) slot.camera.add(id);
+					}
+				}
+				pinched.add(event.pointerId);
+				if (controls.pointerDown(event)) slot.camera.add(event.pointerId);
+				view.dataset.dragging = 'true';
+				canvas.setPointerCapture?.(event.pointerId);
+				this.invalidate();
+				return;
+			}
 			// A right or middle press, or Alt with the left, is the camera's: turn and tilt, or pan.
 			if (mouse && (event.button === 1 || event.button === 2 || (event.button === 0 && event.altKey))) {
 				if (controls.pointerDown(event)) {
@@ -376,12 +402,21 @@ export class AirflowStage implements StageHost {
 
 		on(canvas, 'pointermove', (event) => {
 			const ndc = this.ndc(event, canvas);
-			world.input.pointer('move', event, ndc);
+			if (fingers.has(event.pointerId)) fingers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+			if (!pinched.has(event.pointerId)) world.input.pointer('move', event, ndc);
 			if (slot.claimed !== event.pointerId) controls.pointerMove(event);
 			this.invalidate();
 		});
 
 		const end = (event: PointerEvent) => {
+			fingers.delete(event.pointerId);
+			if (pinched.delete(event.pointerId)) {
+				controls.pointerUp(event);
+				slot.camera.delete(event.pointerId);
+				if (!slot.camera.size) delete view.dataset.dragging;
+				this.invalidate();
+				return;
+			}
 			const ndc = this.ndc(event, canvas);
 			if (slot.claimed === event.pointerId) {
 				slot.claimed = null;

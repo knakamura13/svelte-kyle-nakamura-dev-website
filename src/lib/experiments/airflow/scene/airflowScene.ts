@@ -278,6 +278,8 @@ export function createAirflowScene(host: WorldHost, params: AirflowSceneParams, 
 		},
 		takeShadowChange: () => house.home.takeShadowChange(),
 		aoBox: () => house.home.aoBox(),
+		// A second finger makes a pinch: what the first was doing (a probe to pin, smoke, a fan in hand) is dropped, not done.
+		cancelTouch: () => input.reset(),
 		key(event) {
 			// C steps the walls through cutaway, up and down, as the bottom bar's wall modes do.
 			if (event.key !== 'c' && event.key !== 'C') return false;
