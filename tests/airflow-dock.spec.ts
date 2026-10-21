@@ -19,6 +19,7 @@ test.describe('the Dock', () => {
 	});
 
 	test('sits beside the Stage on a wide screen and under it on a narrow one, keeps every control inside the card, and never scrolls sideways', async ({ page }) => {
+		test.skip(true, 'The old article layout (the Dock in a card beside the Stage): the full-screen world replaced it, and the HUD replaces the Dock in milestone 3.');
 		// Nine page loads: on a busy machine that is more than the default half minute.
 		test.setTimeout(120_000);
 		for (const width of [320, 360, 390, 700, 1000, 1159, 1160, 1280, 1600]) {
@@ -51,6 +52,7 @@ test.describe('the Dock', () => {
 	});
 
 	test('the Stage stays on screen while the Dock is used, so the air can be watched as a control moves: pinned beside the Dock on a wide screen, and above it on a narrow one', async ({ page }) => {
+		test.skip(true, 'The old article layout (a pinned Stage over a scrolling page): the world is now always the window, and the HUD replaces the Dock in milestone 3.');
 		for (const [width, height] of [
 			[1280, 800],
 			[1600, 1000],

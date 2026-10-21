@@ -73,6 +73,7 @@ for (const width of [360, 390]) {
 		test.use({ viewport: { width, height: 844 }, hasTouch: true, isMobile: true });
 
 		test('the note makes the figure no taller, so the Dock under it does not move when the note appears', async ({ page }) => {
+			test.skip(true, 'The old article layout (the Dock under a pinned figure that holds the status line): the status line now floats over the world, and the HUD replaces the Dock in milestone 3.');
 			test.setTimeout(120_000);
 			const measure = async () =>
 				page.evaluate(() => ({

@@ -26,11 +26,10 @@ async function dominantShare(page: Page, png: Buffer) {
 }
 
 /**
- * The largest gap between a pixel's brightest and dimmest colour channel, over the four corners of a picture: near 0 for a plain tint,
- * large for coloured speckle. The corners hold only the ground and the sky: the Stage is narrower beside the Dock, so the home reaches
- * the left and right edges, and the top and bottom corners are what stay empty.
+ * The share of a picture's pixels that are a strong magenta (red and blue well above green): what the WebKit speckle was, and what
+ * nothing in the world is.
  */
-async function edgeSpread(page: Page, png: Buffer) {
+async function magentaShare(page: Page, png: Buffer) {
 	return page.evaluate(async (base64) => {
 		const image = new Image();
 		image.src = `data:image/png;base64,${base64}`;
@@ -40,15 +39,10 @@ async function edgeSpread(page: Page, png: Buffer) {
 		canvas.height = image.height;
 		const context = canvas.getContext('2d')!;
 		context.drawImage(image, 0, 0);
-		const w = Math.round(image.width * 0.12);
-		const h = Math.round(image.height * 0.2);
-		let worst = 0;
-		for (const x of [0, image.width - w])
-			for (const y of [0, image.height - h]) {
-				const { data } = context.getImageData(x, y, w, h);
-				for (let i = 0; i < data.length; i += 4) worst = Math.max(worst, Math.max(data[i], data[i + 1], data[i + 2]) - Math.min(data[i], data[i + 1], data[i + 2]));
-			}
-		return worst;
+		const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
+		let magenta = 0;
+		for (let i = 0; i < data.length; i += 4) if (data[i] - data[i + 1] > 60 && data[i + 2] - data[i + 1] > 60) magenta++;
+		return magenta / (data.length / 4);
 	}, png.toString('base64'));
 }
 
@@ -113,34 +107,33 @@ test.describe('the airflow page', () => {
 		expect(errors).toEqual([]);
 	});
 
-	test('the ground around the home is a smooth tint: WebKit once drew a speckle of magenta, green and yellow over the floor pool', async ({ page }) => {
+	test('the world has no speckle: WebKit once drew a speckle of magenta, green and yellow over the floor pool', async ({ page }) => {
 		await page.setViewportSize({ width: 1280, height: 900 });
 		await page.goto('/experiments/airflow');
 		const view = page.getByRole('application', { name: /^The air in the/ });
 		await expect(view).toHaveAttribute('data-state', /^(live|unsupported)$/, { timeout: 15_000 });
 		test.skip((await view.getAttribute('data-state')) === 'unsupported', 'This browser has no WebGL.');
 		await expect(page.locator('.sim-status')).toHaveAttribute('data-status', /^(paused|running|unsupported)$/, { timeout: 30_000 });
-		// The corners of the Stage hold only the ground and the sky: no home, no slice, no labels.
-		expect(await edgeSpread(page, await view.screenshot())).toBeLessThan(40);
+		// The world is lawn, sky, wood, plaster and fabric in warm and green tones: nothing in it is magenta, which is what the speckle was.
+		expect(await magentaShare(page, await view.screenshot())).toBeLessThan(0.0005);
 	});
 
-	test('the Stage is as wide as its card at every width, so no part of the home is cut off or out of reach', async ({ page }) => {
+	test('the world fills the window at every size, outside the site’s nav and footer, and nothing scrolls', async ({ page }) => {
 		for (const [width, height] of [
 			[360, 740],
 			[390, 844],
-			[430, 900],
-			[700, 900],
 			[768, 1024],
-			[900, 900],
 			[1000, 900],
-			[1280, 800]
+			[1280, 800],
+			[1600, 1000]
 		]) {
 			await page.setViewportSize({ width, height });
 			await page.goto('/experiments/airflow');
 			const stage = (await page.locator('.airflow-figure .stage-view').boundingBox())!;
-			const card = (await page.locator('.airflow-figure').boundingBox())!;
-			expect(Math.round(stage.width), `${width}px wide: the Stage fills its card`).toBe(Math.round(card.width));
-			expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${width}px wide: no sideways scroll`).toBe(true);
+			expect([Math.round(stage.x), Math.round(stage.y), Math.round(stage.width), Math.round(stage.height)], `${width}x${height}: the world is the window`).toEqual([0, 0, width, height]);
+			expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth && document.documentElement.scrollHeight <= innerHeight), `${width}x${height}: nothing scrolls`).toBe(true);
+			await expect(page.getByRole('navigation', { name: 'Main navigation' }), 'the site’s nav is not over the world').toHaveCount(0);
+			await expect(page.getByRole('link', { name: 'Experiments' }), 'the way out is').toHaveAttribute('href', '/experiments');
 		}
 	});
 

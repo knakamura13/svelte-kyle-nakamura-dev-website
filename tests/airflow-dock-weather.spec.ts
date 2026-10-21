@@ -852,7 +852,7 @@ test.describe('the controls of time and weather', () => {
 			await dockGroup(page, 'Openings and furniture');
 			const found = await page.evaluate(() => {
 				const small: string[] = [];
-				const card = document.querySelector('.airflow-card')!.getBoundingClientRect();
+				const card = document.querySelector('.airflow-drawer')!.getBoundingClientRect();
 				const outside: string[] = [];
 				const targets = '.transport button, .transport .segment span, #dock-weather input[type="range"], #dock-openings input[type="range"], #dock-openings .switch, .dock-group > summary';
 				for (const el of document.querySelectorAll(targets)) {

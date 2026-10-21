@@ -4,7 +4,7 @@ import { CUT_HEIGHT, DOWN_HEIGHT, corridorFor, cutWalls, nextWallMode, wallHeigh
 import { wallLines } from '../../src/lib/experiments/airflow/scene/walls/walls';
 import { planById } from '../../src/lib/experiments/airflow/homes/plans';
 import { wallRuns } from '../../src/lib/experiments/airflow/scene/wallPieces';
-import { QUALITY, chooseQuality } from '../../src/lib/experiments/airflow/scene/look/quality';
+import { QUALITY, chooseQuality, isSoftwareRenderer } from '../../src/lib/experiments/airflow/scene/look/quality';
 
 /**
  * The cutaway: which walls drop and which stand, as plain geometry. A box Home 12 by 8 m (x east, z south) with one inside wall
@@ -77,6 +77,31 @@ test('in the two-bedroom’s default view, from the south-south-west, the south 
 	expect(cut.some((isCut, n) => !isCut && runs[n].out === 0)).toBe(true);
 });
 
+test('far out, every wall that faces the camera drops too: the inside walls across the view, and an outside wall only from outdoors', () => {
+	// Outside walls know which side is outdoors: the north wall's is its left seen from west to east (-z), and so on round.
+	const outside: WallLine[] = [
+		{ ...north, outdoors: -1 },
+		{ ...south, outdoors: 1 },
+		{ ...west, outdoors: 1 },
+		{ ...east, outdoors: -1 }
+	];
+	// An inside wall across the view (east-west) and one along it (north-south), well away from the line of sight.
+	const across: WallLine = { ax: 1, az: 2, bx: 5, bz: 2 };
+	const along: WallLine = { ax: 10, az: 1, bx: 10, bz: 5 };
+	// Looking north from far to the south, at the middle of the Home.
+	const view = { camera: { x: 6, z: 30 }, focus: { x: 6, z: 4 }, corridor: corridorFor(0.9), zoom: 0.9 };
+	const [n, s, w, e, a, b] = cutWalls([...outside, across, along], view);
+	expect({ n, s, w, e }, 'the far north wall stands, seen from inside; the near south wall drops; the side walls run along the view').toEqual({ n: false, s: true, w: false, e: false });
+	expect({ across: a, along: b }).toEqual({ across: true, along: false });
+	// Close in the rule is off: only the line of sight counts, so the wall across the view, away from it, stands.
+	expect(cutWalls([across], { ...view, zoom: 0.2, corridor: corridorFor(0.2) })).toEqual([false]);
+	// Without a zoom the far rule never applies, as before it existed.
+	expect(cutWalls([across], { camera: view.camera, focus: view.focus, corridor: 0.5 })).toEqual([false]);
+	// A wall that was cut by it keeps its cut a little longer as the camera comes in.
+	expect(cutWalls([across], { ...view, zoom: 0.48 }, [true])).toEqual([true]);
+	expect(cutWalls([across], { ...view, zoom: 0.48 }, [false])).toEqual([false]);
+});
+
 test('the quality tier: a phone gets low, a small machine medium, a desktop high, and the address can ask for any', () => {
 	expect(chooseQuality({ search: '', small: false })).toBe('high');
 	expect(chooseQuality({ search: '', small: true })).toBe('low');
@@ -84,6 +109,9 @@ test('the quality tier: a phone gets low, a small machine medium, a desktop high
 	expect(chooseQuality({ search: '?quality=low', small: false })).toBe('low');
 	expect(chooseQuality({ search: '?cell=0.2&quality=high', small: true })).toBe('high');
 	expect(chooseQuality({ search: '?quality=ultra', small: true }), 'an unknown tier is ignored').toBe('low');
+	expect(chooseQuality({ search: '', small: false, software: true }), 'WebGL drawn in software gets low').toBe('low');
+	expect(isSoftwareRenderer('ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)')).toBe(true);
+	expect(isSoftwareRenderer('ANGLE (Apple, ANGLE Metal Renderer: Apple M3 Max, Unspecified Version)')).toBe(false);
 	expect(QUALITY.low.ao, 'a phone draws no ambient occlusion').toBeNull();
 	expect(QUALITY.high.ao).not.toBeNull();
 	expect(QUALITY.low.shadows!.size).toBeLessThan(QUALITY.high.shadows!.size);

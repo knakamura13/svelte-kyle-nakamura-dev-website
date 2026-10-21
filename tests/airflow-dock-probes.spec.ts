@@ -135,7 +135,8 @@ test.describe('the mode toggle', () => {
 		await open(page);
 		const canvas = stage(page).locator('canvas');
 		await expect(mode(page, 'Look')).toBeChecked();
-		await expect(canvas, 'in Look mode a vertical swipe still scrolls the page').toHaveCSS('touch-action', 'pan-y');
+		// The page is the world, full screen, and nothing scrolls: a finger is the world's in every mode (in Look mode it moves the view).
+		await expect(canvas, 'in Look mode a finger moves the view').toHaveCSS('touch-action', 'none');
 
 		await mode(page, 'Probe').check();
 		await expect(mode(page, 'Probe')).toBeChecked();
@@ -151,8 +152,8 @@ test.describe('the mode toggle', () => {
 		await expect(canvas).toHaveCSS('touch-action', 'none');
 
 		await mode(page, 'Look').check();
-		await expect(live(page)).toHaveText('Look mode. A finger turns the view, and the arrow keys rotate it.');
-		await expect(canvas).toHaveCSS('touch-action', 'pan-y');
+		await expect(live(page)).toHaveText('Look mode. A finger or the arrow keys move the view, and Q and E turn it.');
+		await expect(canvas).toHaveCSS('touch-action', 'none');
 		expect(errors).toEqual([]);
 	});
 
@@ -169,7 +170,7 @@ test.describe('the mode toggle', () => {
 		await page.keyboard.press('ArrowLeft');
 		await page.keyboard.press('ArrowLeft');
 		await expect(mode(page, 'Look')).toBeChecked();
-		await expect(live(page)).toHaveText('Look mode. A finger turns the view, and the arrow keys rotate it.');
+		await expect(live(page)).toHaveText('Look mode. A finger or the arrow keys move the view, and Q and E turn it.');
 		// It is one stop in the order of the page, and the arrow keys move within it.
 		await expect(page.locator(':focus')).toHaveAccessibleName('Look');
 	});
@@ -187,23 +188,25 @@ test.describe('the mode toggle', () => {
 		expect(await stage(page).evaluate((el) => getComputedStyle(el, '::after').borderTopWidth), 'the Stage shows that it has the focus').toBe('3px');
 	});
 
-	test('keeps the arrow keys for turning the view in Look mode, and gives them to the cursor in Probe mode', async ({ page }) => {
+	test('keeps the arrow keys for moving the view in Look mode, and gives them to the cursor in Probe mode', async ({ page }) => {
 		await open(page);
+		// The arrow keys pan the Sims camera: what moves is the point it looks at on the floor (`data-focus`), not the way it faces.
+		const focus = () => stage(page).getAttribute('data-focus');
 		const yaw = () => stage(page).getAttribute('data-yaw');
-		const start = await yaw();
+		const start = await focus();
+		const facing = await yaw();
 		await stage(page).focus();
 		await page.keyboard.press('ArrowRight');
-		await expect.poll(yaw, 'in Look mode the arrow key turns the view').not.toBe(start);
-		const turned = await yaw();
+		await expect.poll(focus, 'in Look mode the arrow key moves the view').not.toBe(start);
+		expect(await yaw(), 'and does not turn it').toBe(facing);
+		const moved = await focus();
 		await mode(page, 'Probe').check();
-		// The scene takes up a new mode on its next frame, and starts over then: its mark is the canvas taking a finger for itself.
-		await expect(stage(page).locator('canvas')).toHaveCSS('touch-action', 'none');
 		await stage(page).focus();
 		await page.keyboard.press('ArrowRight');
 		await page.keyboard.press('ArrowRight');
 		await expect(hoverTile(page), 'in Probe mode it moved a cursor, which reads the air').toHaveAttribute('data-state', /^(reading|no-air)$/);
 		await page.waitForTimeout(500);
-		expect(await yaw(), 'and left the view as it was').toBe(turned);
+		expect(await focus(), 'and left the view as it was').toBe(moved);
 	});
 });
 
@@ -563,7 +566,7 @@ test.describe('releasing smoke and pinning a Probe without a mouse', () => {
 	test.describe('by touch', () => {
 		test.use({ hasTouch: true, viewport: { width: 390, height: 844 } });
 
-		test('in Look mode a finger only turns the view: a tap pins nothing and releases nothing', async ({ page }) => {
+		test('in Look mode a finger only moves the view: a tap pins nothing and releases nothing', async ({ page }) => {
 			await open(page);
 			await expect(mode(page, 'Look')).toBeChecked();
 			const { x, y } = await stageAt(page, SPOTS[Math.floor(SPOTS.length / 2)]);
@@ -674,7 +677,7 @@ test.describe('the group as a whole', () => {
 			await page.waitForTimeout(200);
 			const found = await page.evaluate((targets) => {
 				const problems: string[] = [];
-				const card = document.querySelector('.airflow-card')!.getBoundingClientRect();
+				const card = document.querySelector('.airflow-drawer')!.getBoundingClientRect();
 				if (document.documentElement.scrollWidth > innerWidth) problems.push('the page scrolls sideways');
 				for (const el of document.querySelectorAll('#dock-probes *')) {
 					const box = el.getBoundingClientRect();
