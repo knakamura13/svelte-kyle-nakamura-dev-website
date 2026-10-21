@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
-import { focusRing } from './dock';
+import { focusRing, worldShot } from './dock';
 import { DEVICE_MODELS } from '../src/lib/experiments/airflow/devices/catalog';
 import { plans } from '../src/lib/experiments/airflow/homes/plans';
 
@@ -19,6 +19,30 @@ test.use({ locale: 'en-US' });
 const hud = (page: Page) => page.locator('.hud');
 const live = (page: Page) => page.locator('.hud p[aria-live="polite"]');
 const view = (page: Page) => page.getByRole('application', { name: /^The air in the/ });
+
+/** How much of a picture changed between two shots: the share of pixels where any channel moved by more than a little. */
+async function changedShare(page: Page, before: Buffer, after: Buffer) {
+	return page.evaluate(
+		async ([a, b]) => {
+			const pixels = async (base64: string) => {
+				const image = new Image();
+				image.src = `data:image/png;base64,${base64}`;
+				await image.decode();
+				const canvas = document.createElement('canvas');
+				canvas.width = image.width;
+				canvas.height = image.height;
+				const context = canvas.getContext('2d')!;
+				context.drawImage(image, 0, 0);
+				return context.getImageData(0, 0, canvas.width, canvas.height).data;
+			};
+			const [first, second] = [await pixels(a), await pixels(b)];
+			let changed = 0;
+			for (let i = 0; i < first.length; i += 4) if (Math.max(Math.abs(first[i] - second[i]), Math.abs(first[i + 1] - second[i + 1]), Math.abs(first[i + 2] - second[i + 2])) > 12) changed++;
+			return changed / (first.length / 4);
+		},
+		[before.toString('base64'), after.toString('base64')]
+	);
+}
 
 /** Opens the HUD and waits until the page's script runs it: the Stage goes live once the engine has taken it over. */
 async function openHud(page: Page) {
@@ -196,6 +220,49 @@ test.describe('the HUD', () => {
 		await expect(hud(page)).toHaveAttribute('data-selection', /^device:/);
 		await expect(page.locator('.carry')).toHaveCount(0);
 		await expect(page.getByRole('toolbar', { name: 'Tools' }).getByRole('button', { name: 'Build' })).toContainText('1');
+	});
+
+	test('the wall modes, the overlays and the graphics quality change the world, and the height probes and smoke use is named for them', async ({ page }) => {
+		const errors: string[] = [];
+		page.on('pageerror', (error) => errors.push(`${error.message}\n${error.stack ?? ''}`));
+		await openHud(page);
+		const stage = view(page);
+		// Paused (as reduced motion starts it), the streaks hold still, so what changes the picture is the control.
+		if (await page.getByRole('button', { name: 'Pause' }).count()) await page.keyboard.press('p');
+		await expect(page.getByRole('button', { name: 'Resume' })).toBeVisible();
+		const walls = page.getByRole('group', { name: 'Walls' });
+		const before = await worldShot(page, stage);
+		await walls.getByRole('button', { name: 'Walls up' }).click();
+		await expect(walls.getByRole('button', { name: 'Walls up' })).toHaveAttribute('aria-pressed', 'true');
+		await expect.poll(async () => changedShare(page, before, await worldShot(page, stage)), { message: 'the walls stand up', timeout: 10_000 }).toBeGreaterThan(0.01);
+		await walls.getByRole('button', { name: 'Walls down' }).click();
+		const down = await worldShot(page, stage);
+		await walls.getByRole('button', { name: 'Cutaway' }).click();
+		await expect.poll(async () => changedShare(page, down, await worldShot(page, stage)), { message: 'cut away again', timeout: 10_000 }).toBeGreaterThan(0.01);
+
+		// An overlay colours the air and shows its legend, in the page's units.
+		const overlay = page.getByRole('group', { name: 'Overlay' });
+		await overlay.getByRole('button', { name: /Air speed/ }).click();
+		await expect(page.getByRole('group', { name: 'Legend: Air speed' })).toBeVisible();
+		await expect(live(page)).toHaveText('Overlay: Air speed.');
+		await overlay.getByRole('button', { name: /Off/ }).click();
+		await expect(page.getByRole('group', { name: /^Legend/ })).toHaveCount(0);
+
+		// Advanced: the graphics quality is the world's tier, and the height a probe is pinned and smoke released at says so.
+		await page.getByRole('button', { name: 'Advanced' }).click();
+		const advanced = page.getByRole('dialog', { name: 'Advanced' });
+		await expect(advanced.getByRole('slider', { name: /^Probe and smoke height/ })).toBeVisible();
+		for (const [name, tier] of [
+			['Medium', 'medium'],
+			['Low', 'low'],
+			['High', 'high']
+		]) {
+			await advanced.getByRole('button', { name, exact: true }).click();
+			await expect(advanced.getByRole('button', { name, exact: true })).toHaveAttribute('aria-pressed', 'true');
+			// WebGL drawn in software (the headless browsers) compiles a tier's post-processing for seconds before the next frame comes.
+			await expect(stage, errors.join('\n')).toHaveAttribute('data-quality', tier, { timeout: 30_000 });
+		}
+		expect(errors).toEqual([]);
 	});
 
 	for (const [width, height] of [
