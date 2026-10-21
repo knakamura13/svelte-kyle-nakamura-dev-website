@@ -59,6 +59,19 @@ const POOL_WIDTH = 64;
 /** Segments along a streak: its tail is traced back through the air in this many steps, so it bends with the flow. */
 export const SEGMENTS = 8;
 
+/**
+ * What a quality tier may change of the streaks' look: their opacity (0 to 1), the seconds of travel a tail shows and the longest a tail
+ * gets (m), their width as drawn near (m: a streak drawn wider than that, to keep to the narrowest it is drawn, is drawn fainter), and
+ * the speeds over which a streak fades in (m/s).
+ */
+export interface StreakLook {
+	opacity?: number;
+	tail?: number;
+	maxLength?: number;
+	width?: number;
+	speedFade?: readonly [number, number];
+}
+
 const VERTEX = /* glsl */ `
 uniform highp sampler2D uState;
 uniform highp sampler2D uExtra;
@@ -260,6 +273,21 @@ export class Streaks {
 	/** The narrowest and widest a streak is drawn, CSS pixels. */
 	setPixels([narrowest, widest]: readonly [number, number]) {
 		this.mesh.material.uniforms.uPixels.value.set(narrowest, widest);
+	}
+
+	/** The look the streaks were made with, for `setLook` to go back to. */
+	private base?: Required<StreakLook>;
+
+	/** How opaque and wide the streaks are and how much of their path they show, where a quality tier asks for its own (`AirLook`); unset is the default. */
+	setLook(look: StreakLook = {}) {
+		const { uniforms } = this.mesh.material;
+		const fade = uniforms.uSpeedFade.value as Vector2;
+		this.base ??= { opacity: uniforms.uOpacity.value, tail: uniforms.uTail.value, maxLength: uniforms.uMaxLength.value, width: uniforms.uWidth.value, speedFade: [fade.x, fade.y] };
+		uniforms.uOpacity.value = look.opacity ?? this.base.opacity;
+		uniforms.uTail.value = look.tail ?? this.base.tail;
+		uniforms.uMaxLength.value = look.maxLength ?? this.base.maxLength;
+		uniforms.uWidth.value = look.width ?? this.base.width;
+		fade.set(...(look.speedFade ?? this.base.speedFade));
 	}
 
 	/** Draws `count` streaks, their positions kept in full floats or (`precise` false, for a GPU that cannot draw into those) half floats: a new field, every streak unborn. */

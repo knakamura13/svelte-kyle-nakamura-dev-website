@@ -308,13 +308,20 @@ void main() {
 /** Puffs at each quality that draws them, and the births a round draws. */
 const PUFFS = { count: 1_200, life: [3, 7] as [number, number], fadeIn: 0.6, fadeOut: 1, poolWidth: 32 };
 
+/** What a quality tier may change of the puffs: how many there are, how wide one is, m, and how opaque (0 to 1). */
+export interface PuffLook {
+	count?: number;
+	size?: number;
+	opacity?: number;
+}
+
 /** Smoke as soft puffs, for low quality: what a phone can afford. */
 export class SmokePuffs {
 	readonly mesh: Mesh<InstancedBufferGeometry, ShaderMaterial>;
 	readonly field: ParticleField;
 
-	constructor(fields: AirFields, precise = true) {
-		this.field = new ParticleField({ count: PUFFS.count, life: PUFFS.life, fadeOut: PUFFS.fadeOut, outside: 0.3, poolWidth: PUFFS.poolWidth }, fields.uniforms, precise);
+	constructor(fields: AirFields, precise = true, count: number = PUFFS.count) {
+		this.field = new ParticleField({ count, life: PUFFS.life, fadeOut: PUFFS.fadeOut, outside: 0.3, poolWidth: PUFFS.poolWidth }, fields.uniforms, precise);
 		const geometry = new InstancedBufferGeometry();
 		geometry.setAttribute('position', new BufferAttribute(new Float32Array([-0.5, -0.5, 0, 0.5, -0.5, 0, -0.5, 0.5, 0, 0.5, 0.5, 0]), 3));
 		geometry.setIndex([0, 1, 2, 2, 1, 3]);
@@ -355,6 +362,17 @@ export class SmokePuffs {
 		const { uniforms } = this.mesh.material;
 		uniforms.uState.value = this.field.state;
 		uniforms.uExtra.value = this.field.extra;
+	}
+
+	/** The size and opacity the puffs were made with, for `setLook` to go back to. */
+	private base?: { size: number; opacity: number };
+
+	/** How wide and how opaque a puff is, where a quality tier asks for its own (`AirLook`); unset is the default. The count is the constructor's. */
+	setLook(look: PuffLook = {}) {
+		const { uniforms } = this.mesh.material;
+		this.base ??= { size: uniforms.uSize.value, opacity: uniforms.uOpacity.value };
+		uniforms.uSize.value = look.size ?? this.base.size;
+		uniforms.uOpacity.value = look.opacity ?? this.base.opacity;
 	}
 
 	/** Lit as the volume is, but evenly: the sky, and half the sun. */

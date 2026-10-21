@@ -153,7 +153,8 @@ export function createAirflowScene(host: WorldHost, params: AirflowSceneParams, 
 		world: () => (session.world?.raster.plan.id === house.plan.id ? session.world : null),
 		muted: () => [house.home.group, devices.group],
 		sun: lighting.sun,
-		quality: host.quality().tier
+		quality: host.quality().tier,
+		look: host.quality().air
 	});
 	let overlay: { kind: OverlayId; sensitivity: number } | null = null;
 	const controls = new SimsCamera(
@@ -268,8 +269,8 @@ export function createAirflowScene(host: WorldHost, params: AirflowSceneParams, 
 		},
 		setQuality(quality) {
 			lighting.setQuality(quality);
-			// The air follows the tier: fewer streaks on medium and low, and puffs for the smoke on low.
-			air.setQuality(quality.tier);
+			// The air follows the tier: fewer streaks on medium and low, and puffs for the smoke on low, drawn as the tier asks (`quality.air`).
+			air.setQuality(quality.tier, quality.air);
 		},
 		takeShadowChange: () => house.home.takeShadowChange(),
 		aoBox: () => house.home.aoBox(),
