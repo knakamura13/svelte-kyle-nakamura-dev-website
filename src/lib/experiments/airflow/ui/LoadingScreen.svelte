@@ -131,6 +131,7 @@
 	.fill {
 		position: absolute;
 		inset: 0;
+		overflow: hidden;
 		border-radius: inherit;
 		transform-origin: left center;
 		background: linear-gradient(90deg, #3fbf82, var(--accent) 60%, #9be8c0);

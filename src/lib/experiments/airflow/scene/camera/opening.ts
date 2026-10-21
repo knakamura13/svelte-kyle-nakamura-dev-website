@@ -11,7 +11,7 @@ import { homeView, wrapAngle, type CameraBounds, type CameraState } from './sims
  */
 
 /** How long the drift takes, s: long enough to read as a move, short enough that the visitor is soon holding the camera. */
-export const OPENING_SECONDS = 6.5;
+export const OPENING_SECONDS = 6;
 
 const DEG = Math.PI / 180;
 
@@ -98,8 +98,11 @@ export function cubicBezier(x1: number, y1: number, x2: number, y2: number) {
 	};
 }
 
-/** The drift's pace: it gets going gently under the fade-in, and settles slowly into the end, with no stop the eye can catch. */
-export const OPENING_EASE = cubicBezier(0.42, 0, 0.18, 1);
+/**
+ * The drift's pace: it gets going gently under the fade-in, glides, and settles into the end with no stop the eye can catch. About 70%
+ * of the way is covered by half time; a longer tail (0.18 for the second point) left the last two seconds moving too little to see.
+ */
+export const OPENING_EASE = cubicBezier(0.45, 0, 0.25, 1);
 
 /** Where the camera is `t` seconds into the opening. The yaw turns the short way round. */
 export function openingAt(opening: Opening, t: number): CameraState {
