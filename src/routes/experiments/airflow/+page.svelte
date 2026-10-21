@@ -1,19 +1,26 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { DEVICE_MODELS } from '$lib/experiments/airflow/devices/catalog';
-	import { loadEngine } from '$lib/experiments/airflow/engine';
+	import { engineLoader } from '$lib/experiments/airflow/engine';
 	import { provideAirflow } from '$lib/experiments/airflow/experience.svelte';
 	import { plans } from '$lib/experiments/airflow/homes/plans';
 	import { linkCatalog, setupFromHash, setupToHash } from '$lib/experiments/airflow/link';
+	import { openingMode } from '$lib/experiments/airflow/load';
+	import { AirflowLoading, provideAirflowLoading } from '$lib/experiments/airflow/loading.svelte';
 	import { SCENARIOS } from '$lib/experiments/airflow/scenarios';
+	import LoadingScreen from '$lib/experiments/airflow/ui/LoadingScreen.svelte';
 	import { shortfall } from '$lib/experiments/airflow/ui/clock';
 	import Hud from '$lib/experiments/airflow/ui/hud/Hud.svelte';
 	import { detectUnits, formatLength } from '$lib/experiments/airflow/units';
 	import { stage } from '$lib/experiments/ui/stage';
 
 	const catalog = linkCatalog(plans, DEVICE_MODELS);
+	/** Whether the visit arrived by a share link: it opens straight onto the linked setup, with no opening. */
+	let shared = $state(false);
+	// The first few seconds: the loading screen while the engine loads, compiles and warms up, then the opening (load.ts).
+	const loading = provideAirflowLoading(new AirflowLoading(() => openingMode({ shared, played: loading.visit.openingPlayed(), reducedMotion: experience.reducedMotion })));
 	const experience = provideAirflow({
-		load: loadEngine,
+		load: engineLoader(loading),
 		plans,
 		models: DEVICE_MODELS,
 		scenarios: SCENARIOS,
@@ -30,8 +37,9 @@
 		const adopt = () => {
 			const setup = setupFromHash(location.hash, catalog);
 			if (setup) experience.adoptSetup(setup);
+			return setup !== null;
 		};
-		adopt();
+		shared = adopt();
 		addEventListener('hashchange', adopt);
 		return () => {
 			removeEventListener('hashchange', adopt);
@@ -72,7 +80,7 @@
 	<meta name="theme-color" content="#2c2f2b" />
 </svelte:head>
 
-<div class="concept airflow-immersive">
+<div class="concept airflow-immersive" data-phase={loading.phase}>
 	<article
 		class="experiment airflow airflow-world"
 		data-tool={experience.tool}
@@ -114,4 +122,22 @@
 			Everything in the home can also be chosen and changed from the Inspector.
 		</p>
 	</article>
+	<LoadingScreen {loading} line={shared ? 'Opening the setup you were sent, as it was when the link was made.' : 'A two-bedroom at golden hour, its windows open to a westerly breeze. Watch the air come in, then drop a fan.'} />
 </div>
+
+<style>
+	/* The HUD comes up a moment after the world, so the first thing seen is the home with the air moving through it. */
+	.airflow-immersive :global(.hud) {
+		transition: opacity 900ms cubic-bezier(0.22, 1, 0.36, 1) 600ms;
+	}
+	.airflow-immersive[data-phase='loading'] :global(.hud) {
+		opacity: 0;
+		transition: none;
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.airflow-immersive :global(.hud) {
+			transition-duration: 1ms;
+			transition-delay: 0s;
+		}
+	}
+</style>

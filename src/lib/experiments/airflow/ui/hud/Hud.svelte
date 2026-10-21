@@ -10,6 +10,7 @@
 	import ContextMenu from './ContextMenu.svelte';
 	import HoverLabel from './HoverLabel.svelte';
 	import Inspector from './Inspector.svelte';
+	import OpeningHint from './OpeningHint.svelte';
 	import ProbeCards from './ProbeCards.svelte';
 	import ProbePanel from './ProbePanel.svelte';
 	import SmokePanel from './SmokePanel.svelte';
@@ -135,6 +136,7 @@
 	<HoverLabel />
 	<Carrier />
 	<Tooltip />
+	<OpeningHint />
 	{#if ui.panel === 'about'}<AboutPanel />{/if}
 	{#if ui.panel === 'advanced'}<AdvancedPanel />{/if}
 

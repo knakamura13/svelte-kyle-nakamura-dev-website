@@ -1,10 +1,13 @@
-import { AgXToneMapping, PCFShadowMap, PMREMGenerator, WebGLRenderer, type Box3, type PerspectiveCamera, type Scene, type Texture } from 'three';
+import { AgXToneMapping, PCFShadowMap, PMREMGenerator, WebGLRenderer, type Box3, type Camera, type Material, type PerspectiveCamera, type Scene, type Texture, type WebGLRenderTarget } from 'three';
 import type { SlotOptions } from '$lib/experiments/engine/controller';
 import type { StageHost } from '$lib/experiments/engine/experience.svelte';
 import { LabelLayer } from '$lib/experiments/engine/labels';
 import type { SceneHost, SceneInput } from '$lib/experiments/engine/types';
+import type { LoadHooks } from '../../load';
+import type { WarmUp } from '../../sim/session';
 import { detectSmallDevice } from '../../sim/device';
 import type { SimsCamera } from '../camera/controls';
+import { CameraOpening, type Opening } from '../camera/opening';
 import { disposeLookAssets, type LookAssets } from './assets';
 import { Post } from './post';
 import { QUALITY, SOFTWARE, chooseQuality, isSoftwareRenderer, isTier, type Quality, type QualityTier } from './quality';
@@ -16,6 +19,12 @@ import { QUALITY, SOFTWARE, chooseQuality, isSoftwareRenderer, isTier, type Qual
  * fan drags it) take left clicks and a finger in Probe or Emit mode, and the Sims camera (`scene.controls`) takes everything else, so
  * a right drag turns the view, a middle drag pans it, the wheel zooms, and a finger pans and pinches. The keys go to the tools first,
  * then to the camera (WASD and the arrows pan, Q and E turn, + and - zoom, Home goes back to the default view).
+ *
+ * The world is not shown until it is ready, while the page's loading screen covers it: every material is compiled first (in parallel,
+ * where the browser can), then the world is warmed up out of sight (the simulation measures the device and picks its grid, with
+ * nothing drawn meanwhile so the measurement is the solver's alone, and then a few frames are drawn, which compiles the passes after
+ * the scene and the air's own, and lets the air get going). Then it is shown, and the opening's camera move plays (`camera/opening.ts`).
+ * The host reports each step to `LoadHooks`.
  */
 
 /** How bright the picture is before AgX maps it to the screen. */
@@ -23,6 +32,39 @@ const EXPOSURE = 1.0;
 
 /** The least time between two frames where WebGL is drawn in software, ms. */
 const SOFTWARE_FRAME_MS = 66;
+
+/** How long the world is drawn out of sight once the simulation is ready, ms: the streaks fill the rooms and every pass has drawn once. */
+const SPIN_UP_MS = 700;
+/** The longest the warm-up may take, ms: past it the world is shown as it is rather than leave the visitor on the loading screen. */
+const WARM_UP_LIMIT_MS = 15_000;
+
+/**
+ * Compiles every material in `scene` as the scene is drawn into the post-processing's buffer (`target`: no tone mapping and linear
+ * colour, which a program is compiled for), so the first frame does not stop to compile them. Where the browser compiles in the
+ * background (`KHR_parallel_shader_compile`) this waits without blocking the page, and `progress` hears the share that is ready.
+ */
+async function compileScene(renderer: WebGLRenderer, scene: Scene, camera: Camera, target: WebGLRenderTarget | null, progress: (share: number) => void, alive: () => boolean) {
+	const previous = renderer.getRenderTarget();
+	renderer.setRenderTarget(target);
+	let materials: Set<Material>;
+	try {
+		materials = renderer.compile(scene, camera);
+	} finally {
+		renderer.setRenderTarget(previous);
+	}
+	const pending = new Set(materials);
+	const total = Math.max(1, pending.size);
+	const properties = renderer.properties as unknown as { get(material: Material): { currentProgram?: { isReady(): boolean } } };
+	while (alive()) {
+		for (const material of pending) {
+			const program = properties.get(material).currentProgram;
+			if (!program || program.isReady()) pending.delete(material);
+		}
+		progress(1 - pending.size / total);
+		if (!pending.size) return;
+		await new Promise((resolve) => setTimeout(resolve, 16));
+	}
+}
 
 /** What the world needs from its host beyond what any scene gets: the CC0 assets (or null when they could not be had) and the quality tier. */
 export interface WorldHost extends SceneHost {
@@ -47,6 +89,10 @@ export interface World {
 	aoBox(): Box3;
 	/** Keys the world handles itself after the tools and before the camera (the walls' temporary C key). */
 	key?(event: KeyboardEvent): boolean;
+	/** How far the world is from ready to show (the simulation's warm-up). Absent: ready at once. */
+	warmUp?(): WarmUp;
+	/** The opening's camera move for the Home on show, on a view of this shape (width over height), or null for none. */
+	opening?(aspect: number): Opening | null;
 	/** Moves everything one frame on. Returns true while anything is still moving. */
 	update(dt: number): boolean;
 	dispose(): void;
@@ -69,7 +115,14 @@ interface Slot {
 	claimed: number | null;
 	/** Pointers the camera has. */
 	camera: Set<number>;
-	firstFrame: boolean;
+	/** Compiling the materials (nothing is drawn), warming up out of sight, or on show. */
+	phase: 'compile' | 'warm-up' | 'live';
+	/** When the warm-up began, and when the simulation was first ready during it, ms. */
+	warmStart: number;
+	warmed: number | null;
+	/** The opening that plays once the world is on show, and the one playing. */
+	pendingOpening: Opening | null;
+	opening: CameraOpening | null;
 	undo: (() => void)[];
 }
 
@@ -86,7 +139,8 @@ export class AirflowStage implements StageHost {
 
 	constructor(
 		private readonly factory: WorldFactory,
-		private readonly assets: LookAssets | null
+		private readonly assets: LookAssets | null,
+		private readonly hooks?: LoadHooks
 	) {
 		this.resizes = new ResizeObserver(() => this.resize());
 		document.addEventListener('visibilitychange', this.onVisibility);
@@ -136,6 +190,7 @@ export class AirflowStage implements StageHost {
 		const renderer = this.ensureRenderer();
 		if (!renderer) {
 			view.dataset.state = 'unsupported';
+			this.hooks?.failed();
 			return () => {};
 		}
 		const tier = this.tierFor(options);
@@ -159,6 +214,7 @@ export class AirflowStage implements StageHost {
 			labels.dispose();
 			view.dataset.state = 'error';
 			this.broken = true;
+			this.hooks?.failed();
 			return () => {};
 		}
 		if (this.assets) {
@@ -166,15 +222,109 @@ export class AirflowStage implements StageHost {
 			world.setEnvironment(this.environment);
 			performance.mark('airflow:sky');
 		}
-		const slot: Slot = { view, options, world, labels, post: null, tier, quality, width: 0, height: 0, ratio: 1, claimed: null, camera: new Set(), firstFrame: true, undo: [] };
+		const slot: Slot = {
+			view,
+			options,
+			world,
+			labels,
+			post: null,
+			tier,
+			quality,
+			width: 0,
+			height: 0,
+			ratio: 1,
+			claimed: null,
+			camera: new Set(),
+			phase: 'compile',
+			warmStart: 0,
+			warmed: null,
+			pendingOpening: null,
+			opening: null,
+			undo: []
+		};
 		this.slot = slot;
 		this.applyQuality(slot, tier);
 		view.prepend(renderer.domElement);
 		this.listen(slot, renderer.domElement);
 		this.resizes.observe(view);
 		this.resize();
-		this.invalidate();
+		void this.prepare(slot);
 		return () => this.unregister();
+	}
+
+	/**
+	 * Gets the world ready to show, out of sight: every material compiled in the background, then the scene drawn once into the
+	 * post-processing's buffer, then one whole frame. The two draws are what is left to compile, and they hold the page while they do
+	 * (the GPU's own pipelines are built as each thing first draws, and so are the shadow map's and the passes' shaders), so they are
+	 * two, with the loading screen painted between them. Then the warm-up, which `tick` carries on with until the world is shown.
+	 */
+	private async prepare(slot: Slot) {
+		const renderer = this.renderer!;
+		const alive = () => this.slot === slot;
+		const target = slot.post?.composer.readBuffer ?? null;
+		/** Waits for the next frame to be painted, so the loading screen shows where the load has got before the page is held again. */
+		const painted = () => new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
+		this.hooks?.report('compile', 0);
+		try {
+			await compileScene(renderer, slot.world.scene, slot.world.camera, target, (share) => this.hooks?.report('compile', 0.45 * share), alive);
+		} catch (error) {
+			// Whatever did not compile now compiles as it first draws, under the loading screen still.
+			console.warn('The world’s shaders could not be compiled ahead of its first frame.', error);
+		}
+		if (!alive()) return;
+		performance.mark('airflow:compiled');
+		await painted();
+		if (!alive()) return;
+		renderer.setRenderTarget(target);
+		renderer.render(slot.world.scene, slot.world.camera);
+		renderer.setRenderTarget(null);
+		this.hooks?.report('compile', 0.7);
+		await painted();
+		if (!alive()) return;
+		slot.phase = 'warm-up';
+		slot.warmStart = performance.now();
+		this.draw(slot, 0);
+		performance.mark('airflow:drawn');
+		this.hooks?.report('compile', 1);
+		// How the world opens is settled now, so the warm-up's frames are drawn from where the visitor will first see it, walls and all.
+		const mode = this.hooks?.opening() ?? 'none';
+		const { controls } = slot.world;
+		// A camera the address asked for (`?camera=`) is the view: no opening moves it.
+		const opening = mode !== 'none' && !controls.touched ? (slot.world.opening?.(slot.width / Math.max(1, slot.height)) ?? null) : null;
+		if (opening && (mode === 'end' || this.reduced.matches)) controls.jumpTo(opening.to);
+		else slot.pendingOpening = opening;
+		this.hooks?.report('warm-up', 0);
+		this.invalidate();
+	}
+
+	/**
+	 * One frame of the warm-up: how far the simulation has got, and whether to draw (not while it measures the device). Once it is ready,
+	 * the world is drawn out of sight for `SPIN_UP_MS` and then shown; past `WARM_UP_LIMIT_MS` it is shown as it is.
+	 */
+	private warm(slot: Slot, now: number): { quiet: boolean } {
+		const state = slot.world.warmUp?.() ?? { share: 1, measuring: false };
+		if (state.share >= 1 && slot.warmed === null) {
+			slot.warmed = now;
+			performance.mark('airflow:warmed');
+		}
+		const spun = slot.warmed === null ? 0 : Math.min(1, (now - slot.warmed) / SPIN_UP_MS);
+		this.hooks?.report('warm-up', 0.85 * state.share + 0.15 * spun);
+		if (spun >= 1 || now - slot.warmStart >= WARM_UP_LIMIT_MS) this.reveal(slot);
+		return { quiet: state.measuring };
+	}
+
+	/** Shows the world: the loading screen goes, and the opening's drift starts. */
+	private reveal(slot: Slot) {
+		if (slot.phase === 'live') return;
+		slot.phase = 'live';
+		if (slot.pendingOpening) slot.opening = new CameraOpening(slot.world.controls, slot.pendingOpening);
+		slot.pendingOpening = null;
+		performance.mark('airflow:first-frame');
+		const { dataset } = slot.view;
+		dataset.state = 'live';
+		// Milliseconds from the start of the navigation to the world on show: the page's load time as a visitor sees it.
+		dataset.firstFrame = String(Math.round(performance.now()));
+		this.hooks?.revealed();
 	}
 
 	private unregister() {
@@ -273,7 +423,8 @@ export class AirflowStage implements StageHost {
 	private tick = (now: number) => {
 		this.frame = 0;
 		const slot = this.slot;
-		if (!slot || document.hidden) return;
+		// While the materials compile nothing moves: `prepare` asks for the first frame once they are ready.
+		if (!slot || document.hidden || slot.phase === 'compile') return;
 		// Drawn in software, a frame takes the processor for a long time; at most about 15 a second leaves the page time between them for
 		// its timers and the visitor's input.
 		if (this.software && this.last && now - this.last < SOFTWARE_FRAME_MS) {
@@ -284,8 +435,15 @@ export class AirflowStage implements StageHost {
 		this.last = now;
 		const tier = this.tierFor(slot.options);
 		if (tier !== slot.tier) this.applyQuality(slot, tier);
-		const moving = slot.world.update(dt);
-		if (moving || this.dirty) {
+		// The opening moves the camera before the world updates, so the walls are cut for where the camera is this frame.
+		if (slot.opening && !slot.opening.update(dt)) slot.opening = null;
+		let moving = slot.world.update(dt) || slot.opening !== null;
+		let quiet = false;
+		if (slot.phase === 'warm-up') {
+			quiet = this.warm(slot, now).quiet;
+			moving = true;
+		}
+		if ((moving || this.dirty) && !quiet) {
 			this.dirty = false;
 			this.draw(slot, dt);
 		}
@@ -295,7 +453,7 @@ export class AirflowStage implements StageHost {
 
 	private draw(slot: Slot, dt: number) {
 		const renderer = this.renderer;
-		if (!renderer || !slot.width) return;
+		if (!renderer || !slot.width || slot.phase === 'compile') return;
 		if (slot.world.takeShadowChange()) renderer.shadowMap.needsUpdate = true;
 		if (slot.post) slot.post.render(dt);
 		else renderer.render(slot.world.scene, slot.world.camera);
@@ -309,13 +467,6 @@ export class AirflowStage implements StageHost {
 			focus: `${controls.goal.x.toFixed(2)},${controls.goal.z.toFixed(2)}`
 		};
 		for (const [key, value] of Object.entries(marks)) if (dataset[key] !== value) dataset[key] = value;
-		if (slot.firstFrame) {
-			slot.firstFrame = false;
-			performance.mark('airflow:first-frame');
-			dataset.state = 'live';
-			// Milliseconds from the start of the navigation to the first frame of the world: the page's load time as a visitor sees it.
-			dataset.firstFrame = String(Math.round(performance.now()));
-		}
 	}
 
 	private onVisibility = () => {
@@ -338,6 +489,15 @@ export class AirflowStage implements StageHost {
 			slot.undo.push(() => target.removeEventListener(type, handler as EventListener, options));
 		};
 		canvas.style.touchAction = 'none';
+
+		// Anything the visitor does (a click or a touch anywhere, a key, the wheel) takes the camera from the opening at once: the drift
+		// stops where it is, before the input itself is handled, so the input moves the camera from there.
+		const takeOver = () => {
+			if (!slot.opening) return;
+			slot.opening.stop();
+			slot.opening = null;
+		};
+		for (const type of ['pointerdown', 'keydown', 'wheel', 'touchstart'] as const) on(window, type, takeOver, { capture: true, passive: true });
 
 		on(canvas, 'pointerdown', (event) => {
 			// The press itself focuses the world (its mousedown focuses the nearest focusable thing, the view), so the keys reach the camera

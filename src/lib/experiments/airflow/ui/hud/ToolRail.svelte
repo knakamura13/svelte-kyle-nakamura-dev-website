@@ -17,12 +17,6 @@
 
 	let rail: HTMLElement | undefined = $state();
 
-	// The first frame's one invitation, beside Build, until the visitor builds something or puts the hint away.
-	const hinting = $derived(ui.hint && experience.tool === 'select' && !experience.menu && !ui.popover && experience.setup.devices.length === 0 && !experience.carry);
-	$effect(() => {
-		if (experience.tool === 'build' || experience.setup.devices.length > 0) ui.hint = false;
-	});
-
 	/** Arrow keys move along the toolbar; Home and End go to its ends. */
 	function keydown(event: KeyboardEvent) {
 		const keys = ui.phone ? ['ArrowLeft', 'ArrowRight'] : ['ArrowUp', 'ArrowDown'];
@@ -72,83 +66,11 @@
 		</button>
 	{/if}
 </div>
-{#if hinting}
-	<div class="hint glass" role="note">
-		<span class="hint-dot" aria-hidden="true"></span>
-		<p><strong>Drop a fan</strong> and watch the air change.</p>
-		<button type="button" class="ibtn hint-close" aria-label="Dismiss the hint" onclick={() => (ui.hint = false)}><Icon name="close" size={14} /></button>
-	</div>
-{/if}
 </div>
 
 <style>
 	.rail-wrap {
 		position: relative;
-	}
-	.hint {
-		position: absolute;
-		top: 76px;
-		left: calc(100% + 14px);
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		width: max-content;
-		max-width: 300px;
-		padding: 4px 4px 4px 14px;
-		border-radius: 16px;
-		animation:
-			hud-slide 420ms 900ms var(--hud-ease) backwards,
-			hint-bob 2.8s 1.4s ease-in-out infinite;
-	}
-	/* A small pointer from the bubble to the Build tool. */
-	.hint::before {
-		content: '';
-		position: absolute;
-		left: -6px;
-		top: 50%;
-		width: 12px;
-		height: 12px;
-		background: var(--hud-glass);
-		transform: translateY(-50%) rotate(45deg);
-		border-radius: 2px;
-	}
-	.hint p {
-		margin: 0;
-		font-size: 13px;
-		white-space: nowrap;
-	}
-	.hint strong {
-		color: var(--hud-accent);
-		font-weight: 800;
-	}
-	.hint-dot {
-		flex: none;
-		width: 8px;
-		height: 8px;
-		border-radius: 50%;
-		background: var(--hud-accent);
-		box-shadow: 0 0 0 4px rgb(95 213 154 / 0.22);
-	}
-	.hint-close {
-		color: var(--hud-muted);
-	}
-	@keyframes hint-bob {
-		50% {
-			transform: translateX(4px);
-		}
-	}
-	:global(.hud.phone) .hint {
-		top: auto;
-		bottom: calc(100% + 12px);
-		left: 50%;
-		transform: translateX(-50%);
-		animation: hud-rise 420ms 900ms var(--hud-ease) backwards;
-	}
-	:global(.hud.phone) .hint::before {
-		left: 50%;
-		top: auto;
-		bottom: -6px;
-		transform: translateX(-50%) rotate(45deg);
 	}
 	.rail {
 		display: flex;
