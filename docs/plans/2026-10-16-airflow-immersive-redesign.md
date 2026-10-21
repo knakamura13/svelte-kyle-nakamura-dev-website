@@ -136,6 +136,12 @@ Kyle paused the project after the first build round. The three milestone agents 
   - In the default view the cutaway rule leaves the west wall standing.
   - The "Look mode" sentence in `probeWords.ts` will be wrong once the arrow keys pan.
 
+**Milestone 1, 2026-10-20 session (branch `worktree-agent-adbd1572cd109344b`, on top of `knakamura/issue-30-completion-7a3fb7`): built, not yet checked in.**
+- Built and committed: `look/{assets,floors,furniture,outside,lighting,post,home,stage}.ts`, the far cutaway rule, `?camera=x,z,heading,zoom,tilt`, `view.slice` (off), the full-screen route (`+layout.ts` immersive, root layout skips the shell), the Dock as a drawer that pushes the world aside, and a lighter tier for WebGL in software.
+- Tests: `tests/solver/look-home.spec.ts` (new) and additions to `walls-cutaway` and `sims-camera` pass; the type check is at its baseline. The airflow e2e specs were adapted (drawer helper, data-focus, new Look words, explainer in the drawer, old-layout tests skipped naming milestone 3) but not yet rerun: the last full Chromium run (before the adaptation) was 58 passed and 72 failed on a machine at load average 200.
+- Not done: the check-in screenshots and video, the frame-rate measurement (the browser was capped at 30 fps on battery saver; main thread ~14 ms a frame on high, ~10 ms on low), the cold first frame (~4 to 6 s, mostly shader compiles; ~0.6 s warm), the eye-level framing, and HOME_ZOOM (the default view cuts off the living room's corner).
+- Resume: rebuild, run `tests/airflow*.spec.ts` in Chromium on an idle machine, then the screenshots (`?camera=` and `?cell=0.15` keep the tuner from restarting the air).
+
 **Milestone 2 (air): the data side done.**
 - **Done and tested: the volume snapshot** (`solver/volume.ts`).
   - It holds velocity, air share, temperature and PM2.5, averaged over blocks of at most 64,000 cells, with strides chosen per axis. No block is over 0.3 m on any grid the tuner picks.
