@@ -52,12 +52,25 @@ export interface Measured {
 /** The parts of the measurement, s: about half a second on a device that keeps up, so the warm-up adds little to the loading screen. */
 export const MEASURE = { discard: 0.15, seconds: 0.4, steps: 12, limit: 4 } as const;
 
+/**
+ * The most steps the measurement leaves unfinished with a backend that queues them. Enough that the backend never waits for the page
+ * between two looks, and no more than the page leaves at the Scenarios' speed (one or two a frame): the GPU sizes a step's scalar
+ * substeps from a reading of the air's speed that is older the deeper its queue is, and enlarges an old reading to be safe, so a queue
+ * kept at its full eight runs heavier steps (2.5 times the cost of the house's, measured) than the page ever does.
+ */
+export const MEASURE_DEPTH = 3;
+
+/** A wait between two looks longer than this, ms, is the page being held (a hidden tab's timers, a busy thread): what it covers is not counted. */
+const STALL_MS = 50;
+
 const wait = () => new Promise<void>((resolve) => setTimeout(resolve, 2));
 
 /**
  * Steps `backend` as fast as it goes and says what a step costs. A backend that works in the background (the GPU, whose steps queue,
- * and the worker) is kept at its limit of unfinished steps, so it never waits on the page, and a step's cost is the time over the steps
- * it finished; one that steps in the page (the CPU in tests) is timed step by step.
+ * and the worker) is kept at `MEASURE_DEPTH` unfinished steps, so it never waits on the page, and a step's cost is the time over the
+ * steps it finished, counted from once its first steps (the heaviest: no speed has been read back for them) are done; one that steps
+ * in the page (the CPU in tests) is timed step by step. A look that comes late (a hidden tab) starts the count again, since the backend
+ * sat idle meanwhile; a measurement that never gets a clean stretch fails rather than report the idling as the cost of a step.
  */
 export async function measureSteps(backend: Steppable, options: MeasureOptions): Promise<Measured> {
 	const { dt, discard = MEASURE.discard, seconds = MEASURE.seconds, steps: fewest = MEASURE.steps, limit = MEASURE.limit } = options;
@@ -65,13 +78,16 @@ export async function measureSteps(backend: Steppable, options: MeasureOptions):
 	const pause = options.pause ?? wait;
 	const alive = options.alive ?? (() => true);
 	const background = backend.stepsInFlight !== undefined;
-	const room = Math.max(1, backend.maxInFlight ?? 2);
+	const room = Math.max(1, Math.min(MEASURE_DEPTH, backend.maxInFlight ?? 2));
 	const start = now();
 	let sent = 0;
-	// In the page, each step is timed by itself; in the background, the clock runs from the moment the discard ends.
+	// In the page, each step is timed by itself; in the background, the clock runs from a mark once the first steps are done.
 	let spent = 0;
 	let timed = 0;
 	let mark: { at: number; done: number } | null = null;
+	let stalled = false;
+	/** The longest clean stretch counted before a stall cut it short, for when no later one is long enough. */
+	let kept: { seconds: number; steps: number } | null = null;
 	const send = () => {
 		options.before?.();
 		backend.step(dt);
@@ -88,22 +104,34 @@ export async function measureSteps(backend: Steppable, options: MeasureOptions):
 				timed++;
 			}
 		}
+		const waited = now();
+		const sofar = background && mark ? { seconds: (waited - mark.at) / 1000, steps: sent - (backend.stepsInFlight ?? 0) - mark.done } : { seconds: spent / 1000, steps: timed };
 		await pause();
 		const at = now();
 		const elapsed = (at - start) / 1000;
 		const done = sent - (background ? (backend.stepsInFlight ?? 0) : 0);
-		if (background && !mark && elapsed >= discard && done > 0) mark = { at, done };
+		if (at - waited > STALL_MS) {
+			// The page was held, and a backend in the background ran dry meanwhile: count again from here, keeping what was counted till now.
+			stalled = true;
+			if (sofar.steps > 0 && (!kept || sofar.seconds > kept.seconds)) kept = sofar;
+			mark = null;
+			spent = 0;
+			timed = 0;
+		} else if (background && !mark && elapsed >= discard && done >= room) mark = { at, done };
 		const counted = background ? (mark ? { seconds: (at - mark.at) / 1000, steps: done - mark.done } : { seconds: 0, steps: 0 }) : { seconds: spent / 1000, steps: timed };
 		options.progress?.(Math.min(1, elapsed / (discard + seconds)));
 		const enough = counted.steps >= fewest && (background ? counted.seconds >= seconds : elapsed >= discard + seconds);
 		if (!enough && elapsed < limit) continue;
+		const best = kept && kept.seconds > counted.seconds ? kept : counted;
 		let ms: number;
 		let steps: number;
-		if (counted.steps > 0) {
-			ms = (counted.seconds * 1000) / counted.steps;
-			steps = counted.steps;
+		if (best.steps > 0) {
+			ms = (best.seconds * 1000) / best.steps;
+			steps = best.steps;
+		} else if (stalled) {
+			throw new Error('The warm-up was held up (the tab was hidden or the page busy) and could not measure a step.');
 		} else {
-			// A backend too slow to finish a step after the discard is measured by what it finished from the start.
+			// A backend too slow to finish its first steps inside the limit is measured by what it finished from the start.
 			ms = done > 0 ? (at - start) / done : NaN;
 			steps = done;
 		}

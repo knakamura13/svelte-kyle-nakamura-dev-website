@@ -217,10 +217,15 @@ export class AirflowStage implements StageHost {
 			this.hooks?.failed();
 			return () => {};
 		}
-		if (this.assets) {
-			this.environment ??= new PMREMGenerator(renderer).fromEquirectangular(this.assets.sky).texture;
-			world.setEnvironment(this.environment);
-			performance.mark('airflow:sky');
+		try {
+			if (this.assets) {
+				this.environment ??= new PMREMGenerator(renderer).fromEquirectangular(this.assets.sky).texture;
+				world.setEnvironment(this.environment);
+				performance.mark('airflow:sky');
+			}
+		} catch (error) {
+			// The sky's lighting could not be made: the world is lit by its sun and fill alone, which is better than no world.
+			console.error(error);
 		}
 		const slot: Slot = {
 			view,
@@ -243,12 +248,25 @@ export class AirflowStage implements StageHost {
 			undo: []
 		};
 		this.slot = slot;
-		this.applyQuality(slot, tier);
+		try {
+			this.applyQuality(slot, tier);
+		} catch (error) {
+			// No post-processing (a GPU that cannot make its buffers): the world is drawn straight to the screen.
+			console.error(error);
+			slot.post = null;
+		}
 		view.prepend(renderer.domElement);
 		this.listen(slot, renderer.domElement);
 		this.resizes.observe(view);
 		this.resize();
-		void this.prepare(slot);
+		this.prepare(slot).catch((error) => {
+			// Whatever went wrong getting ready, the visitor is not left on the loading screen: the world is shown as it is at the next frame.
+			console.error('The world could not be got ready to show.', error);
+			if (this.slot !== slot) return;
+			slot.phase = 'warm-up';
+			slot.warmStart = -Infinity;
+			this.invalidate();
+		});
 		return () => this.unregister();
 	}
 
@@ -328,7 +346,7 @@ export class AirflowStage implements StageHost {
 		dataset.state = 'live';
 		// Milliseconds from the start of the navigation to the world on show: the page's load time as a visitor sees it.
 		dataset.firstFrame = String(Math.round(performance.now()));
-		this.hooks?.revealed();
+		this.hooks?.revealed(slot.opening !== null);
 	}
 
 	private unregister() {
@@ -414,8 +432,9 @@ export class AirflowStage implements StageHost {
 		renderer.setSize(width, height, false);
 		slot.post?.setSize(width, height, slot.ratio);
 		slot.world.controls.setAspect(width / height);
-		// Resizing clears the canvas, so draw before the browser paints rather than show a blank world for a frame.
-		this.draw(slot, 0);
+		// Resizing clears the canvas, so draw before the browser paints rather than show a blank world for a frame. (Under the loading
+		// screen there is nothing to see, and a frame drawn while the warm-up measures the device would be measured with it.)
+		if (slot.phase === 'live') this.draw(slot, 0);
 		this.invalidate();
 	}
 

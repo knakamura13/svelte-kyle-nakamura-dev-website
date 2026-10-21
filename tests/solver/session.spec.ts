@@ -1258,14 +1258,27 @@ test.describe('simulation session', () => {
 		});
 
 		test('the next Home is not measured again, and a page that leaves in the middle of a warm-up lets its world go without a word', async () => {
-			const warm = warming(0.2, 0.3);
+			// The real tuner of the worker, told what the warm-up measured as the choice of backend tells it.
+			const tuner = new Tuner({ kind: 'cpu' });
+			let measurements = 0;
+			const tuning: Tuning = {
+				observe: (_kind, sample) => tuner.observe(sample),
+				note: () => tuner.note ?? '',
+				probe: async (plan) => tuner.probe(plan),
+				calibrate: (_kind, cost) => {
+					measurements++;
+					tuner.calibrate(cost);
+				}
+			};
 			const built = recording();
-			const { session, params } = makeSession(undefined, built.factory, warm.cellSize, { tuning: warm.tuning });
+			const { session, params } = makeSession(undefined, built.factory, (plan) => tuner.pick(plan), { tuning });
 			await start(session);
+			expect(built.sizes[0], 'the studio is measured at the finest the worker may have').toBe(0.15);
 			params.setup = blankSetup('one-bedroom');
 			await until(session, () => session.world!.raster.plan.id === 'one-bedroom', 'the next Home');
-			expect(warm.told, 'measured once for the page').toHaveLength(1);
-			expect(built.sizes).toEqual([0.2, 0.3, 0.3]);
+			expect(measurements, 'measured once for the page').toBe(1);
+			expect(built.sizes.slice(-1)[0], 'the next Home is built once, at the size the measurement allows').toBe(tuner.pick(planById('one-bedroom')!));
+			expect(built.sizes.length, 'and only once').toBeLessThanOrEqual(3);
 			session.dispose();
 
 			const again = warming(0.2, 0.3);
@@ -1288,26 +1301,41 @@ test.describe('simulation session', () => {
 			}
 		});
 
-		test('the real tuner, on a device that cannot keep up: the warm-up picks a coarser grid than it measured, and nothing changes after that', async () => {
+		test('the real tuner, on a device that falls behind: held for its first minute, then one step down that carries the run on, with its probe and fan', async () => {
 			const tuner = new Tuner({ kind: 'cpu' });
+			// Whatever this machine does, every frame is reported as the solver keeping up with a third of real time.
 			const tuning: Tuning = {
-				observe: (_kind, sample) => tuner.observe(sample),
+				observe: (_kind, sample) => tuner.observe({ ...sample, rate: 0.3 }),
 				note: () => tuner.note ?? '',
 				probe: async (plan) => tuner.probe(plan),
-				// A device ten times slower than whatever runs this test: a step costs ten times what was measured.
-				calibrate: (_kind, cost) => tuner.calibrate(cost && { ...cost, ms: 10 * cost.ms })
+				calibrate: (_kind, cost) => tuner.calibrate(cost)
 			};
 			const built = recording();
-			const { session, readout, announced } = makeSession(undefined, built.factory, (plan) => tuner.pick(plan), { tuning });
+			const { session, params, readout, announced } = makeSession(
+				(p) => {
+					p.probes = [{ id: 'p1', x: 3.9, y: 1.1, z: 2.7 }];
+					p.setup = { ...p.setup, devices: [fan()] };
+				},
+				built.factory,
+				(plan) => tuner.pick(plan),
+				{ models: DEVICE_MODELS, tuning }
+			);
 			await start(session);
-			expect(built.sizes[0], 'the studio is measured at the finest the worker may have').toBe(0.15);
 			const shown = session.world!;
-			expect(shown.raster.spec.h, 'and shown on a coarser grid').toBeGreaterThan(0.15);
-			// Fifty seconds of frames: nothing climbs back, and the grid is held for its first minute whatever the frames say.
-			for (let n = 0; n < 500; n++) session.update(0.1);
-			expect(session.world, 'the same world').toBe(shown);
-			expect(readout.tuning).toBe(tuner.note ?? '');
-			expect(announced.filter((m) => m.startsWith('Switched')), 'nothing was switched').toEqual([]);
+			// Frames of a tenth of a second: no change at all in the first minute, however badly they go.
+			for (let t = 0; t < 59; t += 0.1) session.update(0.1);
+			expect(session.world, 'held for a minute').toBe(shown);
+			// The next window that ends after the minute steps down. Frames of a tenth of a second, so it takes few of them on a busy machine.
+			for (let n = 0; n < 400 && session.world === shown; n++) {
+				session.update(0.1);
+				await pause(5);
+			}
+			expect(session.world!.raster.spec.h, 'to a coarser grid').toBeGreaterThan(shown.raster.spec.h);
+			expect(session.simTime, 'the run carried on').toBeGreaterThan(5);
+			expect(params.probes.map((p) => p.id)).toEqual(['p1']);
+			expect(session.world!.fanIndexOf('f1'), 'the fan is in the new solver').toBeDefined();
+			expect(readout.tuning).toMatch(/^Switched to a coarser grid: it ran at 30% of real time\./);
+			expect(announced.filter((m) => m.startsWith('Switched')), 'said once').toHaveLength(1);
 			session.dispose();
 		});
 	});

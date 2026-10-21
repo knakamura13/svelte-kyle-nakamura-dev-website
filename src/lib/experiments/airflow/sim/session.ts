@@ -249,8 +249,16 @@ export class SimulationSession {
 			const probe = tuning?.probe ? await tuning.probe(plan) : null;
 			if (stale()) return;
 			let shown: { world: World; carried: Carried; simTime: number } | null;
-			if (probe !== null) shown = await this.warm(await create(probe), stale);
-			else {
+			if (probe !== null) {
+				let trial = await create(probe);
+				// A GPU that failed while the world was built on it leaves it on the worker, which is measured at its own finest size, not the GPU's.
+				const again = stale() ? probe : await tuning!.probe!(plan);
+				if (again !== null && Math.abs(again - probe) > 1e-9 && !stale()) {
+					trial.dispose();
+					trial = await create(again);
+				}
+				shown = await this.warm(trial, stale);
+			} else {
 				const h = await this.options.cellSize(plan);
 				if (stale()) return;
 				const world = await create(h);
@@ -346,8 +354,13 @@ export class SimulationSession {
 				const carried = await this.carry(trial, world, FRESH);
 				return { world, carried, simTime: carried.time };
 			} catch (error) {
-				world.dispose();
-				throw error;
+				// The warm-up's world cannot be read (its GPU device was lost while it was measured): the new world starts from still air.
+				if (stale()) {
+					world.dispose();
+					return null;
+				}
+				console.warn('The warm-up’s air could not be moved to the grid it picked, so the air starts from rest.', error);
+				return { world, carried: FRESH, simTime: 0 };
 			}
 		} finally {
 			if (!keep) trial.dispose();

@@ -140,6 +140,8 @@ test.describe('the airflow page', () => {
 	test('keyboard focus on the Stage draws a ring over the picture, where the canvas cannot hide it', async ({ page }) => {
 		await page.goto('/experiments/airflow');
 		const view = page.getByRole('application', { name: /^The air in the/ });
+		// Under the loading screen the world cannot be reached by Tab: it can once it is on show.
+		await expect(view).toHaveAttribute('data-state', /^(live|unsupported|error)$/, { timeout: 60_000 });
 		for (let n = 0; n < 30 && !(await view.evaluate((el) => document.activeElement === el)); n++) await page.keyboard.press('Tab');
 		expect(await view.evaluate((el) => document.activeElement === el), 'Tab reaches the Stage').toBe(true);
 		const ring = await view.evaluate((el) => {

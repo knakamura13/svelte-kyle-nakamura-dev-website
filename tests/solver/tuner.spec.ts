@@ -191,9 +191,14 @@ test.describe('the auto-tuner', () => {
 		expect(tuner.note).toBe('Even the coarsest grid is too slow for this device.');
 	});
 
-	test('a device the warm-up found too slow for even the coarsest grid says so from the first frame', () => {
+	test('a device the warm-up found too slow for even the coarsest grid says so from the first frame, and only for the Homes it is too slow for', () => {
 		const tuner = measured('cpu', house, (cells) => ({ cells, ms: 400, steps: 4 }));
 		expect(tuner.pick(house)).toBe(0.3);
+		expect(tuner.note).toBe('Even the coarsest grid is too slow for this device.');
+		// The house at 0.3 m is 12,288 cells; this device holds about 4,000, which is the studio's 3,744 at 0.3 m.
+		expect(tuner.pick(studio)).toBe(0.3);
+		expect(tuner.note, 'the studio is not too much for it').toBeNull();
+		tuner.pick(house);
 		expect(tuner.note).toBe('Even the coarsest grid is too slow for this device.');
 	});
 

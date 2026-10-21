@@ -50,8 +50,9 @@ test.describe('the loading screen', () => {
 		await expect(screen).toContainText('Airflow, room by room');
 		await expect(screen).toContainText('Watch the air come in');
 		await expect(screen.locator('.stages li')).toContainText(['Fetching the home', 'Compiling shaders', 'Measuring this device']);
-		// The HUD waits under it.
+		// The HUD waits under it, out of sight and out of reach of Tab and of a screen reader.
 		expect(await page.locator('.hud').evaluate((el) => getComputedStyle(el).opacity)).toBe('0');
+		await expect(page.locator('article.airflow-world')).toHaveAttribute('inert', '');
 
 		// The bar only goes forward, and is full when the world is shown. (Read by its markup: once the world is shown it is hidden from the accessibility tree.)
 		const values: number[] = [];
@@ -68,6 +69,7 @@ test.describe('the loading screen', () => {
 		expect(values.length, 'it was seen loading').toBeGreaterThan(0);
 		expect(values.every((value, n) => n === 0 || value >= values[n - 1]), `${values.join(' ')}`).toBe(true);
 		await expect(screen, 'it leaves the page once it has faded').toHaveCount(0, { timeout: 5_000 });
+		await expect(page.locator('article.airflow-world')).not.toHaveAttribute('inert', /.*/);
 		await expect.poll(() => page.locator('.hud').evaluate((el) => getComputedStyle(el).opacity), { message: 'and the HUD is up' }).toBe('1');
 		// The load is timed, from the start of the navigation to the world on show.
 		expect(Number(await view(page).getAttribute('data-first-frame'))).toBeGreaterThan(0);

@@ -40,12 +40,12 @@ export class AirflowLoading implements LoadHooks {
 		if (stage !== this.stage) this.stage = stage;
 	}
 
-	revealed() {
+	revealed(drifting: boolean) {
 		if (this.phase !== 'loading') return;
 		this.shares = { fetch: 1, compile: 1, 'warm-up': 1 };
 		this.phase = 'revealed';
-		// The opening plays once a visit: a reload from here on opens where it ends.
-		if (this.mode === 'play') this.visit.rememberOpening();
+		// The opening plays once a visit: a reload from here on opens where it ends. (One a `?camera=` address stopped did not play.)
+		if (drifting) this.visit.rememberOpening();
 	}
 
 	failed() {

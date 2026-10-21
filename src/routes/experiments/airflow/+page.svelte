@@ -92,8 +92,10 @@
 </svelte:head>
 
 <div class="concept airflow-immersive" data-phase={loading.phase}>
+	<!-- Under the loading screen the world and the HUD can be neither reached by Tab nor read: only the loading screen is there yet. -->
 	<article
 		class="experiment airflow airflow-world"
+		inert={loading.phase === 'loading'}
 		data-tool={experience.tool}
 		data-hovering={experience.hovered ? '' : undefined}
 		data-hovered={key(experience.hovered)}

@@ -188,11 +188,14 @@ export class Tuner {
 		if (cost && cost.ms > 0 && cost.cells > 0) this.budget = Math.max(1, Math.min(MAX_CELLS[this.kind], budgetFor(this.kind, cost)));
 	}
 
-	/** The cell size for the next world of `plan`. Call it whenever a world is built: a new Home, a restart and a step down all do. */
+	/**
+	 * The cell size for the next world of `plan`. Call it whenever a world is built: a new Home, a restart and a step down all do. What the
+	 * tuner has to say is said afresh for this Home: a device too slow for even the coarsest grid of a big Home may hold a small one's.
+	 */
 	pick(plan: Footprint): number {
 		const h = this.small ? CELL_SIZES[0] : this.fit(plan, this.budget);
 		this.current = { plan, h, cells: this.cellsAt(plan, h) };
-		if (this.calibrated && !this.small && this.cellsAt(plan, CELL_SIZES[0]) > this.budget) this.note = 'Even the coarsest grid is too slow for this device.';
+		if (!this.small) this.note = this.calibrated && this.cellsAt(plan, CELL_SIZES[0]) > this.budget ? 'Even the coarsest grid is too slow for this device.' : null;
 		this.age = 0;
 		this.restartWindow();
 		return h;

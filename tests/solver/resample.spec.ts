@@ -117,6 +117,52 @@ test.describe('moving the air onto another grid', () => {
 		expect(checked, 'a good part of the room was checked').toBeGreaterThan(50);
 	});
 
+	test('air whose velocity changes steadily in every direction is read exactly at every face of the new grid, each at its own offset', () => {
+		// Each component is a different linear function of x, y and z, so a face read half a cell off, or a component read at another
+		// component's points, comes out wrong. Furniture is left out, so every face of the box is air.
+		const setup = { ...blankSetup('studio'), furniture: false };
+		const a = grid(0.15, setup);
+		const b = grid(0.3, setup);
+		const fields = blank(a);
+		const flow = {
+			u: (x: number, y: number, z: number) => 0.3 + 0.2 * x - 0.15 * y + 0.05 * z,
+			v: (x: number, y: number, z: number) => -0.1 + 0.03 * x + 0.4 * y - 0.07 * z,
+			w: (x: number, y: number, z: number) => 0.2 - 0.06 * x + 0.1 * y + 0.12 * z
+		};
+		const fill = (g: GridAir, out: FieldState) => {
+			const { nx, ny, nz, h } = g.spec;
+			for (let k = 0; k <= nz; k++)
+				for (let j = 0; j <= ny; j++)
+					for (let i = 0; i <= nx; i++) {
+						const index = i + (nx + 1) * j + (nx + 1) * (ny + 1) * k;
+						out.u[index] = flow.u(i * h, (j + 0.5) * h, (k + 0.5) * h);
+						out.v[index] = flow.v((i + 0.5) * h, j * h, (k + 0.5) * h);
+						out.w[index] = flow.w((i + 0.5) * h, (j + 0.5) * h, k * h);
+					}
+		};
+		fill(a, fields);
+		const out = resampleFields(a, fields, b);
+		const expected = blank(b);
+		fill(b, expected);
+		const { nx, ny, nz } = b.spec;
+		let worst = 0;
+		let checked = 0;
+		// Faces that are open in the new grid, one cell in from its walls, where the old grid's faces surround the point on every side.
+		for (let k = 1; k < nz - 1; k++)
+			for (let j = 1; j < ny - 1; j++)
+				for (let i = 1; i < nx - 1; i++) {
+					const index = i + (nx + 1) * j + (nx + 1) * (ny + 1) * k;
+					for (const component of ['u', 'v', 'w'] as const) {
+						const open = component === 'u' ? b.au : component === 'v' ? b.av : b.aw;
+						if (!(open[index] > 0)) continue;
+						worst = Math.max(worst, Math.abs(out[component][index] - expected[component][index]));
+						checked++;
+					}
+				}
+		expect(checked, 'most of the box was checked').toBeGreaterThan(1500);
+		expect(worst, 'every face exact, to the float').toBeLessThan(1e-5);
+	});
+
 	test('a face the new grid has shut carries no flow, and a cell that is furniture there holds nothing', () => {
 		const a = grid(0.1);
 		const b = grid(0.2);

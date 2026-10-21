@@ -25,8 +25,8 @@ export type OpeningMode = 'play' | 'end' | 'none';
 export interface LoadHooks {
 	/** How far `stage` has got, 0 to 1. A stage's report also finishes every stage before it. */
 	report(stage: LoadStage, share: number): void;
-	/** The world is on screen and can be used: the loading screen goes. */
-	revealed(): void;
+	/** The world is on screen and can be used: the loading screen goes. `drifting` says whether the opening's drift started. */
+	revealed(drifting: boolean): void;
 	/** The world could not load (the engine failed, or the browser has no WebGL): the loading screen goes, and the Stage's note shows. */
 	failed(): void;
 	/** How the world should open, asked as the warm-up begins. */

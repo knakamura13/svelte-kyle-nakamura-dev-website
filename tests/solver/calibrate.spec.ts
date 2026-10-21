@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { MEASURE, measureSteps, type Steppable } from '../../src/lib/experiments/airflow/sim/calibrate';
+import { MEASURE, MEASURE_DEPTH, measureSteps, type Steppable } from '../../src/lib/experiments/airflow/sim/calibrate';
 
 /**
  * The warm-up's measurement of a step (sim/calibrate.ts), on made-up backends and a made-up clock, so what it measures is known: a
@@ -13,29 +13,29 @@ function clock(tick = 2) {
 	return { now: () => now, advance: (ms: number) => (now += ms), pause: (after: () => void) => async () => (now += tick, after()) };
 }
 
-/** A backend whose steps queue, as the GPU's do, at most `limit` unfinished, finishing one every `ms` of the clock. */
-function background(ms: number, limit: number, time: ReturnType<typeof clock>) {
-	let queued = 0;
+/**
+ * A backend whose steps queue, as the GPU's do, at most `limit` unfinished, finishing one every `ms` of the clock. Its first `heavy`
+ * steps cost `heavier` times as much, as the GPU's first steps do, sent before any speed has been read back.
+ */
+function background(ms: number, limit: number, time: ReturnType<typeof clock>, heavy = 0, heavier = 1) {
+	const costs: number[] = [];
 	let busy = 0;
 	let last = time.now();
 	const backend: Steppable & { sent: number; settle(): void } = {
 		sent: 0,
 		maxInFlight: limit,
 		get stepsInFlight() {
-			return queued;
+			return costs.length;
 		},
 		step() {
-			queued++;
+			costs.push(backend.sent < heavy ? ms * heavier : ms);
 			backend.sent++;
 		},
 		settle() {
 			busy += time.now() - last;
 			last = time.now();
-			while (queued > 0 && busy >= ms) {
-				busy -= ms;
-				queued--;
-			}
-			if (!queued) busy = 0;
+			while (costs.length && busy >= costs[0]) busy -= costs.shift()!;
+			if (!costs.length) busy = 0;
 		}
 	};
 	return backend;
@@ -63,8 +63,43 @@ test.describe('measuring a step', () => {
 			expect(measured.ms).toBeLessThan(1.15 * ms);
 			expect(measured.steps).toBeGreaterThanOrEqual(MEASURE.steps);
 			expect(measured.sent, 'every step it was sent is counted, for the simulated time it covers').toBe(backend.sent);
-			expect(deepest, 'never more than its limit unfinished').toBeLessThanOrEqual(limit);
+			// No deeper than the page leaves it: a GPU's steps grow heavier the older its reading of the air's speed is, and that is older the deeper its queue.
+			expect(deepest, 'never more than a few unfinished, nor more than its limit').toBeLessThanOrEqual(Math.min(limit, MEASURE_DEPTH));
 		}
+	});
+
+	test('the first steps, which run before any speed has been read back and cost three times as much, are not counted', async () => {
+		const time = clock();
+		const backend = background(3.7, 8, time, MEASURE_DEPTH, 3);
+		const measured = await measureSteps(backend, { dt: 0.05, now: time.now, pause: time.pause(() => backend.settle()) });
+		expect(measured.ms).toBeGreaterThan(0.9 * 3.7);
+		expect(measured.ms).toBeLessThan(1.15 * 3.7);
+		// The same on a GPU four times slower, whose heavy first steps outlast the time the measurement leaves out at the start.
+		const slow = clock();
+		const crawling = background(15, 8, slow, MEASURE_DEPTH, 3);
+		const four = await measureSteps(crawling, { dt: 0.05, now: slow.now, pause: slow.pause(() => crawling.settle()) });
+		expect(four.ms).toBeGreaterThan(0.9 * 15);
+		expect(four.ms).toBeLessThan(1.15 * 15);
+	});
+
+	test('a look that comes late (a hidden tab, a busy page) is not counted as the backend being slow; one that never has a clean stretch fails', async () => {
+		// Every fortieth look is a second late: the backend sat idle for most of it.
+		let looks = 0;
+		let now = 0;
+		const backend = background(3.7, 8, { now: () => now, advance: () => 0, pause: () => async () => {} });
+		const measured = await measureSteps(backend, {
+			dt: 0.05,
+			now: () => now,
+			pause: async () => {
+				now += ++looks % 40 === 0 ? 1000 : 2;
+				backend.settle();
+			}
+		});
+		expect(measured.ms, 'the step, not the idling').toBeLessThan(1.15 * 3.7);
+
+		const hidden = clock(1000);
+		const asleep = background(3.7, 8, hidden);
+		await expect(measureSteps(asleep, { dt: 0.05, now: hidden.now, pause: hidden.pause(() => asleep.settle()) })).rejects.toThrow(/held up/);
 	});
 
 	test('it takes about half a second on a device that keeps up, and a slow one is given enough steps to be measured, within its limit', async () => {
