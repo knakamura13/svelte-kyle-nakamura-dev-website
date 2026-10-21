@@ -30,16 +30,23 @@ html:has(.airflow-immersive),body:has(.airflow-immersive) { height:100%; overflo
 .airflow-world .sim-status.airflow-status { position:absolute; left:16px; bottom:16px; z-index:3; max-width:min(560px,calc(100% - 32px)); margin:0; padding:10px 14px; border-radius:12px; background:var(--glass-soft); color:var(--glass-muted); box-shadow:inset 0 0 0 1px var(--glass-edge); -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px); font-size:11.5px; line-height:1.5; pointer-events:none; }
 .airflow-world .sim-status.airflow-status[data-status="unsupported"],.airflow-world .sim-status.airflow-status[data-status="error"] { color:var(--glass-ink); }
 
-/* The Dock, until the HUD replaces it: a drawer on the right, over the world, shut at first. */
-.airflow-drawer { position:absolute; top:76px; right:16px; bottom:16px; z-index:5; width:min(430px,calc(100% - 32px)); overflow:auto; overscroll-behavior:contain; border-radius:20px; background:#fbfaf6f0; box-shadow:0 24px 60px #00000040,inset 0 0 0 1px #ffffff80; -webkit-backdrop-filter:blur(18px); backdrop-filter:blur(18px); transform:translateX(calc(100% + 24px)); opacity:0; visibility:hidden; transition:transform 320ms var(--ease),opacity 220ms,visibility 0s 320ms; }
+/* The Dock, until the HUD replaces it: a drawer on the right, shut at first. Open, it takes its side of the window and the world draws
+   in the rest, so the air can be watched while a control moves and nothing in the world hides under it. On a phone it is a sheet over
+   the bottom half. */
+.airflow-world { --drawer:min(430px,calc(100% - 32px)); }
+.airflow-drawer { position:absolute; top:76px; right:16px; bottom:16px; z-index:5; width:var(--drawer); overflow:auto; overscroll-behavior:contain; border-radius:20px; background:#fbfaf6f5; box-shadow:0 24px 60px #00000040,inset 0 0 0 1px #ffffff80; -webkit-backdrop-filter:blur(18px); backdrop-filter:blur(18px); transform:translateX(calc(100% + 24px)); opacity:0; visibility:hidden; transition:transform 320ms var(--ease),opacity 220ms,visibility 0s 320ms; }
 .airflow-drawer[data-open="true"] { transform:none; opacity:1; visibility:visible; transition:transform 320ms var(--ease),opacity 220ms,visibility 0s; }
-.airflow-drawer .explainer,.airflow-drawer > :not(.airflow-dock) { padding-inline:20px; }
+.airflow-world[data-drawer="open"] .airflow-figure { right:calc(var(--drawer) + 32px); }
+.airflow-world[data-drawer="open"] .sim-status.airflow-status { max-width:min(560px,calc(100% - var(--drawer) - 64px)); }
+.airflow-drawer > :not(.airflow-dock) { padding-inline:20px; }
 @media(prefers-reduced-motion:reduce) { .airflow-drawer,.airflow-drawer[data-open="true"] { transition:none; } }
 @media(max-width:600px) {
  .airflow-bar { top:10px; left:10px; right:10px; gap:8px; }
  .airflow-title { display:none; }
- .airflow-drawer { top:66px; right:8px; left:8px; bottom:8px; width:auto; }
+ .airflow-drawer { top:auto; height:52%; right:8px; left:8px; bottom:8px; width:auto; transform:translateY(calc(100% + 24px)); }
+ .airflow-world[data-drawer="open"] .airflow-figure { right:0; bottom:calc(52% + 8px); }
  .airflow-world .sim-status.airflow-status { left:10px; bottom:10px; max-width:calc(100% - 20px); }
+ .airflow-world[data-drawer="open"] .sim-status.airflow-status { bottom:calc(52% + 18px); max-width:calc(100% - 20px); }
 }
 
 /* Room names and compass letters are plain text over the picture, so they carry no dot; a probe's label keeps one. */

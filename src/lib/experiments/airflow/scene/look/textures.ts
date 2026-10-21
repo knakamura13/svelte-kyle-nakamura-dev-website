@@ -1,4 +1,4 @@
-import { CanvasTexture, NoColorSpace, RepeatWrapping, SRGBColorSpace, type Texture } from 'three';
+import { CanvasTexture, DataTexture, NoColorSpace, RepeatWrapping, SRGBColorSpace, type Texture } from 'three';
 
 /**
  * Procedural textures, painted once into canvases: wood planks, two kinds of floor tile, painted plaster, lap siding, paving,
@@ -66,7 +66,15 @@ function fbm(cellsX: number, cellsY: number, octaves: number, seed: number) {
 
 type Paint = (data: Uint8ClampedArray, size: number) => void;
 
-function canvasTexture(size: number, paint: Paint, color: boolean): CanvasTexture {
+function canvasTexture(size: number, paint: Paint, color: boolean): Texture {
+	// Where there is no DOM (the Node tests), a texture is one white texel: what it looks like is checked in a browser.
+	if (typeof document === 'undefined') {
+		const texel = new DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
+		texel.wrapS = texel.wrapT = RepeatWrapping;
+		texel.colorSpace = color ? SRGBColorSpace : NoColorSpace;
+		texel.needsUpdate = true;
+		return texel;
+	}
 	const canvas = document.createElement('canvas');
 	canvas.width = canvas.height = size;
 	const context = canvas.getContext('2d')!;
@@ -262,7 +270,7 @@ const grainWood: Paint = (data, size) => {
  * Soft, tileable fractal noise as plain numbers in [0, 1] (grey, no colour space), `size` pixels a side with `cells` lattice cells
  * across its coarsest octave: for breaking up a texture's repeat over a large surface.
  */
-export function noiseTexture(size: number, cells: number, octaves: number, seed: number): CanvasTexture {
+export function noiseTexture(size: number, cells: number, octaves: number, seed: number): Texture {
 	const noise = fbm(cells, cells, octaves, seed);
 	const texture = canvasTexture(
 		size,
@@ -307,7 +315,7 @@ export const TEXTURE_METRES: Record<TextureName, number> = {
 
 /** Paints textures on first use and keeps them until `dispose`. */
 export class TextureSet {
-	private readonly made = new Map<TextureName, CanvasTexture>();
+	private readonly made = new Map<TextureName, Texture>();
 
 	constructor(private readonly anisotropy: number) {}
 
@@ -328,7 +336,7 @@ export class TextureSet {
 		const key = `${name}:data` as TextureName;
 		let texture = this.made.get(key);
 		if (!texture) {
-			texture = source.clone() as CanvasTexture;
+			texture = source.clone();
 			texture.colorSpace = NoColorSpace;
 			texture.needsUpdate = true;
 			this.made.set(key, texture);

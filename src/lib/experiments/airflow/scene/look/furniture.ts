@@ -206,6 +206,9 @@ const RECIPES: Record<string, Recipe> = {
 	Wardrobe: { kind: 'wardrobe' }
 };
 
+/** Whether a kind of piece (a plan's furniture `name`) has a recipe of its own, rather than the stand-in. */
+export const hasRecipe = (name: string) => name in RECIPES;
+
 /** The model a recipe is judged by when its facing is chosen: its footprint, across and along. A row's width is free (0). */
 function naturalFootprint(recipe: Recipe, bounds: (file: FurnitureFile) => Vector3): { across: number; along: number } {
 	switch (recipe.kind) {
@@ -258,6 +261,8 @@ export interface FurnitureView {
 	solids: Mesh;
 	/** Where each piece faces, by id, for tests. */
 	facings: Map<string, Facing>;
+	/** The models each piece is drawn with, by id, in the order they are laid out along it (from its own -x), for tests. */
+	models: Map<string, (FurnitureFile | 'wardrobe')[]>;
 	dispose(): void;
 }
 
@@ -270,6 +275,7 @@ export function buildFurniture(plan: HomePlan, materials: Materials, assets: Loo
 	group.name = 'furniture';
 	const owned: (BufferGeometry | Material)[] = [];
 	const facings = new Map<string, Facing>();
+	const used = new Map<string, (FurnitureFile | 'wardrobe')[]>();
 	const boundsCache = new Map<FurnitureFile, Box3>();
 	const bounds = (file: FurnitureFile) => {
 		let box = boundsCache.get(file);
@@ -336,18 +342,23 @@ export function buildFurniture(plan: HomePlan, materials: Materials, assets: Loo
 		const { across, along } = extents(item, facing);
 		const piece = new Group();
 		piece.name = item.id;
+		const files: (FurnitureFile | 'wardrobe')[] = [];
+		used.set(item.id, files);
 		switch (recipe.kind) {
 			case 'model':
 				piece.add(fitted(recipe.file, item.name, across, item.h, along));
+				files.push(recipe.file);
 				break;
 			case 'row': {
 				const count = Math.max(1, Math.round(across / recipe.module));
 				const width = across / count;
 				const window = windowModule(plan, item, facing, count);
 				for (let i = 0; i < count; i++) {
-					const module = fitted(recipe.pick(i, count, { window, home }), item.name, width, item.h, along);
+					const file = recipe.pick(i, count, { window, home });
+					const module = fitted(file, item.name, width, item.h, along);
 					module.position.x = -across / 2 + (i + 0.5) * width;
 					piece.add(module);
+					files.push(file);
 				}
 				break;
 			}
@@ -360,11 +371,13 @@ export function buildFurniture(plan: HomePlan, materials: Materials, assets: Loo
 						const module = fitted(recipe.file, item.name, width, height, along);
 						module.position.set(-across / 2 + (c + 0.5) * width, r * height, 0);
 						piece.add(module);
+						files.push(recipe.file);
 					}
 				break;
 			}
 			case 'wardrobe':
 				piece.add(wardrobe(materials, across, item.h, along, owned));
+				files.push('wardrobe');
 				break;
 		}
 		piece.rotation.y = facingAngle(facing);
@@ -390,6 +403,7 @@ export function buildFurniture(plan: HomePlan, materials: Materials, assets: Loo
 		group,
 		solids,
 		facings,
+		models: used,
 		dispose() {
 			group.removeFromParent();
 			for (const thing of owned) thing.dispose();

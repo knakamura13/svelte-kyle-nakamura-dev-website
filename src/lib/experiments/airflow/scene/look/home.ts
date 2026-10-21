@@ -52,7 +52,6 @@ export class Home {
 	private readonly outside: OutsideView;
 	private readonly disposeFloors: () => void;
 	private cut: boolean[] = [];
-	private furnitureShown = true;
 	/** Something that casts a shadow appeared or went (the furniture) since the scene last asked. */
 	private changed = true;
 
@@ -96,10 +95,10 @@ export class Home {
 	}
 
 	setFurniture(on: boolean) {
-		if (on === this.furnitureShown && this.furniture.group.visible === on) return;
-		this.furnitureShown = on;
-		this.furniture.group.visible = on;
 		const listed = this.pickables.indexOf(this.furniture.solids);
+		const pickable = listed >= 0;
+		if (this.furniture.group.visible === on && pickable === on) return;
+		this.furniture.group.visible = on;
 		if (on && listed < 0) this.pickables.push(this.furniture.solids);
 		if (!on && listed >= 0) this.pickables.splice(listed, 1);
 		this.changed = true;
@@ -126,6 +125,11 @@ export class Home {
 	/** Where each piece of furniture faces, by id (for tests). */
 	get facings() {
 		return this.furniture.facings;
+	}
+
+	/** The models each piece of furniture is drawn with, by id (for tests). */
+	get furnitureModels() {
+		return this.furniture.models;
 	}
 
 	dispose() {

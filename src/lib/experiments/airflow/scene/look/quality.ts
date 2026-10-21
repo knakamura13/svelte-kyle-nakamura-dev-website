@@ -31,13 +31,23 @@ export const QUALITY: Record<QualityTier, Quality> = {
 export const isTier = (value: unknown): value is QualityTier => value === 'high' || value === 'medium' || value === 'low';
 
 /**
- * The tier for this device: what the address asks for, else low on a phone or a small tablet (`small`, from `detectSmallDevice`),
- * medium on a machine with few cores, and high otherwise.
+ * The tier for this device: what the address asks for, else low on a phone or a small tablet (`small`, from `detectSmallDevice`) and
+ * where WebGL is drawn in software (`software`: no GPU, as in a headless test browser or a machine without drivers), medium on a
+ * machine with few cores, and high otherwise.
  */
-export function chooseQuality(input: { search: string; small: boolean; cores?: number }): QualityTier {
+export function chooseQuality(input: { search: string; small: boolean; cores?: number; software?: boolean }): QualityTier {
 	const asked = new URLSearchParams(input.search).get('quality');
 	if (isTier(asked)) return asked;
-	if (input.small) return 'low';
+	if (input.small || input.software) return 'low';
 	if (input.cores !== undefined && input.cores > 0 && input.cores < 6) return 'medium';
 	return 'high';
 }
+
+/** Whether a WebGL renderer's name (`WEBGL_debug_renderer_info`) is a software rasterizer rather than a GPU. */
+export const isSoftwareRenderer = (name: string) => /swiftshader|llvmpipe|softpipe|software|basic render/i.test(name);
+
+/**
+ * The low tier where WebGL is drawn in software, unless the address asks for a tier: every pixel costs the processor, which also runs
+ * the page, so it draws half the pixels, no shadows and no edge smoothing, and the page stays usable.
+ */
+export const SOFTWARE: Quality = { ...QUALITY.low, pixelRatio: 0.5, shadows: null, smaa: false };

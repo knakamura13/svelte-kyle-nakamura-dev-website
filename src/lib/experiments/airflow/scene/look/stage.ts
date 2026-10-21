@@ -7,7 +7,7 @@ import { detectSmallDevice } from '../../sim/device';
 import type { SimsCamera } from '../camera/controls';
 import { disposeLookAssets, type LookAssets } from './assets';
 import { Post } from './post';
-import { QUALITY, chooseQuality, isTier, type Quality, type QualityTier } from './quality';
+import { QUALITY, SOFTWARE, chooseQuality, isSoftwareRenderer, isTier, type Quality, type QualityTier } from './quality';
 
 /**
  * The airflow page's own host for its one full-screen world, in place of the article pages' `StageController`. It owns the WebGL
@@ -91,10 +91,35 @@ export class AirflowStage implements StageHost {
 
 	/** The tier the visitor asked for (the store's `view.quality`), or what suits the device: `?quality=` in the address wins over the guess. */
 	private tierFor(options: SlotOptions): QualityTier {
-		const asked = (options.params as { view?: { quality?: string } }).view?.quality;
-		if (asked && isTier(asked)) return asked;
-		return chooseQuality({ search: location.search, small: detectSmallDevice(), cores: navigator.hardwareConcurrency });
+		const asked = this.asked(options);
+		if (asked) return asked;
+		return chooseQuality({ search: location.search, small: detectSmallDevice(), cores: navigator.hardwareConcurrency, software: this.software });
 	}
+
+	/** A tier asked for by name, in the store or the address, rather than guessed. */
+	private asked(options: SlotOptions): QualityTier | null {
+		const view = (options.params as { view?: { quality?: string } }).view?.quality;
+		if (view && isTier(view)) return view;
+		const search = new URLSearchParams(location.search).get('quality');
+		return isTier(search) ? search : null;
+	}
+
+	/** What a tier draws: its own settings, or the lighter low tier for WebGL in software when nobody asked for a tier by name. */
+	private qualityFor(options: SlotOptions, tier: QualityTier): Quality {
+		return this.software && !this.asked(options) ? SOFTWARE : QUALITY[tier];
+	}
+
+	/** Whether WebGL is drawn in software here (no GPU), asked once of the renderer. */
+	private get software(): boolean {
+		if (this.softwareRenderer === null) {
+			const gl = this.renderer?.getContext();
+			const info = gl?.getExtension('WEBGL_debug_renderer_info');
+			const name = gl && info ? String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL)) : '';
+			this.softwareRenderer = isSoftwareRenderer(name);
+		}
+		return this.softwareRenderer;
+	}
+	private softwareRenderer: boolean | null = null;
 
 	register(view: HTMLElement, options: SlotOptions) {
 		if (this.slot) this.unregister();
@@ -104,7 +129,7 @@ export class AirflowStage implements StageHost {
 			return () => {};
 		}
 		const tier = this.tierFor(options);
-		const quality = QUALITY[tier];
+		const quality = this.qualityFor(options, tier);
 		const labels = new LabelLayer(view.querySelector<HTMLElement>('.stage-labels') ?? view);
 		let world: World;
 		try {
@@ -200,7 +225,7 @@ export class AirflowStage implements StageHost {
 	private applyQuality(slot: Slot, tier: QualityTier) {
 		const renderer = this.renderer!;
 		slot.tier = tier;
-		slot.quality = QUALITY[tier];
+		slot.quality = this.qualityFor(slot.options, tier);
 		slot.ratio = Math.min(window.devicePixelRatio || 1, slot.quality.pixelRatio);
 		renderer.setPixelRatio(slot.ratio);
 		slot.world.setQuality(slot.quality);

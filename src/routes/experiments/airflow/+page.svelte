@@ -29,11 +29,11 @@
 	let drawer: HTMLElement | undefined = $state();
 	let toggle: HTMLButtonElement | undefined = $state();
 
-	function setDrawer(open: boolean, focus = true) {
+	/** Opens or shuts the drawer. The button stays where the focus is, and the drawer comes next in the order; shutting it from inside gives the focus back to the button. */
+	function setDrawer(open: boolean) {
+		const inside = !!drawer?.contains(document.activeElement);
 		drawerOpen = open;
-		if (!focus) return;
-		// Opening takes the keyboard into the drawer; closing gives it back to the button that opened it.
-		requestAnimationFrame(() => (open ? drawer?.querySelector<HTMLElement>('summary, button, input, a')?.focus() : toggle?.focus()));
+		if (!open && inside) toggle?.focus();
 	}
 
 	onMount(() => {
