@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { page } from '$app/state';
 	import Arrow from '$lib/components/Arrow.svelte';
 	import { DEVICE_MODELS } from '$lib/experiments/airflow/devices/catalog';
 	import { loadEngine } from '$lib/experiments/airflow/engine';
@@ -10,9 +11,12 @@
 	import { shortfall } from '$lib/experiments/airflow/ui/clock';
 	import Dock from '$lib/experiments/airflow/ui/Dock.svelte';
 	import Explainer from '$lib/experiments/airflow/ui/Explainer.svelte';
+	import HudFrame from '$lib/experiments/airflow/ui/hud/HudFrame.svelte';
 	import { detectUnits, formatLength } from '$lib/experiments/airflow/units';
 	import { stage } from '$lib/experiments/ui/stage';
 
+	// The HUD over a full-screen world (redesign milestone 3), behind `?hud` until the full-screen route replaces the Dock.
+	const hud = page.url.searchParams.has('hud');
 	const catalog = linkCatalog(plans, DEVICE_MODELS);
 	const experience = provideAirflow({
 		load: loadEngine,
@@ -21,7 +25,8 @@
 		scenarios: SCENARIOS,
 		initial: null,
 		defaultScenario: SCENARIOS[0].id,
-		link: (setup) => `${location.origin}${location.pathname}${setupToHash(setup)}`
+		link: (setup) => `${location.origin}${location.pathname}${hud ? location.search : ''}${setupToHash(setup)}`,
+		hud
 	});
 
 	onMount(() => {
@@ -72,6 +77,32 @@
 	/>
 </svelte:head>
 
+{#snippet stageView()}
+	<!-- The view is operated with the arrow keys (see the controller). `application` tells screen readers to pass keys through; Svelte only counts widget roles as interactive. -->
+	<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+	<div
+		class="stage-view"
+		role="application"
+		aria-roledescription="3D view"
+		tabindex="0"
+		aria-label="The air in the {experience.plan.name}, drawn as a slice through a cutaway of the home."
+		aria-describedby="stage-help"
+		data-state="pending"
+		use:stage={{ experience, scene: 'airflow', params: experience, readout }}
+	>
+		<div class="stage-labels" aria-hidden="true"></div>
+		<p class="stage-note" data-when="loading">Loading the 3D view…</p>
+		<p class="stage-note" data-when="unsupported">
+			This browser can’t show 3D graphics, so the scene is switched off.
+		</p>
+		<p class="stage-note" data-when="error">The 3D view couldn’t load.</p>
+		<noscript><p class="stage-note stage-note-static">The 3D view needs JavaScript.</p></noscript>
+	</div>
+{/snippet}
+
+{#if hud}
+	<HudFrame {status}>{@render stageView()}</HudFrame>
+{:else}
 <article class="experiment airflow">
 	<header class="page-intro">
 		<a class="text-link page-back" href="/experiments"><span aria-hidden="true"><Arrow direction="left" /></span> All experiments</a>
@@ -88,26 +119,7 @@
 
 	<div class="airflow-card">
 		<figure class="airflow-figure" data-stage-region data-sim={readout.status}>
-			<!-- The view is operated with the arrow keys (see the controller). `application` tells screen readers to pass keys through; Svelte only counts widget roles as interactive. -->
-			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-			<div
-				class="stage-view"
-				role="application"
-				aria-roledescription="3D view"
-				tabindex="0"
-				aria-label="The air in the {experience.plan.name}, drawn as a slice through a cutaway of the home."
-				aria-describedby="stage-help"
-				data-state="pending"
-				use:stage={{ experience, scene: 'airflow', params: experience, readout }}
-			>
-				<div class="stage-labels" aria-hidden="true"></div>
-				<p class="stage-note" data-when="loading">Loading the 3D view…</p>
-				<p class="stage-note" data-when="unsupported">
-					This browser can’t show 3D graphics, so the scene is switched off.
-				</p>
-				<p class="stage-note" data-when="error">The 3D view couldn’t load.</p>
-				<noscript><p class="stage-note stage-note-static">The 3D view needs JavaScript.</p></noscript>
-			</div>
+			{@render stageView()}
 			<p class="sim-status" role="status" data-status={readout.status}>{status}{#if tuning}<span aria-hidden="true" data-tuning>{' '}{tuning}</span>{/if}{#if behind}<span aria-hidden="true" data-behind>{' '}{behind}</span>{/if}</p>
 			<figcaption>{experience.plan.name}. {experience.plan.blurb}</figcaption>
 		</figure>
@@ -129,3 +141,4 @@
 	</p>
 	<p class="sr-only" aria-live="polite">{experience.announcement}</p>
 </article>
+{/if}
