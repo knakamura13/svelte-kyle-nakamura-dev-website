@@ -12,20 +12,40 @@ export const caption = (page: Page) => page.locator('.airflow-figure figcaption'
 export const status = (page: Page) => page.locator('.sim-status');
 
 /**
- * Opens the page and waits until it can be used. The Dock is in the server's HTML, so it can be seen before the page's script has
- * attached to it, and a click then does nothing. The Stage leaves `pending` once the script has taken the page over.
+ * Opens the page and waits until it can be used, with the Dock showing. The page is the full-screen world, and the Dock is a drawer over
+ * it that starts shut (until the HUD replaces it, milestone 3), so this opens it. The Dock is in the server's HTML, so it can be seen
+ * before the page's script has attached to it, and a click then does nothing: the Stage leaves `pending` once the script has taken the
+ * page over.
  */
 export async function openAirflow(page: Page, path = '/experiments/airflow') {
-	// Loading the page again brings back the scroll position the last load was left at, and the page is long (the explainer is under the card), so that can be
-	// far below the Stage, which then never comes within a screen of the viewport and never starts. A visitor opening the page starts at its top.
-	await page.evaluate(() => scrollTo({ top: 0, behavior: 'instant' }));
 	await page.goto(path);
-	await expect(page.locator('.airflow-dock')).toBeVisible();
 	await expect(page.getByRole('application', { name: /^The air in the/ })).not.toHaveAttribute('data-state', 'pending', { timeout: 15_000 });
+	await openDrawer(page);
 }
 
-/** A Dock group by its title. Opens it when it is closed, so its controls can be used. */
+/**
+ * Opens the drawer that holds the Dock, if it is shut, the way a keyboard does: a click would make the browser take the next focus for a
+ * pointer's, which shows no ring, and the specs check the rings. The drawer fades in where it stands, so its controls can be used at once.
+ */
+export async function openDrawer(page: Page) {
+	const toggle = page.locator('.airflow-drawer-toggle');
+	if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
+		await toggle.focus();
+		await page.keyboard.press('Enter');
+	}
+	await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+	await expect(page.locator('.airflow-dock')).toBeVisible();
+}
+
+/**
+ * A picture of the world, with the chips that float over it (the bar at the top and the status line) painted over: the status line's
+ * words change as the simulation runs ("Running at 0.9× real time"), and a comparison of two pictures is about the world.
+ */
+export const worldShot = (page: Page, view: Locator) => view.screenshot({ mask: [page.locator('.airflow-bar'), page.locator('.sim-status')], maskColor: '#000000' });
+
+/** A Dock group by its title. Opens the drawer and the group when they are closed, so its controls can be used. */
 export async function dockGroup(page: Page, title: string): Promise<Locator> {
+	await openDrawer(page);
 	const group = page.locator('.dock-group', { has: page.locator('summary', { hasText: title }) });
 	await expect(group, `a group called ${title}`).toHaveCount(1);
 	if ((await group.getAttribute('open')) === null) {

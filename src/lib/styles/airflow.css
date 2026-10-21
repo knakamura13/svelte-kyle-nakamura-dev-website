@@ -1,47 +1,63 @@
-/* Airflow: the page's own Stage frame and label tones, loaded after experiments.css by routes/experiments/airflow/+layout.svelte. */
-.experiment.airflow { --tint:var(--mist); }
+/* Airflow: the full-screen world and what floats over it, loaded after experiments.css by routes/experiments/airflow/+layout.svelte. The page stands
+   outside the site's shell (routes/+layout.svelte), so the window is the world: nothing scrolls, and the controls float over it. */
+html:has(.airflow-immersive),body:has(.airflow-immersive) { height:100%; overflow:hidden; overscroll-behavior:none; }
+.airflow-immersive { position:fixed; inset:0; overflow:hidden; background:#cbd3cf; }
+.experiment.airflow { --tint:#cbd3cf; --glass:#1d201ccc; --glass-soft:#1d201c99; --glass-edge:#ffffff1f; --glass-ink:#f7f4ee; --glass-muted:#d8d3c9; }
+.airflow-world { position:absolute; inset:0; }
 
-/* The Stage: one live 3D view of the home, in a card. The card holds the figure (the Stage, where the simulation is, and its caption) and the Dock.
-   The point of the page is to change something and watch the air answer, so the Stage and the Dock are always on screen together: side by side
-   on a wide screen, with the Stage pinned while the Dock scrolls beside it, and on a narrower one the Stage pinned at the top while the Dock
-   scrolls under it. --airflow-pin is how far down the pinned Stage reaches, so focus is never left behind it. */
-.airflow-card { --airflow-pin:calc(72px + clamp(240px,40vh,440px) + 92px); margin:0 0 56px; border-radius:22px; background:var(--surface); box-shadow:var(--shadow-card); overflow:clip; }
-.airflow-figure { position:sticky; top:72px; z-index:3; margin:0; background:var(--surface); }
-/* The shared Stage rules give it an aspect ratio below 1000px, and with a fixed height that sets its width, so it would overflow its card. */
-.airflow-figure .stage-view { --dock:0px; aspect-ratio:auto; height:clamp(240px,40vh,440px); }
-/* Pinned above the Dock, the figure keeps to the Stage and two short lines: the caption is cut to one (a screen reader still has all of it). */
-.airflow-figure figcaption { padding:0 16px 10px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.airflow-figure .sim-status { padding:8px 16px 6px; min-height:calc(3.2em + 14px); }
-.airflow-dock :is(button,input,summary,select,a) { scroll-margin-top:calc(var(--airflow-pin) + 12px); }
-@media(min-width:1160px) {
- .airflow-card { --airflow-pin:84px; display:grid; grid-template-columns:minmax(0,1fr) clamp(340px,36%,440px); align-items:start; }
- .airflow-figure { top:96px; }
- .airflow-figure .stage-view { height:clamp(340px,calc(100vh - 230px),760px); }
- .airflow-figure figcaption { padding:0 20px 18px; white-space:normal; overflow:visible; }
- .airflow-figure .sim-status { padding:12px 20px 14px; min-height:0; }
- .airflow-dock { border-top:0; border-left:1px solid var(--rule); }
-}
-/* A short window, such as a phone on its side or a small one held upright, has no room to pin the Stage above the Dock. */
-@media(max-width:1159px) and (max-height:700px) {
- .airflow-figure { position:static; }
- .airflow-card { --airflow-pin:0px; }
-}
-@media(max-height:560px) {
- .airflow-figure { position:static; }
- .airflow-card { --airflow-pin:0px; }
-}
-@media(max-width:700px) {
- .airflow-figure .stage-view { height:clamp(260px,40vh,420px); }
+/* The world fills the window. */
+.airflow-figure { position:absolute; inset:0; margin:0; }
+.airflow-world .stage-view { position:absolute; inset:0; height:auto; aspect-ratio:auto; background-color:var(--tint); }
+.airflow-world .stage-view canvas { cursor:default; touch-action:none; }
+.airflow-world .stage-view[data-dragging] canvas { cursor:grabbing; }
+.airflow-world .stage-view:focus-visible::after { border-radius:0; }
+.airflow-world .stage-note { color:var(--ink); font-size:14px; }
+
+/* Floating chips: dark glass with rounded corners and the site's type, at least 44px to touch. */
+.airflow-bar { position:absolute; top:16px; left:16px; right:16px; z-index:4; display:flex; align-items:center; gap:10px; pointer-events:none; }
+.airflow-bar .airflow-chip { pointer-events:auto; display:inline-flex; align-items:center; gap:9px; min-height:44px; padding:0 16px; border-radius:14px; background:var(--glass); color:var(--glass-ink); box-shadow:0 8px 24px #0000002e,inset 0 0 0 1px var(--glass-edge); -webkit-backdrop-filter:blur(14px) saturate(1.3); backdrop-filter:blur(14px) saturate(1.3); font-size:13px; font-weight:650; line-height:1.2; text-decoration:none; white-space:nowrap; }
+.airflow-chip:is(a,button) { cursor:pointer; transition:background 160ms,transform 160ms var(--ease); }
+.airflow-chip:is(a,button):hover { background:#2a2e29e6; }
+.airflow-chip:is(a,button):active { transform:scale(.97); }
+.airflow-chip:focus-visible { outline:3px solid var(--focus); outline-offset:3px; }
+.airflow-title { gap:10px; background:var(--glass-soft); }
+.airflow-title-name { font-family:'Newsreader Variable',Georgia,serif; font-size:19px; font-weight:400; letter-spacing:-.03em; }
+.airflow-title-home { color:var(--glass-muted); font-weight:600; font-size:12px; }
+.airflow-drawer-toggle { margin-left:auto; }
+.airflow-drawer-toggle[aria-expanded="true"] { background:#f7f4eef2; color:var(--ink); }
+
+/* Where the simulation runs, in a quiet chip at the bottom left. */
+.airflow-world .sim-status.airflow-status { position:absolute; left:16px; bottom:16px; z-index:3; max-width:min(560px,calc(100% - 32px)); margin:0; padding:10px 14px; border-radius:12px; background:var(--glass-soft); color:var(--glass-muted); box-shadow:inset 0 0 0 1px var(--glass-edge); -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px); font-size:11.5px; line-height:1.5; pointer-events:none; }
+.airflow-world .sim-status.airflow-status[data-status="unsupported"],.airflow-world .sim-status.airflow-status[data-status="error"] { color:var(--glass-ink); }
+
+/* The Dock, until the HUD replaces it: a drawer on the right, shut at first. Open, it takes its side of the window and the world draws
+   in the rest, so the air can be watched while a control moves and nothing in the world hides under it. On a phone it is a sheet over
+   the bottom half. */
+.airflow-world { --drawer:min(430px,calc(100% - 32px)); }
+/* It fades rather than slides: the world beside it takes its new size at once, and the controls are where they will stay from the start. */
+.airflow-drawer { position:absolute; top:76px; right:16px; bottom:16px; z-index:5; width:var(--drawer); overflow:auto; overscroll-behavior:contain; border-radius:20px; background:#fbfaf6f5; box-shadow:0 24px 60px #00000040,inset 0 0 0 1px #ffffff80; -webkit-backdrop-filter:blur(18px); backdrop-filter:blur(18px); opacity:0; visibility:hidden; transition:opacity 180ms,visibility 0s 180ms; }
+.airflow-drawer[data-open="true"] { opacity:1; visibility:visible; transition:opacity 180ms,visibility 0s; }
+.airflow-world[data-drawer="open"] .airflow-figure { right:calc(var(--drawer) + 32px); }
+.airflow-world[data-drawer="open"] .sim-status.airflow-status { max-width:min(560px,calc(100% - var(--drawer) - 64px)); }
+.airflow-drawer > :not(.airflow-dock) { padding-inline:20px; }
+@media(prefers-reduced-motion:reduce) { .airflow-drawer,.airflow-drawer[data-open="true"] { transition:none; } }
+@media(max-width:600px) {
+ .airflow-bar { top:10px; left:10px; right:10px; gap:8px; }
+ .airflow-bar .airflow-title { display:none; }
+ .airflow-drawer { top:auto; height:52%; right:8px; left:8px; bottom:8px; width:auto; }
+ .airflow-world[data-drawer="open"] .airflow-figure { right:0; bottom:calc(52% + 8px); }
+ .airflow-world .sim-status.airflow-status { left:10px; bottom:10px; max-width:calc(100% - 20px); }
+ .airflow-world[data-drawer="open"] .sim-status.airflow-status { bottom:calc(52% + 18px); max-width:calc(100% - 20px); }
 }
 
 /* Room names and compass letters are plain text over the picture, so they carry no dot; a probe's label keeps one. */
-.airflow .stage-label[data-tone="room"],.airflow .stage-label[data-tone="compass"] { padding:2px 8px; background:#ffffffb8; border-color:transparent; box-shadow:none; font-weight:650; }
+.airflow .stage-label[data-tone="room"],.airflow .stage-label[data-tone="compass"] { padding:3px 9px; background:#fffdf8cc; border-color:transparent; box-shadow:0 2px 10px #0000001a; font-weight:650; -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); }
 .airflow .stage-label[data-tone="room"]::before,.airflow .stage-label[data-tone="compass"]::before { display:none; }
 .airflow .stage-label[data-tone="compass"] { padding:1px 7px; color:var(--muted); font-size:10px; letter-spacing:.06em; }
 .airflow .stage-label[data-tone="probe"] { --tone:var(--ink); }
 
 /* The Dock: groups of controls, each a disclosure that holds a grid of controls. `.dock.airflow-dock` is written with both classes because the shared `.dock` rule has the same weight and would win whenever its stylesheet came second. */
-.dock.airflow-dock { gap:0; padding:0 20px 6px; border-top:1px solid var(--rule); }
+.dock.airflow-dock { gap:0; padding:0 20px 6px; }
 @media(max-width:700px) { .dock.airflow-dock { padding-inline:16px; } }
 .dock-group { border-bottom:1px solid var(--rule); }
 .dock-group:last-child { border-bottom:0; }
@@ -72,16 +88,5 @@
 .airflow-dock .dock-actions { display:grid; grid-template-columns:repeat(auto-fit,minmax(8.5rem,1fr)); justify-content:stretch; gap:8px; }
 .airflow-dock .dock-actions .pill { justify-content:center; padding-inline:14px; }
 
-/* Where the simulation is, under the Stage. */
-.sim-status { margin:0; padding:12px 20px 14px; font-size:12px; line-height:1.6; color:var(--muted); font-variant-numeric:tabular-nums; }
-.sim-status[data-status="unsupported"],.sim-status[data-status="error"] { color:var(--ink); }
-
-/* The auto-tuner (#56) adds one short sentence to the status line (a phone's note, or that the simulation restarted on another grid). On a phone that is the cell
-   size, the sentence and the rate, which is three lines, so the pinned figure keeps three: the Dock under it does not move when the sentence appears or goes.
-   --airflow-pin is the figure's height as far as focus is concerned, so it grows by the same line. */
-@media(max-width:519px) {
- .airflow-figure .sim-status { min-height:calc(4.8em + 14px); }
-}
-@media(max-width:519px) and (min-height:701px) {
- .airflow-card { --airflow-pin:calc(72px + clamp(240px,40vh,440px) + 111px); }
-}
+/* Where the simulation is: the status line's words. */
+.sim-status { margin:0; font-size:12px; line-height:1.6; color:var(--muted); font-variant-numeric:tabular-nums; }

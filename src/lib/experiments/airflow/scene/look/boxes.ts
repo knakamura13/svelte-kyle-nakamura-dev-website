@@ -1,4 +1,4 @@
-import { BufferGeometry, Color, Float32BufferAttribute } from 'three';
+import { BufferGeometry, Color, Float32BufferAttribute, MeshDepthMaterial } from 'three';
 
 /** The six faces of an axis-aligned box, by the axis and the way their normal points. */
 export type Face = 'px' | 'nx' | 'py' | 'ny' | 'pz' | 'nz';
@@ -91,11 +91,29 @@ export class CutBoxes {
 		geometry.setAttribute('normal', new Float32BufferAttribute(this.normals, 3));
 		geometry.setAttribute('color', new Float32BufferAttribute(this.colors, 3));
 		geometry.setAttribute('uv', new Float32BufferAttribute(this.uvs, 2));
+		// Where every vertex was built, before any cut: the sun's shadow is cast from this (`uncutShadow`).
+		geometry.setAttribute('basePosition', new Float32BufferAttribute(this.positions, 3));
 		geometry.setIndex(this.indices);
 		geometry.computeBoundingSphere();
 		geometry.computeBoundingBox();
 		return { geometry, cut: { base: new Float32Array(this.positions), bottom: new Float32Array(this.bottoms), anchor: new Float32Array(this.anchors) } };
 	}
+}
+
+/**
+ * The material a cut mesh casts the sun's shadow with: its vertices where they were built (`basePosition`), not where the cut moved
+ * them. A wall dropped by the cutaway still shades the room as the standing wall does, so the light in a room does not change as the
+ * camera moves round it, and the shadow map only needs drawing again when something really moves (a door, a window).
+ */
+export function uncutShadow() {
+	const material = new MeshDepthMaterial();
+	material.onBeforeCompile = (shader) => {
+		shader.vertexShader = shader.vertexShader
+			.replace('#include <common>', '#include <common>\nattribute vec3 basePosition;')
+			.replace('#include <begin_vertex>', 'vec3 transformed = vec3( basePosition );');
+	};
+	material.customProgramCacheKey = () => 'airflow-uncut-shadow';
+	return material;
 }
 
 /**

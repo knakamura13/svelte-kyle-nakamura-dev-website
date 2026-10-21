@@ -1,14 +1,19 @@
 import { BoxGeometry, Color, Group, Mesh, MeshBasicMaterial, type Material, type Object3D } from 'three';
 import { roomAt } from '../../homes/rooms';
 import type { HomePlan, OpeningSpec } from '../../homes/types';
-import { CutBoxes, applyCut, type CutData, type Face } from '../look/boxes';
+import { CutBoxes, applyCut, uncutShadow, type CutData, type Face } from '../look/boxes';
 import { WALL_COLORS, paintFor, type Materials } from '../look/materials';
 import { EXTERIOR_WALL, doorSwing, frameLayouts, frameSpan, openingPanels, panelBottom, wallBox, wallPieces, wallPoint, wallRuns, type Panel, type Span, type WallRun } from '../wallPieces';
 import type { WallLine } from './cutaway';
 
-/** Every wall's centre line in the plan, in the order of `wallRuns`, for the cutaway rule. */
+/**
+ * Every wall's centre line in the plan, in the order of `wallRuns`, for the cutaway rule. A run's `out` is the side across it (in n)
+ * that is outdoors, and n is the line's left seen from its start to its end for both axes, so it is the line's `outdoors` as it is.
+ */
 export function wallLines(runs: readonly WallRun[]): WallLine[] {
-	return runs.map((run) => (run.axis === 'x' ? { ax: run.from, az: run.at, bx: run.to, bz: run.at } : { ax: run.at, az: run.from, bx: run.at, bz: run.to }));
+	return runs.map((run) =>
+		run.axis === 'x' ? { ax: run.from, az: run.at, bx: run.to, bz: run.at, outdoors: run.out } : { ax: run.at, az: run.from, bx: run.at, bz: run.to, outdoors: run.out }
+	);
 }
 
 /** Skirting boards: how high, and how far proud of the wall. */
@@ -78,6 +83,10 @@ export class WallsView {
 	private readonly posts: { meshes: CutMesh[]; walls: [number, number]; applied: number }[] = [];
 	private readonly openings: OpeningView[] = [];
 	private readonly targetMaterial = new MeshBasicMaterial({ visible: false });
+	/** Every cut mesh casts the sun's shadow as it was built, so a wall the cutaway drops still shades its room (`uncutShadow`). */
+	private readonly shadow = uncutShadow();
+	/** Something that casts a shadow moved (a door swung, a sash slid) since the scene last asked: the shadow map is stale. */
+	shadowsChanged = true;
 
 	constructor(
 		private readonly plan: HomePlan,
@@ -184,6 +193,7 @@ export class WallsView {
 			const mesh = new Mesh(geometry, material);
 			mesh.castShadow = material !== materials.glass;
 			mesh.receiveShadow = true;
+			if (mesh.castShadow) mesh.customDepthMaterial = this.shadow;
 			if (material === materials.glass) mesh.renderOrder = 2;
 			this.group.add(mesh);
 			view.meshes.push({ mesh, data: cut, lift: 0 });
@@ -259,6 +269,7 @@ export class WallsView {
 			const mesh = new Mesh(geometry, material as Material);
 			mesh.castShadow = material !== materials.glass;
 			mesh.receiveShadow = true;
+			if (mesh.castShadow) mesh.customDepthMaterial = this.shadow;
 			if (material === materials.glass) mesh.renderOrder = 2;
 			mesh.userData.opening = spec.id;
 			holder.add(mesh);
@@ -286,6 +297,7 @@ export class WallsView {
 			const { geometry, cut } = boxes.build();
 			const mesh = new Mesh(geometry, materials.trim);
 			mesh.castShadow = mesh.receiveShadow = true;
+			mesh.customDepthMaterial = this.shadow;
 			this.group.add(mesh);
 			this.posts.push({ meshes: [{ mesh, data: cut, lift: 0 }], walls: [index(a), index(b)], applied: plan.ceiling });
 		}
@@ -316,6 +328,7 @@ export class WallsView {
 		}
 		// Every moving part is cut again at its wall's height.
 		for (const view of this.views) this.cutParts(view, view.height);
+		this.shadowsChanged = true;
 	}
 
 	/** The height each wall should stand at, m, in the order of `runs`. */
@@ -373,6 +386,7 @@ export class WallsView {
 			if (mesh.isMesh) mesh.geometry.dispose();
 		});
 		this.targetMaterial.dispose();
+		this.shadow.dispose();
 		this.openingTargets.length = 0;
 	}
 }

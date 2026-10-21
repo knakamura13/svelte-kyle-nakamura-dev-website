@@ -19,8 +19,8 @@
 	const MODES: Record<PointerMode, { label: string; help: string; announce: string }> = {
 		look: {
 			label: 'Look',
-			help: 'A finger turns the view, and the arrow keys rotate it while the 3D view has focus. Choose Probe or Emit to use touch or keys on the air itself.',
-			announce: 'Look mode. A finger turns the view, and the arrow keys rotate it.'
+			help: 'One finger moves the view, and two pinch to zoom and twist to turn it. While the 3D view has focus, the arrow keys or W, A, S and D move it, and Q and E turn it. Choose Probe or Emit to use touch or keys on the air itself.',
+			announce: 'Look mode. A finger or the arrow keys move the view, and Q and E turn it.'
 		},
 		probe: {
 			label: 'Probe',
@@ -41,7 +41,7 @@
 
 	/** The arrow keys and Enter act on the air only while the 3D view has focus, so the Dock can take the focus there. */
 	function goToStage(event: MouseEvent) {
-		(event.currentTarget as HTMLElement).closest('.airflow-card')?.querySelector<HTMLElement>('.stage-view')?.focus();
+		(event.currentTarget as HTMLElement).closest('.airflow')?.querySelector<HTMLElement>('.stage-view')?.focus();
 	}
 
 	// What is under the pointer or the keyboard cursor, from the scene. It changes with every move, so it is never a live region.

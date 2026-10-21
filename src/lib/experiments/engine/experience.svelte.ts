@@ -1,5 +1,5 @@
 import { getContext, setContext } from 'svelte';
-import type { SlotOptions, StageController } from './controller';
+import type { SlotOptions } from './controller';
 
 const key = Symbol('experiment');
 
@@ -7,12 +7,22 @@ export const prefersReducedMotion = () =>
 	typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /**
+ * What hosts an Experiment's Stages: the shared `StageController` that every article's chapters use, or an Experiment's own host
+ * (the airflow page's full-screen world). It takes a Stage, draws it when told something changed, and lets everything go at the end.
+ */
+export interface StageHost {
+	register(view: HTMLElement, options: SlotOptions): () => void;
+	invalidate(): void;
+	destroy(): void;
+}
+
+/**
  * Fetches an Experiment's 3D engine: the controller module and that Experiment's scenes, as dynamic
  * imports, so three.js stays out of the page's initial JavaScript. It resolves to a function that builds
  * the controller rather than to a controller, so the Experience can still decline to build one for a
  * visitor who has already left (a controller listens to the document until it is destroyed).
  */
-export type EngineLoader = () => Promise<() => StageController>;
+export type EngineLoader = () => Promise<() => StageHost>;
 
 /**
  * State shared by every chapter on the page: the motion preference, the one 3D engine (fetched only
@@ -22,8 +32,8 @@ export type EngineLoader = () => Promise<() => StageController>;
 export class Experience {
 	reducedMotion = $state(false);
 	announcement = $state('');
-	private controller: StageController | null = null;
-	private loading: Promise<StageController | null> | null = null;
+	private controller: StageHost | null = null;
+	private loading: Promise<StageHost | null> | null = null;
 	/** Counts teardowns, so a download that finishes after one can tell it is no longer wanted. */
 	private generation = 0;
 	private announceTimer: ReturnType<typeof setTimeout> | undefined;

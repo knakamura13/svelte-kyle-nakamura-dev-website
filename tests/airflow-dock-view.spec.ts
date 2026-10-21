@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { focusRing, live, openAirflow, status } from './dock';
+import { focusRing, live, openAirflow, status, worldShot } from './dock';
 import { dockLegend } from '../src/lib/experiments/airflow/viz/dockLegend';
 import { SENSITIVITY_SLIDER, describeLayer, describeSensitivity, describeSliceHeight, sensitivityFromSlider } from '../src/lib/experiments/airflow/viz/viewControls';
 import type { LayerId } from '../src/lib/experiments/airflow/state';
@@ -56,10 +56,10 @@ async function changedShare(page: Page, before: Buffer, after: Buffer) {
  * once at once and again when the simulation's new reading of it arrives, so the picture right after a change may not be the last one.
  */
 async function settle(page: Page, view: Locator, from?: Buffer) {
-	let previous = from ?? (await view.screenshot());
+	let previous = from ?? (await worldShot(page, view));
 	for (let n = 0; n < 30; n++) {
 		await page.waitForTimeout(200);
-		const next = await view.screenshot();
+		const next = await worldShot(page, view);
 		const calm = (await changedShare(page, previous, next)) < 0.0005;
 		previous = next;
 		if (calm) break;
@@ -67,13 +67,20 @@ async function settle(page: Page, view: Locator, from?: Buffer) {
 	return previous;
 }
 
-/** Opens the page and waits for a live Stage with its picture drawn. Skips in a browser that cannot draw 3D. */
-async function liveStage(page: Page) {
+/**
+ * Opens the page and waits for a live Stage with its picture drawn, with the Slice on: it is an overlay, off at first, and these tests
+ * are about what it shows. Skips in a browser that cannot draw 3D.
+ */
+async function liveStage(page: Page, { slice = true } = {}) {
 	await openAirflow(page);
 	const view = stageOf(page);
 	await expect(view).toHaveAttribute('data-state', /^(live|unsupported)$/, { timeout: 15_000 });
 	test.skip((await view.getAttribute('data-state')) === 'unsupported', 'This browser has no WebGL.');
 	await expect(status(page)).toHaveAttribute('data-status', /^(paused|running)$/, { timeout: 30_000 });
+	if (slice) {
+		await page.getByRole('checkbox', { name: 'Slice', exact: true }).check();
+		await expect(live(page)).toHaveText('Slice on.');
+	}
 	return { view, picture: await settle(page, view) };
 }
 
@@ -83,7 +90,7 @@ async function redrawn(page: Page, view: Locator, before: Buffer, atLeast: numbe
 	await expect
 		.poll(
 			async () => {
-				latest = await view.screenshot();
+				latest = await worldShot(page, view);
 				return changedShare(page, before, latest);
 			},
 			{ message: `${what}: the Stage is redrawn`, timeout: 30_000 }
@@ -338,7 +345,8 @@ test.describe('the View group and the legend', () => {
 
 	test('Top-down view and Tracers redraw the Stage, say so, and can be switched back', async ({ page }) => {
 		test.setTimeout(180_000);
-		const { view, picture } = await liveStage(page);
+		// The Slice stays off here: the tracers are drawn through the whole room, and the Slice would hide those under it.
+		const { view, picture } = await liveStage(page, { slice: false });
 		const topDown = page.getByRole('checkbox', { name: 'Top-down view' });
 		const tracers = page.getByRole('checkbox', { name: 'Tracers' });
 		await expect(topDown).not.toBeChecked();
@@ -346,10 +354,10 @@ test.describe('the View group and the legend', () => {
 
 		await tracers.uncheck();
 		await expect(live(page)).toHaveText('Tracers off.');
-		const noTracers = await redrawn(page, view, picture, 0.01, 'Tracers off');
+		const noTracers = await redrawn(page, view, picture, 0.004, 'Tracers off');
 		await tracers.check();
 		await expect(live(page)).toHaveText('Tracers on.');
-		const withTracers = await redrawn(page, view, noTracers, 0.01, 'Tracers on');
+		const withTracers = await redrawn(page, view, noTracers, 0.004, 'Tracers on');
 		// With the Tracers back the picture is the one it was, not the one without them (a little may differ: the dots are small and many).
 		expect(await changedShare(page, picture, withTracers), 'with the Tracers back it is the same picture').toBeLessThan((await changedShare(page, picture, noTracers)) / 2);
 
@@ -407,7 +415,14 @@ test.describe('the View group and the legend', () => {
 		await page.keyboard.press('ArrowLeft');
 		await expect(valueOf(page, 'airflow-slice-height')).toHaveText(/^3\sft\s6\sin$/);
 
-		// The switches: Space.
+		// The switches: Space. The Slice is off at first: the air shows through the whole room, and the Slice is an overlay.
+		await page.keyboard.press(next);
+		await expect(page.getByRole('checkbox', { name: 'Slice', exact: true })).toBeFocused();
+		expect(await focusRing(page), 'Slice shows where it is').toBe(true);
+		await expect(page.getByRole('checkbox', { name: 'Slice', exact: true })).not.toBeChecked();
+		await page.keyboard.press('Space');
+		await expect(page.getByRole('checkbox', { name: 'Slice', exact: true })).toBeChecked();
+		await expect(live(page)).toHaveText('Slice on.');
 		await page.keyboard.press(next);
 		await expect(page.getByRole('checkbox', { name: 'Top-down view' })).toBeFocused();
 		expect(await focusRing(page), 'Top-down view shows where it is').toBe(true);

@@ -236,7 +236,8 @@ test.describe('the Physics group of the Dock', () => {
 			await expect(table(page).getByRole('row', { name: /^Living room/ }).getByRole('cell').first()).toHaveText(/^\d+\sm³$/, { timeout: 30_000 });
 			const measure = () =>
 				page.evaluate(() => {
-					const card = document.querySelector('.airflow-card')!.getBoundingClientRect();
+					// The Dock is in the drawer over the world now; nothing in the panel may stick out of it.
+					const card = document.querySelector('.airflow-drawer')!.getBoundingClientRect();
 					const outside = [...document.querySelectorAll('#dock-physics *')]
 						.filter((el) => {
 							const box = el.getBoundingClientRect();
@@ -355,7 +356,8 @@ test.describe('the explainer on the page', () => {
 		await withoutWebGpu(page);
 	});
 
-	test('is part of the page, after the card with the Stage and before the closing links, with its three sections and the line that it is not advice', async ({ page }) => {
+	test('is in the drawer, after the Dock, with its three sections and the line that it is not advice', async ({ page }) => {
+		// Until the HUD's About panel holds it (milestone 3), the explainer is under the Dock in the drawer, not after a card on a page.
 		await page.setViewportSize({ width: 1280, height: 900 });
 		await openAirflow(page);
 		await expect(page.getByRole('heading', { level: 2, name: /^How it\s*works\.$/ })).toBeAttached();
@@ -363,19 +365,19 @@ test.describe('the explainer on the page', () => {
 		await expect(page.getByRole('heading', { level: 2, name: 'Sources.' })).toBeAttached();
 		await expect(page.getByText('It is not engineering or health advice.')).toBeAttached();
 		const places = await page.evaluate(() => {
-			const top = (el: Element) => el.getBoundingClientRect().top + scrollY;
-			const sections = [...document.querySelectorAll('article.airflow > section.experiment-close')];
-			return { card: top(document.querySelector('.airflow-card')!) + document.querySelector('.airflow-card')!.getBoundingClientRect().height, sections: sections.map(top), end: top(document.querySelector('.case-end')!) };
+			const drawer = document.querySelector('.airflow-drawer')!;
+			const sections = [...drawer.querySelectorAll('section.experiment-close')];
+			const dock = drawer.querySelector('.airflow-dock')!;
+			return { sections: sections.length, afterDock: sections.every((section) => dock.compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING) };
 		});
-		expect(places.sections, 'three sections').toHaveLength(3);
-		expect(places.sections[0], 'after the card').toBeGreaterThanOrEqual(places.card - 1);
-		expect(places.sections[2], 'before the closing links').toBeLessThan(places.end);
+		expect(places.sections, 'three sections').toBe(3);
+		expect(places.afterDock, 'after the Dock').toBe(true);
 	});
 
 	test('says what is true of this page: the processor runs it where there is no WebGPU, the casement opens about 80 %, and the books agree to 0.1 %', async ({ page }) => {
 		await page.setViewportSize({ width: 1280, height: 900 });
 		await openAirflow(page);
-		const text = await page.locator('article.airflow > section.experiment-close').allInnerTexts().then((all) => all.join('\n').replace(/\s+/g, ' '));
+		const text = await page.locator('article.airflow section.experiment-close').allInnerTexts().then((all) => all.join('\n').replace(/\s+/g, ' '));
 		// The fallback that the page really has: this browser has no WebGPU here, and the line under the Stage says where it runs.
 		expect(text).toMatch(/otherwise it still runs\. The same algorithm runs on the processor in a worker at a coarser grid, and the page says so when it does/);
 		await expect(status(page)).toContainText('on the processor at reduced detail', { timeout: 60_000 });
@@ -393,7 +395,7 @@ test.describe('the explainer on the page', () => {
 		for (const width of [1440, 390]) {
 			await page.setViewportSize({ width, height: 900 });
 			await openAirflow(page);
-			const { violations } = await new AxeBuilder({ page }).include('article.airflow > section.experiment-close').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
+			const { violations } = await new AxeBuilder({ page }).include('article.airflow section.experiment-close').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
 			expect(
 				violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`),
 				`${width}px wide`

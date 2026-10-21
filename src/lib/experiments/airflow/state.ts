@@ -89,6 +89,12 @@ export interface View {
 	sensitivity: number;
 	/** Height of the slice plane above the floor, m. */
 	sliceHeight: number;
+	/**
+	 * Whether the slice plane is drawn. Off by default: the plane is mostly opaque and hid everything below it, so the air and the
+	 * smoke now show through the whole room from every angle, and the slice is an overlay the visitor turns on (the Dock's View group).
+	 * Readings and Probes still come from the slice height either way.
+	 */
+	slice: boolean;
 	topDown: boolean;
 	/** Whether the little dots that follow the air are drawn. */
 	tracers: boolean;
@@ -126,7 +132,7 @@ export const DEFAULT_CONDITIONS: Conditions = { windFrom: 270, windSpeed: 0, out
  * The overlay starts on Air speed, which is today's slice, so the page looks as it did before the HUD. The redesign wants it Off
  * (the streaks show the air on their own); that is the default to set once the streaks are drawn.
  */
-export const DEFAULT_VIEW: Omit<View, 'units'> = { layer: 'speed', sensitivity: 0.5, sliceHeight: 1.1, topDown: false, tracers: true, mode: 'look', overlay: 'speed', walls: 'cutaway', quality: 'auto' };
+export const DEFAULT_VIEW: Omit<View, 'units'> = { layer: 'speed', sensitivity: 0.5, sliceHeight: 1.1, slice: false, topDown: false, tracers: true, mode: 'look', overlay: 'speed', walls: 'cutaway', quality: 'auto' };
 
 export const DEFAULT_CLOCK: Clock = { paused: false, speed: 1 };
 

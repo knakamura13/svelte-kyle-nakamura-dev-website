@@ -56,9 +56,13 @@ export const PITCH_MAX = 86 * DEG;
 export const FOCUS_INSET = 0.5;
 /** Above the roof's band the camera may stand anywhere; below it, it stays this far inside the outside walls. */
 export const CAMERA_INSET = 0.18;
-/** The default view: from the south-west, a little more than half way out, so the whole Home shows at a three-quarter angle. */
+/**
+ * The default view: from the south-west, most of the way out and tilted back from the pitch that zoom gives, so the whole Home and a
+ * margin of lawn show at a three-quarter angle (about 54 degrees down). At 0.8 and no tilt the living room's far corner was cut off.
+ */
 export const HOME_YAW = -32 * DEG;
-export const HOME_ZOOM = 0.8;
+export const HOME_ZOOM = 0.9;
+export const HOME_TILT = -10 * DEG;
 
 const clamp = (value: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, value));
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -93,9 +97,19 @@ export function farDistance(bounds: CameraBounds, fov: number, aspect: number): 
 	return Math.max(NEAR_DISTANCE * 2, radius / Math.sin(half));
 }
 
-/** The default view of a Home: its middle, from the south-west, far enough out to see all of it. */
-export function homeView(bounds: CameraBounds): CameraState {
-	return { x: bounds.width / 2, z: bounds.depth / 2, yaw: HOME_YAW, zoom: HOME_ZOOM, tilt: 0 };
+/**
+ * On a screen taller than it is wide (a phone held upright) the default view is from nearly bird's-eye, tilted back a little, and
+ * turned to look along the Home's long side, so its length runs up the screen and all of it fits.
+ */
+export const PORTRAIT_YAW = -70 * DEG;
+export const PORTRAIT_TILT = -14 * DEG;
+export const PORTRAIT_ZOOM = 0.88;
+
+/** The default view of a Home: its middle, from the south-west, far enough out to see all of it on a screen of this `aspect` (width over height). */
+export function homeView(bounds: CameraBounds, aspect = 1.6): CameraState {
+	const middle = { x: bounds.width / 2, z: bounds.depth / 2 };
+	if (aspect < 1) return { ...middle, yaw: bounds.width >= bounds.depth ? PORTRAIT_YAW : HOME_YAW, zoom: PORTRAIT_ZOOM, tilt: PORTRAIT_TILT };
+	return { ...middle, yaw: HOME_YAW, zoom: HOME_ZOOM, tilt: HOME_TILT };
 }
 
 /**
@@ -165,6 +179,24 @@ export function pose(state: CameraState, bounds: CameraBounds, far: number): Cam
 		distance,
 		inside: kept
 	};
+}
+
+/**
+ * A camera that `?camera=x,z,heading,zoom,tilt` in the address asks for, for QA and for screenshots: the focus in metres, the way the
+ * camera looks in degrees clockwise from north (as the page's `data-yaw` reports it), the zoom from 0 to 1 and the tilt in degrees.
+ * Missing or unreadable parts are left out; null when there is no such parameter.
+ */
+export function cameraFromSearch(search: string): Partial<CameraState> | null {
+	const asked = new URLSearchParams(search).get('camera');
+	if (!asked) return null;
+	const [x, z, heading, zoom, tilt] = asked.split(',').map((part) => (part.trim() === '' ? NaN : Number(part)));
+	const state: Partial<CameraState> = {};
+	if (Number.isFinite(x)) state.x = x;
+	if (Number.isFinite(z)) state.z = z;
+	if (Number.isFinite(heading)) state.yaw = wrapAngle(-heading * DEG);
+	if (Number.isFinite(zoom)) state.zoom = clampZoom(zoom);
+	if (Number.isFinite(tilt)) state.tilt = tilt * DEG;
+	return Object.keys(state).length ? state : null;
 }
 
 /** An angle brought into (-π, π]. */

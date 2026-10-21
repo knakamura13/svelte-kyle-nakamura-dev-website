@@ -5,11 +5,13 @@ import {
 	CAMERA_INSET,
 	EYE_HEIGHT,
 	FOCUS_INSET,
+	HOME_TILT,
 	HOME_ZOOM,
 	PITCH_FAR,
 	PITCH_MAX,
 	PITCH_MIN,
 	TILT_LIMIT,
+	cameraFromSearch,
 	clampFocus,
 	clampTilt,
 	distanceAt,
@@ -61,7 +63,7 @@ test.describe('the orbit', () => {
 	});
 
 	test('at bird’s-eye it looks down about 75 degrees from far enough out to see the whole Home', () => {
-		const at = pose({ ...homeView(HOME), zoom: 1 }, HOME, FAR);
+		const at = pose({ ...homeView(HOME), zoom: 1, tilt: 0 }, HOME, FAR);
 		expect(at.pitch).toBeCloseTo(PITCH_FAR, 5);
 		expect(at.target[1]).toBe(0);
 		// Every corner of the footprint is within the vertical field of view from there.
@@ -90,9 +92,9 @@ test.describe('the orbit', () => {
 		}
 		for (const ratio of ratios) expect(ratio).toBeCloseTo(ratios[0], 6);
 		expect(distanceAt(1, FAR)).toBeCloseTo(FAR, 6);
-		// The default view is a three-quarter view, between the two.
-		expect(pitchAt(HOME_ZOOM) / DEG).toBeGreaterThan(40);
-		expect(pitchAt(HOME_ZOOM) / DEG).toBeLessThan(60);
+		// The default view is a three-quarter view, between the two: far out, tilted back.
+		expect((pitchAt(HOME_ZOOM) + HOME_TILT) / DEG).toBeGreaterThan(40);
+		expect((pitchAt(HOME_ZOOM) + HOME_TILT) / DEG).toBeLessThan(60);
 	});
 
 	test('a drag tilts within limits, and the pitch never leaves its range whatever the zoom and the tilt', () => {
@@ -327,5 +329,49 @@ test.describe('the controls', () => {
 		const home = rig();
 		expect(home.controls.yawDegrees).toBe(32);
 		expect(home.controls.pitchDegrees).toBeGreaterThan(40);
+	});
+
+	test('on a screen taller than wide, start from bird’s-eye looking along the Home’s long side, until the visitor moves the camera', () => {
+		const { controls } = rig();
+		controls.setAspect(390 / 844);
+		expect(controls.goal).toEqual(homeView(HOME, 390 / 844));
+		expect(controls.goal.zoom).toBeGreaterThan(HOME_ZOOM - 0.05);
+		// The two-bedroom is wider than deep, so the camera looks east-north-east, along its 12 m.
+		expect(controls.yawDegrees).toBe(70);
+		// Turned the other way up, it goes back to the landscape view; once moved, a new shape leaves the camera where it is.
+		controls.setAspect(1.6);
+		expect(controls.goal).toEqual(homeView(HOME));
+		controls.wheel({ deltaY: -100, deltaMode: 0, ctrlKey: false, metaKey: false });
+		const moved = { ...controls.goal };
+		controls.setAspect(0.5);
+		expect(controls.goal).toEqual(moved);
+	});
+
+	test('start anywhere a link asks for, at once and within the limits: ?camera=x,z,heading,zoom,tilt', () => {
+		expect(cameraFromSearch('')).toBeNull();
+		expect(cameraFromSearch('?camera=')).toBeNull();
+		expect(cameraFromSearch('?camera=nonsense')).toBeNull();
+		// The heading is the way the camera looks, clockwise from north, as the page's data-yaw says it.
+		const asked = cameraFromSearch('?quality=high&camera=2.8,4.5,215,0,3')!;
+		expect(asked.x).toBe(2.8);
+		expect(asked.z).toBe(4.5);
+		expect(asked.zoom).toBe(0);
+		expect(asked.tilt).toBeCloseTo(3 * DEG, 9);
+		const { controls, camera } = rig();
+		controls.jumpTo(asked);
+		expect(controls.yawDegrees).toBe(215);
+		expect(controls.state).toEqual(controls.goal);
+		expect(controls.update(1 / 60), 'already there').toBe(false);
+		// At eye level, tilted 3 degrees down from the 5 the zoom gives.
+		expect(controls.pitchDegrees).toBe(8);
+		expect(camera.position.y).toBeGreaterThan(EYE_HEIGHT);
+		// A part left out keeps the default; a zoom past the end is the end; a focus outside the Home, close in, is brought inside.
+		const partial = rig();
+		partial.controls.jumpTo(cameraFromSearch('?camera=,,,2')!);
+		expect(partial.controls.goal.zoom).toBe(1);
+		expect(partial.controls.goal.x).toBe(homeView(HOME).x);
+		const outside = rig();
+		outside.controls.jumpTo({ x: -5, z: 3, zoom: 0 });
+		expect(outside.controls.goal.x).toBe(FOCUS_INSET);
 	});
 });
