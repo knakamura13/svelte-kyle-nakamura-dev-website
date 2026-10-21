@@ -335,7 +335,10 @@ export class SimsCamera {
 	}
 
 	setZoom(zoom: number) {
+		const before = this.goal.zoom;
 		this.goal.zoom = clampZoom(zoom);
+		// Coming in, a tilt fades with the zoom, so eye level is eye level: the default view's tilt, or a drag's, does not follow the camera down.
+		if (this.goal.zoom < before && before > 0) this.goal.tilt *= this.goal.zoom / before;
 		this.goal.tilt = clampTilt(this.goal.tilt, this.goal.zoom);
 		// Pulling in brings the focus inside the Home, which a far view let it leave.
 		this.setFocus(this.goal.x, this.goal.z);

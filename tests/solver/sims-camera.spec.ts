@@ -5,6 +5,7 @@ import {
 	CAMERA_INSET,
 	EYE_HEIGHT,
 	FOCUS_INSET,
+	HOME_TILT,
 	HOME_ZOOM,
 	PITCH_FAR,
 	PITCH_MAX,
@@ -62,7 +63,7 @@ test.describe('the orbit', () => {
 	});
 
 	test('at bird’s-eye it looks down about 75 degrees from far enough out to see the whole Home', () => {
-		const at = pose({ ...homeView(HOME), zoom: 1 }, HOME, FAR);
+		const at = pose({ ...homeView(HOME), zoom: 1, tilt: 0 }, HOME, FAR);
 		expect(at.pitch).toBeCloseTo(PITCH_FAR, 5);
 		expect(at.target[1]).toBe(0);
 		// Every corner of the footprint is within the vertical field of view from there.
@@ -91,9 +92,9 @@ test.describe('the orbit', () => {
 		}
 		for (const ratio of ratios) expect(ratio).toBeCloseTo(ratios[0], 6);
 		expect(distanceAt(1, FAR)).toBeCloseTo(FAR, 6);
-		// The default view is a three-quarter view, between the two.
-		expect(pitchAt(HOME_ZOOM) / DEG).toBeGreaterThan(40);
-		expect(pitchAt(HOME_ZOOM) / DEG).toBeLessThan(60);
+		// The default view is a three-quarter view, between the two: far out, tilted back.
+		expect((pitchAt(HOME_ZOOM) + HOME_TILT) / DEG).toBeGreaterThan(40);
+		expect((pitchAt(HOME_ZOOM) + HOME_TILT) / DEG).toBeLessThan(60);
 	});
 
 	test('a drag tilts within limits, and the pitch never leaves its range whatever the zoom and the tilt', () => {

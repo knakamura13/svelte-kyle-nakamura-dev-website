@@ -56,9 +56,13 @@ export const PITCH_MAX = 86 * DEG;
 export const FOCUS_INSET = 0.5;
 /** Above the roof's band the camera may stand anywhere; below it, it stays this far inside the outside walls. */
 export const CAMERA_INSET = 0.18;
-/** The default view: from the south-west, a little more than half way out, so the whole Home shows at a three-quarter angle. */
+/**
+ * The default view: from the south-west, most of the way out and tilted back from the pitch that zoom gives, so the whole Home and a
+ * margin of lawn show at a three-quarter angle (about 54 degrees down). At 0.8 and no tilt the living room's far corner was cut off.
+ */
 export const HOME_YAW = -32 * DEG;
-export const HOME_ZOOM = 0.8;
+export const HOME_ZOOM = 0.9;
+export const HOME_TILT = -10 * DEG;
 
 const clamp = (value: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, value));
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -95,7 +99,7 @@ export function farDistance(bounds: CameraBounds, fov: number, aspect: number): 
 
 /** The default view of a Home: its middle, from the south-west, far enough out to see all of it. */
 export function homeView(bounds: CameraBounds): CameraState {
-	return { x: bounds.width / 2, z: bounds.depth / 2, yaw: HOME_YAW, zoom: HOME_ZOOM, tilt: 0 };
+	return { x: bounds.width / 2, z: bounds.depth / 2, yaw: HOME_YAW, zoom: HOME_ZOOM, tilt: HOME_TILT };
 }
 
 /**
