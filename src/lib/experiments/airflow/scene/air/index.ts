@@ -9,7 +9,7 @@ import { MarchTarget } from './march';
 import { solidMask, type SolidMask } from './mask';
 import { Mute, Overlay } from './overlay';
 import { SMOKE_STEPS, SmokePuffs, SmokeVolume, smokeBounds, type SmokeLighting } from './smokeVolume';
-import { STREAK_COUNTS, Streaks } from './streaks';
+import { STREAK_COUNTS, STREAK_PIXELS, Streaks } from './streaks';
 
 export { STREAK_AIR, overlayLegend, streakColor, type OverlayLegend, type OverlayLegendOptions } from './legend';
 export { STREAK_COUNTS } from './streaks';
@@ -105,6 +105,7 @@ export function createAir(options: AirOptions): Air {
 	let tier: QualityTier = options.quality ?? 'high';
 	let precise = true;
 	const streaks = new Streaks(STREAK_COUNTS[tier], fields, precise);
+	streaks.setPixels(STREAK_PIXELS[tier]);
 	const smoke = new SmokeVolume(fields, depth.uniforms, march.size);
 	const overlay = new Overlay(fields, depth.uniforms, march.size);
 	let puffs: SmokePuffs | null = null;
@@ -260,6 +261,7 @@ export function createAir(options: AirOptions): Air {
 			if (next === tier) return;
 			tier = next;
 			streaks.setCount(STREAK_COUNTS[tier]);
+			streaks.setPixels(STREAK_PIXELS[tier]);
 			setSmokeMode();
 		},
 		setStreaks(on) {

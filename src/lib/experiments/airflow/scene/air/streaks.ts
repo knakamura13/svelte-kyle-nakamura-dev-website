@@ -40,9 +40,13 @@ export const STREAK_COUNTS: Readonly<Record<QualityTier, number>> = { high: 15_0
 /** Seconds of travel a streak's tail shows, and the longest it gets, m. */
 export const TAIL = 0.5;
 const MAX_LENGTH = 0.9;
-/** A streak's width, m, as drawn near; it never draws thinner than 1.6 CSS pixels or wider than 4 (scaled by the pixel ratio). */
+/**
+ * A streak's width, m, as drawn near; it never draws thinner than 1.6 CSS pixels or wider than 4 (scaled by the pixel ratio). The low
+ * tier (a phone) draws a third as many, on a screen drawn at fewer pixels than it has, so each is wider, or the air is a faint speckle.
+ */
 const WIDTH = 0.014;
-const PIXELS: [number, number] = [1.6, 4];
+export const STREAK_PIXELS: Readonly<Record<QualityTier, readonly [number, number]>> = { high: [1.6, 4], medium: [1.6, 4], low: [2.6, 5.5] };
+const PIXELS = STREAK_PIXELS.high;
 /** Speeds over which a streak fades in, m/s: still air shows nothing, the slow drift of a room shows faintly, a draught fully. */
 const SPEED_FADE: [number, number] = [0.02, 0.35];
 /** Lives, s, and the fades at each end. */
@@ -251,6 +255,11 @@ export class Streaks {
 
 	get count() {
 		return this.field.count;
+	}
+
+	/** The narrowest and widest a streak is drawn, CSS pixels. */
+	setPixels([narrowest, widest]: readonly [number, number]) {
+		this.mesh.material.uniforms.uPixels.value.set(narrowest, widest);
 	}
 
 	/** Draws `count` streaks, their positions kept in full floats or (`precise` false, for a GPU that cannot draw into those) half floats: a new field, every streak unborn. */
