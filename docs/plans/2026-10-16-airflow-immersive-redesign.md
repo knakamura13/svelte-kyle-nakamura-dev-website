@@ -109,101 +109,58 @@ Decided by the agent from those answers (Kyle asked for no more questions, and t
 
 ## What happens to the existing work
 
-- The Dock slices (#49 to #55) are done but superseded. Their pure logic is reused by the HUD, and their end-to-end specs retire when the HUD replaces them.
+- The Dock slices (#49 to #55) are done but superseded. Their pure logic is reused by the HUD. The Dock's components and end-to-end specs were deleted when the HUD replaced them (bb56fd7).
 - #56 (the auto-tuner) changes: it tunes during the loading screen instead of restarting while the visitor watches.
 - #61 to #64 and #68 are re-scoped to the new page.
 - #58, #59, #60, #65 and #69 are unchanged.
 - New sub-issues for milestones 1 to 5 are added to #30 after the first check-in confirms the direction.
 
-## Where it stands (2026-10-16, paused)
+## Where it stands (2026-10-20, paused after check-in 2)
 
-Kyle paused the project after the first build round. The three milestone agents stopped early, and their work is merged into the working branch, but nothing new is on screen yet: `/experiments/airflow` still shows the Dock page. So the first check-in (screenshots of the new look) has not happened. It comes after milestone 1's rendering is wired in.
+Kyle approved check-in 2 on 2026-10-20 and paused the project. Milestones 1 to 3 are merged into the working branch and pushed: e2b5e97 is the merge of check-in 2. `/experiments/airflow` is now the full-screen experience: the new world, the air and the HUD, with no Dock and no slice plane. The history of how each milestone got here is in git.
 
-**Milestone 1 (look and camera): about a quarter done.**
-- **Done and tested:**
-  - `scene/camera/sims.ts`, the orbit maths. Zoom 0 is eye level at 1.6 m, looking 5° down; zoom 1 is bird's-eye at 75°. The pitch follows the zoom, with a tilt of up to 24° either way. The focus is kept 0.5 m off the walls close in. Motion uses critically damped springs.
-  - `scene/camera/controls.ts` (`SimsCamera`): every input in the spec.
-  - `scene/walls/cutaway.ts`: up, cutaway and down. A wall drops to 0.4 m when the line of sight to the focus crosses it, with hysteresis.
-  - `scene/look/quality.ts`, with `?quality=` to override.
-  - Tests: `tests/solver/sims-camera.spec.ts` and `walls-cutaway.spec.ts`.
-- **Written but never rendered:** `scene/walls/walls.ts` and `scene/look/{boxes,materials,textures}.ts`. They cover per-room paint, skirting, siding, window frames, sills and glass, panelled doors, and procedural oak, tile, plaster, siding, paving, grass and fabric.
-- **Next, in order:**
-  1. `look/lighting.ts`, `post.ts`, `floors.ts`, `furniture.ts`, and a `look/home.ts` that replaces the old dollhouse in `airflowScene.ts`.
-  2. `look/stage.ts`, an airflow-only input host. It needs one type-only change to `EngineLoader` in `engine/experience.svelte.ts`.
-  3. A `slice` view field, off by default.
-  4. The full-screen route. A layout reset cannot escape the root layout, so `src/routes/+layout.svelte` must skip `PortfolioShell` when `page.data.immersive` is set.
-  5. Tests, then the screenshots for the first check-in.
-- **Open:**
-  - In the default view the cutaway rule leaves the west wall standing.
-  - The "Look mode" sentence in `probeWords.ts` will be wrong once the arrow keys pan.
+**Built:**
+- **World (milestone 1):**
+  - Kenney furniture fitted to each piece's box in the plans, with laminate or tile floors, painted walls, a lawn, trees and the HDR sky. Assets are in `static/airflow/`, licences in `LICENSES.md`.
+  - A low warm sun with soft shadows, GTAO, bloom, AgX and SMAA, with high, medium and low tiers.
+  - The Sims camera (`scene/camera/`) and cutaway walls (`scene/walls/`).
+  - The full-screen route outside the site's shell, with an Exit button. `?camera=` and `?cell=` reproduce a shot.
+- **Air (milestone 2):**
+  - A downsampled volume snapshot on both backends (`solver/volume.ts`).
+  - Streaks carried through the whole room volume, a ray-marched smoke volume, and puffs on low quality (`scene/air/`).
+  - The overlays (Air speed, Temperature, Smoke) colour the streaks, with a haze capped at 22%. The world is muted 30% under an overlay. There is no plane anywhere.
+  - A GPU snapshot race fixed, with a regression test.
+- **HUD (milestone 3):**
+  - Built pieces: the top bar, tool rail, Build catalog with drag-to-place, context menus, inspector, weather widget, bottom bar, About, Advanced, and the phone layout (`ui/hud/`).
+  - The Dock's components and specs were deleted in bb56fd7, which reverts alone. The Physics panel, the explainer and the pure modules stay.
 
-**Milestone 1, 2026-10-20 session (branch `worktree-agent-adbd1572cd109344b`, on top of `knakamura/issue-30-completion-7a3fb7`): built; the first check-in is ready for Kyle.**
-- Built: `look/{assets,floors,furniture,outside,lighting,post,home,stage}.ts`, the far cutaway rule (from half way out, every wall facing the camera drops), `?camera=x,z,heading,zoom,tilt`, `view.slice` (off), the full-screen route (`+layout.ts` says immersive and the root layout skips the shell), the Dock as a drawer that pushes the world aside, a lighter tier for WebGL in software, and a default view for an upright phone.
-- Measured on this M3 Max, on AC power with the machine quiet: the high tier holds 60 fps at 1440x900 at one and two device pixels, with GTAO at full resolution (p95 16.8 ms); the tuner climbs to 0.075 m cells. The first frame comes 0.46 to 0.5 s after navigation with the shaders cached, and about 6 s on the first visit, nearly all of it Metal compiling the shaders (the assets are in by 0.3 s on the local preview).
-- Tests: `tests/solver/look-home.spec.ts` (new) and additions to `walls-cutaway` and `sims-camera` pass; the type check is at its baseline. The airflow e2e specs were adapted (drawer helper, data-focus after an arrow key, the new Look mode words, the explainer in the drawer); the tests that only check the old article layout are skipped, each naming milestone 3.
-- Screenshots and the recording: `?camera=` and `?cell=0.15` (so the tuner does not restart the air) reproduce them.
-- Open: the Kenney models are low-poly and some are stretched to their boxes (the dining table, the sideboard); the old tracers and smoke puffs stand in until milestone 2; a cold first visit spends about 6 s compiling shaders (milestone 4's loading screen, or `compileAsync`); the hover ring still sits at the slice height with the slice off; `scene/dollhouse.ts` is no longer drawn but is still imported by its Node test and the old QA harness.
+**Measured** on the M3 Max, on mains power, load 9 to 15:
+- 60 fps at 1440x900 on high with the air on, and 58.2 fps under Air speed at two device pixels.
+- The first frame takes 0.5 s with shaders cached, and about 6 s on a first visit, nearly all of it shader compiling.
 
-**Milestones 2 and 3 in the new world, 2026-10-20 (branch `worktree-agent-a631a2d6d36c24400`, on top of milestone 1): ready for the second check-in.**
-- Merged the air (`scene/air/`) and the HUD (`ui/hud/`) into milestone 1's world. `createAir` runs in `createAirflowScene` in place of the old tracers and smoke points (the session reads the volume and keeps no particles), mutes the Home and the devices under an overlay, lights the smoke with `lighting.sun`, and follows the stage's tier. The selection is wired in with its outlines, ghost, menu anchors and tool-routed clicks; a click stops at a standing wall (`WallsView.standingBoxes`) and cannot take an Opening in a cut wall (`openingCut`), and a Probe, smoke or a carried device does not land behind one.
-- The page is `<Hud {status} {tuning} {behind} />` over the world, with no frame and no `?hud`. The Dock's groups, their end-to-end specs and the helpers only they used are deleted in one commit (bb56fd7), which reverts alone. The Physics panel, the explainer and the pure modules stay.
-- Connected: the bottom bar's wall modes drive the cutaway; Advanced's Graphics drives the stage's tiers; the overlay switcher drives `setOverlay`, and its legend and the colour sensitivity are the air's own (`scene/air/legend.ts`); Slice height is now "Probe and smoke height"; the marker under the pointer and the smoke's marker stand on a stem from the floor.
-- Fixed on the way: about one frame in ten was blank on the high and medium tiers (a NaN from `pow` at a streak's tail, spread by the bloom); the mute changed only material colours, which left maps and vertex colours (most of the new world) unmuted, so it is now one shared shader uniform; the smoke volume whited a room out, so its extinction now grows with the square of the concentration, in a cool grey; markers drew under the smoke; a click rang the whole window in blue (a script focus); the compass dial turned the wrong way for the new camera; the near streaks hung like a curtain at eye level; the compass letters sat on room names; the HUD's backdrop blur cost one frame in nine at two device pixels, so the glass is a little more opaque and unblurred.
-- Measured on this M3 Max on mains power, load averages 9 to 15 (macOS media analysis and a Time Machine backup running): at 1440x900 on the high tier, with the tuner at 7.5 cm cells, 60.0 fps with the overlays off and with smoke released, 58.2 fps under Air speed at two device pixels (18 of 583 frames over 20 ms), and 60.0 fps in all three at one device pixel.
-- Tests: the type check at its baseline; the Node suite 489 passed, 1 skipped; the GPU suite 43 passed, 15 skipped; `tests/airflow.spec.ts`, `airflow-tune.spec.ts` and `airflow-hud.spec.ts` 66 passed in Chromium, Firefox and WebKit at two workers. The HUD spec gained a test that the wall modes, the overlays and Graphics change the world.
-- Open: smoke is a soft volume, not wisps, because the volume averages blocks of up to 0.3 m; on a phone the air is still faint; the bookcase and some Kenney pieces read as boxes; the old `scene/particles.ts`, `arrows.ts`, `SliceLayer` and `dollhouse.ts` are only imported by tests now; doors and windows in a wall that is cut away can be opened only from the Inspector or with the walls up.
-
-**Milestone 2 (air): the data side done.**
-- **Done and tested: the volume snapshot** (`solver/volume.ts`).
-  - It holds velocity, air share, temperature and PM2.5, averaged over blocks of at most 64,000 cells, with strides chosen per axis. No block is over 0.3 m on any grid the tuner picks.
-  - On the worker it is sent as transferred buffers. On the GPU a `volume` kernel writes it, read back through one reused buffer.
-  - The session opts in with `volume: true`: up to 10 a second while running, once when paused. `particles: false` turns off the old tracers.
-  - Cost per snapshot: on the GPU, +0.06 ms (two-bedroom at 0.15 m) to +0.31 ms (house at 0.075 m); on the worker, +0.33 to +0.75 ms.
-  - Tests: `tests/solver/volume.spec.ts` and `tests/gpu/volume.gpu.ts`. The GPU matches the CPU within 2e-7.
-- **Fixed: a GPU snapshot race.**
-  - A snapshot read `fanCount`, the time, the steps and dt after its `await`, so a fan added mid-read made it read a null buffer. Before the fix, 6 of 25 rounds threw and 17 more returned the wrong fan count.
-  - Regression test: `tests/gpu/snapshots.gpu.ts`.
-- **Not started:** `scene/air/` (streaks, the smoke volume and puffs, the overlays, `createAir`) and its hook in `airflowScene.ts`.
-- **Plan for the renderers:**
-  - The CPU picks spawn points, weighted by speed and by open windows with inflow, and uploads them as a texture.
-  - A full-resolution wall mask is built from `raster.geometry` and rebuilt when `World.revision` changes.
-  - One depth pre-pass is shared by the smoke and overlay ray-marches.
-
-**Milestone 3 (HUD): the logic done.**
-- **Done and tested:**
-  - `scene/selection.ts`. It picks the door, window, device or probe under the pointer from the plan's geometry, anchors menus, outlines the chosen and hovered thing, and draws the carried ghost, which R rotates. `ToolInput` routes clicks by tool. It is not yet connected to `airflowScene.ts`.
-  - `state.ts`: `Tool` and `Target`, plus `overlay`, `walls` and `quality` in the view state. `overlay` starts on Air speed so today's page is unchanged.
-  - `ui/hud/{tools,presets,compass,menus,layout,catalog}.ts`.
-  - Tests: `tests/solver/hud.spec.ts`.
-- **To check before launch:** the outdoor air presets (0, 35, 150 and 350 µg/m³) and the wind speeds were picked from the US EPA bands and the Beaufort scale from memory, not looked up.
-- **Not started:**
-  - Every Svelte component: the top bar, the tool rail, the catalog drawer with thumbnails and dragging, the context menus, the inspector, the weather widget, the bottom bar, About, Advanced, the probe cards, the smoke chips and the phone layout.
-  - The page mount and `tests/airflow-hud.spec.ts`.
-- **Resume in order:**
-  1. The store: tool, selection, hover and menu state, and `yaw` and `moving` on the drag preview.
-  2. The scene wiring, about 8 lines in `airflowScene.ts`.
-  3. The components.
-- **Open:** until the cutaway hook is connected, picking can select something behind a full-height wall, or inside a wall that is cut away.
-
-**Assets (milestone 4): researched, nothing downloaded.** The recommended CC0 set, with every link, licence and size, is in `docs/research/airflow/cc0-assets.md`:
-
-| Asset | Download size |
-| --- | --- |
-| Kenney Furniture Kit | about 5.0 MB |
-| Kenney Nature Kit | about 9.8 MB |
-| Poly Haven Laminate Floor 02, Interior Tiles and Beige Wall 001, at 1K | 3.78 MB together |
-| ambientCG Grass004 at 1K (or a procedural lawn) | 11.0 MB |
-| Poly Haven Kloppenheim 06 pure-sky HDRI at 1K | 1.17 MB |
-| **Total** | **about 30.7 MB** |
-
-What the page itself loads is an estimated 10 to 15 MB. The downloads wait for Kyle's explicit OK.
-
-**Checks on the merged tree (2026-10-16):**
+**Checks** at the merge:
 - The type check is at its baseline.
-- The full Node suite: 453 passed, 1 skipped.
-- Every airflow e2e spec, in Chromium on a production build: 130 passed.
-- The GPU suite: 37 passed on the milestone 2 branch. It was not rerun after merging milestones 1 and 3, which do not touch the GPU code.
+- The Node suite: 489 passed, 1 skipped.
+- The GPU suite: 43 passed, 15 skipped.
+- `tests/airflow.spec.ts`, `airflow-tune.spec.ts` and `airflow-hud.spec.ts`: 66 passed in Chromium, Firefox and WebKit at two workers.
+
+**Next, in order:**
+1. **Milestone 4.**
+   - The first-30-seconds opening.
+   - A loading screen that compiles the shaders (`compileAsync`) and picks the grid from a warm-up, so the air never restarts in view.
+   - A phone pass: the air is faint there, and the 3D view is small under the sheets.
+2. **Milestone 5.** The performance pass against the budgets, the accessibility floor, the issues, and the launch issue (#69).
+3. **Sub-issues.** The new sub-issues for the milestones are still to be added to #30.
+
+**Known weak spots:**
+- Smoke reads as a soft volume, not wisps, because the volume averages blocks of up to 0.3 m.
+- Near the windows at eye level the streaks can look like rain.
+- Some Kenney pieces are stretched to their boxes (the dining table, the sideboard), and some read as plain boxes (the bookcase).
+- A door or window in a cut-away wall can be changed only from the Inspector, or with the walls up.
+- The outdoor air presets (0, 35, 150 and 350 µg/m³) and the wind speeds were picked from the US EPA bands and the Beaufort scale from memory. Check them against the sources before launch.
+- `scene/particles.ts`, `arrows.ts`, `SliceLayer` and `dollhouse.ts` are drawn by nothing now and imported only by tests. Remove them.
 
 **Notes for the agents that resume this:**
-- A worktree may start from `main`, where merging this branch conflicts (`playwright.config.ts`, `RangeField.svelte`). Point the empty branch at this branch's tip instead.
-- Vite refuses to serve a `node_modules` that is a symlink into another worktree. Either allow it in a scratch config (`server.fs.allow`), as the milestone 3 agent did, or install `node_modules` in the worktree.
+- A worktree may start from `main`, where merging this branch conflicts (`playwright.config.ts`, `RangeField.svelte`). Point the empty branch at this branch's tip with `git reset --hard` instead.
+- Vite's dev server refuses a `node_modules` that is a symlink into another worktree. Use `yarn build && yarn preview`, allow it in a scratch config (`server.fs.allow`), or install `node_modules` in the worktree.
+- The machine is often loaded by other sessions. Run end-to-end specs at `--workers=2`, check `uptime` before blaming the code, and re-measure frame rates on mains power.
