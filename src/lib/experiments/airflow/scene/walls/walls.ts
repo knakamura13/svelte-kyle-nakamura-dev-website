@@ -370,11 +370,14 @@ export class WallsView {
 		return boxes;
 	}
 
-	/** Whether an Opening's wall stands lower than the top of its frame now (cut away, or down), so the Opening is not whole and cannot be chosen. */
-	openingCut(id: string): boolean {
+	/**
+	 * How high an Opening's wall stands now, m, when that is lower than the top of its frame (cut away, or down), so the Opening is not
+	 * whole and is chosen by what is left of it (`selection.ts`); null while its wall stands whole.
+	 */
+	openingCut(id: string): number | null {
 		const found = this.openingWalls.get(id);
-		if (!found) return false;
-		return (this.views[found.wall]?.height ?? Infinity) < found.top - 0.01;
+		const height = found ? this.views[found.wall]?.height : undefined;
+		return found && height !== undefined && height < found.top - 0.01 ? height : null;
 	}
 
 	/** Once a frame: eases every wall toward its height (all at once when `instant`). Returns true while any is still moving. */

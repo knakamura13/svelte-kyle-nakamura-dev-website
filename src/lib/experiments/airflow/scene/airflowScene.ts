@@ -191,7 +191,7 @@ export function createAirflowScene(host: WorldHost, params: AirflowSceneParams, 
 	});
 	scene.add(editor.group);
 	// The HUD: what a click chooses, the outlines of the chosen and hovered things, the carried ghost, where a menu hangs, and clicks that
-	// follow the tool. A click stops at a wall that stands, and an Opening in a wall that is cut away cannot be chosen.
+	// follow the tool. A click stops at a wall that stands, and an Opening in a wall that is cut away is chosen at its cut.
 	const selection = new Selection({
 		camera,
 		rect: host.rect,

@@ -6,8 +6,8 @@ import { plans } from '../../src/lib/experiments/airflow/homes/plans';
 import { isExterior, type HomePlan, type OpeningSpec } from '../../src/lib/experiments/airflow/homes/types';
 import { Home } from '../../src/lib/experiments/airflow/scene/look/home';
 import { Materials } from '../../src/lib/experiments/airflow/scene/look/materials';
-import { anchorOf, deviceBox, openingBox, pickTarget, rayBox, wallDistance, type PickScene, type Vec3 } from '../../src/lib/experiments/airflow/scene/selection';
-import type { WallMode } from '../../src/lib/experiments/airflow/scene/walls/cutaway';
+import { anchorOf, cutSill, deviceBox, openingBox, pickTarget, rayBox, wallDistance, type PickScene, type Vec3 } from '../../src/lib/experiments/airflow/scene/selection';
+import { CUT_HEIGHT, DOWN_HEIGHT, type WallMode } from '../../src/lib/experiments/airflow/scene/walls/cutaway';
 import { LIMITS, type DeviceState } from '../../src/lib/experiments/airflow/state';
 import { formatSpeed } from '../../src/lib/experiments/airflow/units';
 import { vectorToBearing } from '../../src/lib/experiments/airflow/readout';
@@ -286,10 +286,25 @@ test.describe('picking in the 3D world', () => {
 	function wallsIn(home: Home, mode: WallMode, look = { camera: { x: 1, z: 1 }, focus: { x: 2, z: 2 }, zoom: 0.2 }) {
 		home.update(look, mode, 0, true);
 		const { walls } = home;
-		return { walls: walls.standingBoxes(), hidden: (target: { kind: string; id: string }) => target.kind === 'opening' && walls.openingCut(target.id) };
+		return { walls: walls.standingBoxes(), cutAt: (opening: string) => walls.openingCut(opening) };
 	}
 
-	test('a click stops at a wall that stands and passes over one that is cut down, and a door or window in a cut wall cannot be chosen', () => {
+	/** A ray from above the room's side of an Opening, down at the middle of its wall's cap when the wall stands `height` m high. */
+	function rayAtCap(plan: HomePlan, opening: OpeningSpec, height: number): { origin: Vec3; direction: Vec3 } {
+		const [x, , z] = anchorOf({ kind: 'opening', id: opening.id }, { plan, devices: [], models, probes: [] })!;
+		const { placement } = opening;
+		// Half a wall's thickness to the outside of an outside wall's line, since outside walls stand outside the footprint.
+		const out = isExterior(placement) ? { north: [0, -0.1], south: [0, 0.1], west: [-0.1, 0], east: [0.1, 0] }[placement.facade] : [0, 0];
+		const target: Vec3 = [x + out[0], height, z + out[1]];
+		// From 1.2 m up and 1 m into the room, which is south of a north wall, and so on; an inside wall's room is either side.
+		const into = isExterior(placement) ? { north: [0, 1], south: [0, -1], west: [1, 0], east: [-1, 0] }[placement.facade] : placement.axis === 'x' ? [0, 1] : [1, 0];
+		const origin: Vec3 = [target[0] + into[0], height + 1.2, target[2] + into[1]];
+		const d: Vec3 = [target[0] - origin[0], target[1] - origin[1], target[2] - origin[2]];
+		const length = Math.hypot(...d);
+		return { origin, direction: [d[0] / length, d[1] / length, d[2] / length] };
+	}
+
+	test('a click stops at a wall that stands and passes over one that is cut down, and a door or window in a cut wall is chosen by its cut', () => {
 		const plan = plans.find((p) => p.id === 'two-bedroom')!;
 		const home = new Home(plan, new Materials(1, null), null, { furniture: false });
 		// From the bathroom, at eye height, toward a Probe in Bedroom 2 behind the wall between them (no door in it there).
@@ -304,31 +319,57 @@ test.describe('picking in the 3D world', () => {
 		// Without the walls (as before they were handed over) the Probe was taken through the wall.
 		expect(pickTarget(origin, direction, { plan, devices: [], models, probes: [pin], furniture: false })?.id).toBe('p1');
 
-		// Walls up, every door and window is whole and can be chosen from its room; walls down, none of them can.
+		// Walls up, every door and window is whole and can be chosen from its room. Walls down, a ray at its middle passes over the low
+		// wall, but one at the wall's cap where it was (a window's sill strip, or a door's stub) still chooses it.
 		for (const opening of plan.openings) {
 			const { origin: at, direction: toward } = rayAt(plan, opening);
 			expect(pickTarget(at, toward, scene('up'), ['opening'])?.id, `${opening.id}, walls up`).toBe(opening.id);
-			expect(home.walls.openingCut(opening.id), `${opening.id}, walls up`).toBe(false);
-			expect(pickTarget(at, toward, scene('down'), ['opening']), `${opening.id}, walls down`).toBeNull();
-			expect(home.walls.openingCut(opening.id), `${opening.id}, walls down`).toBe(true);
+			expect(home.walls.openingCut(opening.id), `${opening.id}, walls up`).toBeNull();
+			expect(pickTarget(at, toward, scene('down'), ['opening'])?.id ?? null, `${opening.id}, walls down, at the frame's middle`).not.toBe(opening.id);
+			expect(home.walls.openingCut(opening.id), `${opening.id}, walls down`).toBeCloseTo(DOWN_HEIGHT, 6);
+			const cap = rayAtCap(plan, opening, DOWN_HEIGHT);
+			expect(pickTarget(cap.origin, cap.direction, scene('down'), ['opening'])?.id, `${opening.id}, walls down, at its cap`).toBe(opening.id);
+			// A window's place on the cap is marked; a door shows its own stub.
+			const sill = cutSill(plan, opening, DOWN_HEIGHT);
+			if (opening.kind === 'door' || opening.kind === 'sliding-door') expect(sill, opening.id).toBeNull();
+			else {
+				expect(sill!.min[1]).toBeCloseTo(DOWN_HEIGHT, 6);
+				expect(sill!.max[1] - sill!.min[1]).toBeLessThan(0.02);
+				expect(Math.max(sill!.max[0] - sill!.min[0], sill!.max[2] - sill!.min[2])).toBeCloseTo(opening.width, 6);
+			}
+			expect(cutSill(plan, opening, plan.ceiling), `${opening.id}: no strip once the wall stands above the sill`).toBeNull();
 		}
 		home.dispose();
 	});
 
-	test('in cutaway, the wall between the camera and the room drops and its windows cannot be chosen, while the far walls keep theirs', () => {
+	test('in cutaway, the wall between the camera and the room drops and its windows are chosen from the world by their place on its cap', () => {
 		const plan = plans.find((p) => p.id === 'two-bedroom')!;
 		const home = new Home(plan, new Materials(1, null), null, { furniture: false });
 		// At eye level outside the west wall, looking east into the living room: the west wall is cut, the walls beyond stand.
 		const look = { camera: { x: -2, z: 5.4 }, focus: { x: 2.4, z: 5.4 }, zoom: 0.1 };
-		const { walls, hidden } = wallsIn(home, 'cutaway', look);
+		const { walls, cutAt } = wallsIn(home, 'cutaway', look);
 		const west = plan.openings.filter((o) => 'facade' in o.placement && o.placement.facade === 'west');
 		expect(west.length).toBeGreaterThan(0);
-		for (const opening of west) expect(hidden({ kind: 'opening', id: opening.id }), `${opening.id} is in the cut wall`).toBe(true);
+		for (const opening of west) expect(cutAt(opening.id), `${opening.id} is in the cut wall`).toBeCloseTo(CUT_HEIGHT, 6);
 		const east = plan.openings.filter((o) => 'facade' in o.placement && o.placement.facade === 'east');
-		for (const opening of east) expect(hidden({ kind: 'opening', id: opening.id }), `${opening.id} stands`).toBe(false);
-		// The camera looks over the cut wall into the room: nothing stops the ray before the room.
+		for (const opening of east) expect(cutAt(opening.id), `${opening.id} stands`).toBeNull();
+		// The camera looks over the cut wall into the room: nothing stops the ray before the room, and it chooses no window on the way.
 		const origin: Vec3 = [-2, 1.6, 5.4];
 		expect(wallDistance(origin, [1, 0, 0], walls)).toBeGreaterThan(2.2);
+		const scene: PickScene = { plan, devices: [], models, probes: [], furniture: false, walls, cutAt };
+		for (const opening of west) {
+			const { placement } = opening as { placement: { center: number } };
+			expect(pickTarget([-2, 1.6, placement.center], [1, 0, 0], scene, ['opening']), `${opening.id}: over its cut wall`).toBeNull();
+			// From the camera, down at the cap where the window was: the window, whose menu then opens beside it.
+			const target: Vec3 = [-0.1, CUT_HEIGHT, placement.center];
+			const d: Vec3 = [target[0] - origin[0], target[1] - origin[1], target[2] - origin[2]];
+			const length = Math.hypot(...d);
+			expect(pickTarget(origin, [d[0] / length, d[1] / length, d[2] / length], scene, ['opening'])?.id, `${opening.id}: at its place on the cap`).toBe(opening.id);
+			// What is drawn there: a strip the window's width on the cap, the depth of the wall.
+			const sill = cutSill(plan, opening, CUT_HEIGHT)!;
+			expect(sill.min).toEqual([-0.2, CUT_HEIGHT, expect.closeTo(placement.center - opening.width / 2, 9)]);
+			expect(sill.max).toEqual([0, expect.closeTo(CUT_HEIGHT + 0.012, 9), expect.closeTo(placement.center + opening.width / 2, 9)]);
+		}
 		home.dispose();
 	});
 });
