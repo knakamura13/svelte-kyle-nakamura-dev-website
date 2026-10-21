@@ -49,6 +49,3 @@ export const engineLoader =
 			throw error;
 		}
 	};
-
-/** The loader with nobody listening: for a page with no loading screen. */
-export const loadEngine: EngineLoader = engineLoader();

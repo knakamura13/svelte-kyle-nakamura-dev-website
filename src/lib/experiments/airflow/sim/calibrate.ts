@@ -63,6 +63,15 @@ export const MEASURE_DEPTH = 3;
 /** A wait between two looks longer than this, ms, is the page being held (a hidden tab's timers, a busy thread): what it covers is not counted. */
 const STALL_MS = 50;
 
+/**
+ * The counted time is cut into stretches of at least this long and this many steps, and a step costs what it did in the fastest of
+ * them. A GPU that sat idle before the warm-up may still be raising its clocks, and another program may borrow it for a moment: both
+ * make a step look dearer than it is, and the house measured twice as dear in one run as in the next. A grid too coarse for the device
+ * would last the whole visit (the tuner never climbs), while one a little too fine is stepped down after a minute, so the measurement
+ * leans to the fast side.
+ */
+const STRETCH = { seconds: 0.1, steps: 6 } as const;
+
 const wait = () => new Promise<void>((resolve) => setTimeout(resolve, 2));
 
 /**
@@ -88,6 +97,9 @@ export async function measureSteps(backend: Steppable, options: MeasureOptions):
 	let stalled = false;
 	/** The longest clean stretch counted before a stall cut it short, for when no later one is long enough. */
 	let kept: { seconds: number; steps: number } | null = null;
+	/** Where the current stretch began, and what a step cost in the fastest stretch so far, ms. */
+	let stretch: { at: number; done: number } | null = null;
+	let fastest = Infinity;
 	const send = () => {
 		options.before?.();
 		backend.step(dt);
@@ -115,9 +127,18 @@ export async function measureSteps(backend: Steppable, options: MeasureOptions):
 			stalled = true;
 			if (sofar.steps > 0 && (!kept || sofar.seconds > kept.seconds)) kept = sofar;
 			mark = null;
+			stretch = null;
 			spent = 0;
 			timed = 0;
-		} else if (background && !mark && elapsed >= discard && done >= room) mark = { at, done };
+		} else if (background && !mark && elapsed >= discard && done >= room) {
+			mark = { at, done };
+		} else if (mark && !stretch && done > mark.done) {
+			// Stretches start as a step finishes, so each one's time is whole steps.
+			stretch = { at, done };
+		} else if (stretch && at - stretch.at >= 1000 * STRETCH.seconds && done - stretch.done >= STRETCH.steps) {
+			fastest = Math.min(fastest, (at - stretch.at) / (done - stretch.done));
+			stretch = { at, done };
+		}
 		const counted = background ? (mark ? { seconds: (at - mark.at) / 1000, steps: done - mark.done } : { seconds: 0, steps: 0 }) : { seconds: spent / 1000, steps: timed };
 		options.progress?.(Math.min(1, elapsed / (discard + seconds)));
 		const enough = counted.steps >= fewest && (background ? counted.seconds >= seconds : elapsed >= discard + seconds);
@@ -126,7 +147,8 @@ export async function measureSteps(backend: Steppable, options: MeasureOptions):
 		let ms: number;
 		let steps: number;
 		if (best.steps > 0) {
-			ms = (best.seconds * 1000) / best.steps;
+			// The fastest stretch, where there were stretches enough to choose from; the whole count otherwise.
+			ms = Math.min((best.seconds * 1000) / best.steps, fastest);
 			steps = best.steps;
 		} else if (stalled) {
 			throw new Error('The warm-up was held up (the tab was hidden or the page busy) and could not measure a step.');

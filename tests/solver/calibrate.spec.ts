@@ -82,6 +82,32 @@ test.describe('measuring a step', () => {
 		expect(four.ms).toBeLessThan(1.15 * 15);
 	});
 
+	test('a GPU that is slow for a while (raising its clocks, lent to another program) is measured by its fastest stretch, not dragged down by the slow one', async () => {
+		const time = clock();
+		// Twice as slow for the first 350 ms of the clock, then itself: 4 ms a step.
+		const costs: number[] = [];
+		let busy = 0;
+		let last = 0;
+		const backend: Steppable & { settle(): void } = {
+			maxInFlight: 8,
+			get stepsInFlight() {
+				return costs.length;
+			},
+			step() {
+				costs.push(time.now() < 350 ? 8 : 4);
+			},
+			settle() {
+				busy += time.now() - last;
+				last = time.now();
+				while (costs.length && busy >= costs[0]) busy -= costs.shift()!;
+				if (!costs.length) busy = 0;
+			}
+		};
+		const measured = await measureSteps(backend, { dt: 0.05, now: time.now, pause: time.pause(() => backend.settle()) });
+		expect(measured.ms).toBeGreaterThan(0.9 * 4);
+		expect(measured.ms, 'what a step costs once the device is itself').toBeLessThan(1.1 * 4);
+	});
+
 	test('a look that comes late (a hidden tab, a busy page) is not counted as the backend being slow; one that never has a clean stretch fails', async () => {
 		// Every fortieth look is a second late: the backend sat idle for most of it.
 		let looks = 0;
