@@ -50,6 +50,13 @@
 		(row ?? panel?.querySelector<HTMLElement>('.row'))?.focus();
 	}
 
+	/** Opens the panel in place of its button, and the focus goes into it. */
+	async function open() {
+		ui.inspector = true;
+		await tick();
+		panel?.querySelector<HTMLElement>('button')?.focus();
+	}
+
 	async function close() {
 		ui.inspector = false;
 		await tick();
@@ -73,7 +80,7 @@
 		aria-expanded="false"
 		aria-controls="hud-inspector"
 		use:tooltip={{ label: 'Inspector', hint: 'Everything in the home, and every setting, by keyboard too.', side: 'left' }}
-		onclick={() => (ui.inspector = true)}
+		onclick={open}
 	>
 		<Icon name="inspector" size={19} />
 		<span>Inspector</span>

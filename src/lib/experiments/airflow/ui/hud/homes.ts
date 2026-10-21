@@ -71,7 +71,7 @@ export function planThumbnail(plan: HomePlan, pad = 0.35): PlanThumbnail {
 export interface HomeCard {
 	name: string;
 	blurb: string;
-	/** "54 m²" or "581 ft²", the floor area in the visitor's units. */
+	/** "54 m²" or "581 sq ft", the floor area in the visitor’s units. */
 	area: string;
 	/** "3 rooms · 9 windows and doors". */
 	facts: string;

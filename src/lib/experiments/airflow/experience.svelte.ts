@@ -188,6 +188,8 @@ export class AirflowExperience extends Experience {
 		}
 		this.setup.devices.push(made.device);
 		this.selected = made.device.id;
+		this.selection = { kind: 'device', id: made.device.id };
+		this.menu = false;
 		this.scenario = null;
 		this.announce(`${model.name} added.`);
 		this.wake();

@@ -6,8 +6,13 @@ import { plans } from '../../src/lib/experiments/airflow/homes/plans';
 import { isExterior, type HomePlan, type OpeningSpec } from '../../src/lib/experiments/airflow/homes/types';
 import { anchorOf, deviceBox, openingBox, pickTarget, rayBox, type Vec3 } from '../../src/lib/experiments/airflow/scene/selection';
 import { LIMITS, type DeviceState } from '../../src/lib/experiments/airflow/state';
+import { formatSpeed } from '../../src/lib/experiments/airflow/units';
+import { vectorToBearing } from '../../src/lib/experiments/airflow/readout';
+import { carryHint, isClick, turnCarried } from '../../src/lib/experiments/airflow/ui/hud/carry';
 import { cardLines, inTab, towardMiddle } from '../../src/lib/experiments/airflow/ui/hud/catalog';
-import { bearingFromPointer, dialPoint, snapBearing, stepBearing, windWords } from '../../src/lib/experiments/airflow/ui/hud/compass';
+import { bearingFromPointer, dialPoint, dialRotation, snapBearing, stepBearing, windWords } from '../../src/lib/experiments/airflow/ui/hud/compass';
+import { ROOM_TINTS, homeCard, planThumbnail } from '../../src/lib/experiments/airflow/ui/hud/homes';
+import { inventory, menuFor, openingState, powerState, probeCards, targetWords, type HomeContext } from '../../src/lib/experiments/airflow/ui/hud/inventory';
 import { placeCard } from '../../src/lib/experiments/airflow/ui/hud/layout';
 import { deviceMenu, openingMenu } from '../../src/lib/experiments/airflow/ui/hud/menus';
 import { AIR_PRESETS, WIND_PRESETS, activePreset, airPreset, stepValue, WINDOW_PRESETS } from '../../src/lib/experiments/airflow/ui/hud/presets';
@@ -213,4 +218,139 @@ test('overlays map to today’s slice layers, and back', () => {
 	expect(OVERLAYS.map((o) => o.label)).toEqual(['Off', 'Air speed', 'Temperature', 'Smoke']);
 	for (const overlay of OVERLAYS) if (overlay.layer) expect(overlayOfLayer(overlay.layer)).toBe(overlay.id);
 	expect(overlayOfLayer('direction')).toBe('speed');
+});
+
+test.describe('carrying a device in from the catalog', () => {
+	test('a press that stays put is a click, R turns a step from where the ghost faces, and the chip says what a click does', () => {
+		expect(isClick({ x: 0, y: 0 }, { x: 5, y: 4 })).toBe(true);
+		expect(isClick({ x: 0, y: 0 }, { x: 6, y: 6 })).toBe(false);
+		// Unturned, the first press turns what the ghost shows (it faces the middle of the home) by one step.
+		expect(turnCarried(null, 100, 1)).toBe(145);
+		expect(turnCarried(null, 100, -1)).toBe(55);
+		// Once turned, from where the visitor turned it, round past north.
+		expect(turnCarried(350, 10, 1)).toBe(35);
+		expect(turnCarried(null, null, -1)).toBe(315);
+		expect(carryHint(null, false, false).tone).toBe('away');
+		expect(carryHint(null, true, true).title).toBe('Move it into a room');
+		expect(carryHint({ ok: false, reason: 'That spot is in a wall.' }, false, false)).toMatchObject({ tone: 'refused', detail: 'That spot is in a wall.' });
+		expect(carryHint({ ok: true, reason: null }, true, false).title).toBe('Let go to put it here');
+		expect(carryHint({ ok: true, reason: null }, false, false).title).toBe('Click to put it here');
+	});
+});
+
+test.describe('the Home picker', () => {
+	test('each card draws its plan: a tinted path for each Room, every wall, and every door and window on its wall', () => {
+		for (const plan of plans) {
+			const thumb = planThumbnail(plan);
+			const [x, y, w, h] = thumb.viewBox.split(' ').map(Number);
+			expect(x).toBeLessThan(0);
+			expect(y).toBeLessThan(0);
+			expect(x + w).toBeGreaterThan(plan.width);
+			expect(y + h).toBeGreaterThan(plan.depth);
+			expect(thumb.rooms.map((room) => room.id)).toEqual(plan.rooms.map((room) => room.id));
+			expect(new Set(thumb.rooms.map((room) => room.tint)).size).toBe(Math.min(plan.rooms.length, ROOM_TINTS.length));
+			for (const room of thumb.rooms) for (const n of room.d.match(/-?[\d.]+/g)!.map(Number)) expect(Math.abs(n)).toBeLessThanOrEqual(Math.max(plan.width, plan.depth) + 1e-9);
+			expect(thumb.walls).toHaveLength(plan.walls.length);
+			expect(thumb.openings).toHaveLength(plan.openings.length);
+			thumb.openings.forEach((gap, i) => {
+				const opening = plan.openings[i];
+				close(Math.hypot(gap.x2 - gap.x1, gap.y2 - gap.y1), opening.width);
+				expect(gap.window).toBe(opening.kind === 'double-hung' || opening.kind === 'casement');
+				// On the footprint's edge or on an inside wall's line, so it reads as a gap in that wall.
+				const onEdge = [gap.x1, gap.x2].every((v) => v >= -1e-9 && v <= plan.width + 1e-9) && [gap.y1, gap.y2].every((v) => v >= -1e-9 && v <= plan.depth + 1e-9);
+				expect(onEdge, `${plan.id} ${opening.id}`).toBe(true);
+			});
+		}
+	});
+
+	test('a card gives the floor area in the visitor’s units and counts the rooms, windows and doors', () => {
+		const studio = plans.find((p) => p.id === 'studio')!;
+		const metric = homeCard(studio, 'metric');
+		expect(metric.name).toBe('Studio');
+		expect(metric.area).toMatch(/^42\s?m²$/u);
+		expect(homeCard(studio, 'imperial').area).toMatch(/^453\s?sq ft$/u);
+		const windows = studio.openings.filter((o) => o.kind === 'double-hung' || o.kind === 'casement').length;
+		expect(metric.facts).toBe(`${studio.rooms.length} rooms · ${windows} windows · ${studio.openings.length - windows} ${studio.openings.length - windows === 1 ? 'door' : 'doors'}`);
+	});
+});
+
+test.describe('the Inspector, the hover label and the probe cards', () => {
+	const plan = plans.find((p) => p.id === 'two-bedroom')!;
+	const context = (over: Partial<HomeContext> = {}): HomeContext => ({
+		plan,
+		setup: { devices: [] },
+		probes: [],
+		models,
+		readings: [],
+		units: 'metric',
+		amount: (id) => plan.openings.find((o) => o.id === id)?.open ?? 0,
+		...over
+	});
+	const boxFan = DEVICE_MODELS.find((m) => m.kind === 'box-fan')!;
+	const placed = () => {
+		const made = newDevice(plan, boxFan, []);
+		if (!('device' in made)) throw new Error(made.reason);
+		return made.device;
+	};
+
+	test('lists the fans and purifiers and the Probes with their limits, then each Room’s doors and windows, every one once', () => {
+		const groups = inventory(context());
+		expect(groups[0]).toMatchObject({ id: 'devices', title: 'Fans and purifiers', count: '0 of 6', items: [] });
+		expect(groups[1]).toMatchObject({ id: 'probes', count: '0 of 4', items: [] });
+		const listed = groups.slice(2).flatMap((group) => group.items.map((item) => item.target.id));
+		expect([...listed].sort()).toEqual(plan.openings.map((o) => o.id).sort());
+		const device = placed();
+		const withOne = inventory(context({ setup: { devices: [device] }, probes: [{ id: 'p1', x: 2, y: 1.1, z: 2 }] }));
+		expect(withOne[0].items).toEqual([expect.objectContaining({ target: { kind: 'device', id: device.id }, name: boxFan.name, state: 'Medium' })]);
+		expect(withOne[1].items[0]).toMatchObject({ name: 'Probe 1', state: 'Waiting' });
+	});
+
+	test('says each thing’s state in the words its menu uses', () => {
+		const window = plan.openings.find((o) => o.kind === 'double-hung' || o.kind === 'casement')!;
+		expect(openingState(window, 0.5)).toBe('Half');
+		expect(openingState(window, 0.37)).toBe('37%');
+		const door = plan.openings.find((o) => o.kind === 'door')!;
+		expect(openingState(door, 1)).toBe('Open');
+		expect(openingState(door, 0)).toBe('Closed');
+		expect(powerState(boxFan, 2 / 3)).toBe('Medium');
+		expect(powerState(boxFan, 0)).toBe('Off');
+		expect(powerState(boxFan, 0.45)).toBe('45%');
+	});
+
+	test('names the thing under the pointer and builds the menu of a chosen one, and neither for one that is gone', () => {
+		const device = placed();
+		const ctx = context({ setup: { devices: [device] }, probes: [{ id: 'p1', x: 2, y: 1.1, z: 2 }] });
+		expect(targetWords({ kind: 'device', id: device.id }, ctx)).toEqual({ title: boxFan.name, detail: 'Box fan · Medium' });
+		expect(targetWords({ kind: 'probe', id: 'p1' }, ctx)).toEqual({ title: 'Probe 1', detail: 'Probe · Waiting' });
+		const window = plan.openings.find((o) => o.kind === 'double-hung' || o.kind === 'casement')!;
+		expect(targetWords({ kind: 'opening', id: window.id }, ctx)?.title).toBe(window.name);
+		expect(menuFor({ kind: 'opening', id: window.id }, ctx)?.kind).toBe('window');
+		expect(menuFor({ kind: 'device', id: device.id }, ctx)?.kind).toBe('fan');
+		expect(menuFor({ kind: 'probe', id: 'p1' }, ctx)?.reading?.message).toBe('Waiting for the first reading.');
+		expect(menuFor({ kind: 'device', id: 'gone' }, ctx)).toBeNull();
+		expect(targetWords({ kind: 'opening', id: 'nowhere' }, ctx)).toBeNull();
+	});
+
+	test('a probe card reads the air in large values once a reading of its own point arrives', () => {
+		const pin = { id: 'p2', x: 2, y: 1.1, z: 2 };
+		expect(probeCards(context({ probes: [pin] }))[0]).toMatchObject({ name: 'Probe 2', speed: null, message: 'Waiting for the first reading.' });
+		const reading = { id: 'p2', label: 'Probe 2', ...pin, u: 0.3, v: 0, w: -0.4, speed: 0.5, averageSpeed: null, temperature: 21, particulates: 0.01, inAir: true };
+		const card = probeCards(context({ probes: [pin], readings: [reading] }))[0];
+		expect(card.speed).toBe(formatSpeed(0.5, 'metric').text);
+		close(card.heading!, vectorToBearing(0.3, -0.4));
+		expect(card.temperature).toMatch(/^21/);
+		expect(card.sentence).toContain('Probe 2');
+		// A reading of another point (a Probe pinned again elsewhere under the same id) is not this card's.
+		expect(probeCards(context({ probes: [{ ...pin, x: 3 }], readings: [reading] }))[0].speed).toBeNull();
+	});
+});
+
+test('the dial turns with the camera: north up the screen when the camera looks north, to the right when it looks west', () => {
+	expect(dialRotation(0)).toBe(0);
+	expect(dialRotation(90)).toBe(90);
+	expect(dialRotation(-30)).toBe(330);
+	expect(dialRotation(Number.NaN)).toBe(0);
+	const north = dialPoint(0, 10, dialRotation(90));
+	close(north.x, 10);
+	close(north.y, 0);
 });
