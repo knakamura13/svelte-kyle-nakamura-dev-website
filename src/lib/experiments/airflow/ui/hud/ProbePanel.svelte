@@ -2,6 +2,7 @@
 	import { useAirflow } from '../../experience.svelte';
 	import { describeSpot } from '../../probeWords';
 	import { MAX_PINS } from '../../state';
+	import { formatLength } from '../../units';
 	import Icon from './Icon.svelte';
 	import { focusWorld } from './world';
 
@@ -11,6 +12,8 @@
 	 */
 	const experience = useAirflow();
 	const units = $derived(experience.view.units);
+	/** The probe and smoke height, which Advanced sets: where a probe is pinned and the marker under the pointer floats. */
+	const height = $derived(formatLength(experience.view.sliceHeight, units).text);
 	const hover = $derived(experience.readout.hover);
 	const spot = $derived(hover ? describeSpot('', hover, hover, units) : null);
 	const full = $derived(experience.probes.length >= MAX_PINS);
@@ -21,7 +24,9 @@
 		<h2 id="hud-probe-title" class="title">Probe</h2>
 		<p class="sub">{experience.probes.length} of {MAX_PINS} pinned</p>
 	</header>
-	<p class="how">{full ? `A home holds ${MAX_PINS} probes. Remove one to pin another.` : 'Click the air to pin a probe. It keeps reading the air there.'}</p>
+	<p class="how">
+		{full ? `A home holds ${MAX_PINS} probes. Remove one to pin another.` : `Click the air to pin a probe ${height} above the floor. It keeps reading the air there.`}
+	</p>
 	<div class="under" data-state={spot ? (spot.rows.length ? 'reading' : 'no-air') : 'empty'}>
 		<p class="eyebrow">Under the pointer</p>
 		{#if spot}

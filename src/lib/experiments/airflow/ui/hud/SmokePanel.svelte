@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { useAirflow } from '../../experience.svelte';
 	import { describeStrength, smokeMarks, type SmokeMark } from '../../smokeWords';
+	import { formatLength } from '../../units';
 	import Icon from './Icon.svelte';
 	import { focusWorld } from './world';
 
@@ -13,6 +14,8 @@
 	const strength = $derived(experience.emission.strength);
 	const words = $derived(describeStrength(strength));
 	const releasing = $derived(experience.emission.active);
+	/** The probe and smoke height, which Advanced sets: where smoke is released. */
+	const height = $derived(formatLength(experience.view.sliceHeight, experience.view.units).text);
 	/** Half a step of the old slider: the mark the strength is at is the one pressed. */
 	const HALF_STEP = 0.005;
 
@@ -28,7 +31,7 @@
 		<h2 id="hud-smoke-title" class="title">Smoke</h2>
 		<p class="status" role="status" data-releasing={releasing ? '' : undefined}><span class="dot" aria-hidden="true"></span>{releasing ? 'Releasing' : 'Not releasing'}</p>
 	</header>
-	<p class="how">Press and hold on the air to release smoke. It drifts where the air takes it.</p>
+	<p class="how">Press and hold on the air to release smoke {height} above the floor. It drifts where the air takes it.</p>
 	<div class="marks" role="group" aria-label="Smoke strength">
 		{#each marks as mark (mark.id)}
 			<button type="button" class="mark" aria-pressed={Math.abs(strength - mark.position) < HALF_STEP} data-mark={mark.id} onclick={() => choose(mark)}>
