@@ -239,6 +239,8 @@ export function createAir(options: AirOptions): Air {
 			}
 			const blend = fields.tick(now);
 			pending = Math.min(0.1, pending + Math.max(0, dt));
+			// The smoke's detail rides the air as the streaks do, and holds still with them while the clock is paused.
+			smoke.advance(dt);
 			if (++sinceLights >= LIGHT_REFRESH || (lights.sun && !lights.sun.parent)) {
 				lights = findLights(scene, options.sun);
 				sinceLights = 0;

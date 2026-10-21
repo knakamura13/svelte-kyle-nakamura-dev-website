@@ -8,6 +8,7 @@ import { HAZE, STREAK_AIR, overlayLegend, overlayMapping, overlayStrength, strea
 import { MASK_STRIDE, faceByte, passes, solidMask } from '../../src/lib/experiments/airflow/scene/air/mask';
 import { COLOUR_ONLY } from '../../src/lib/experiments/airflow/scene/air/depth';
 import { MUTE, Mute, muted } from '../../src/lib/experiments/airflow/scene/air/overlay';
+import { tilingNoise } from '../../src/lib/experiments/airflow/scene/air/noise';
 import { SMOKE_LOOK, smokeBounds } from '../../src/lib/experiments/airflow/scene/air/smokeVolume';
 import { World } from '../../src/lib/experiments/airflow/sim/world';
 import { CpuBackend } from '../../src/lib/experiments/airflow/solver/cpu/backend';
@@ -212,6 +213,30 @@ test.describe('where streaks are born', () => {
 });
 
 test.describe('the smoke and the look of the air', () => {
+	test('the smoke’s detail is a noise that tiles without a seam and spreads evenly from 0 to 1', () => {
+		const size = 24;
+		const noise = tilingNoise(size, 2, 3, 3);
+		expect(noise).toHaveLength(size ** 3);
+		// Ranked, so every share of it is as likely as any other: a threshold of t keeps 1 - t of it.
+		const sorted = Float32Array.from(noise).sort();
+		expect(sorted[0]).toBe(0);
+		expect(sorted[sorted.length - 1]).toBe(1);
+		for (const q of [0.1, 0.25, 0.5, 0.75, 0.9]) expect(sorted[Math.floor(q * (sorted.length - 1))]).toBeCloseTo(q, 2);
+		// Across the tile's edge it changes no more than between neighbours inside it, along every axis.
+		const at = (x: number, y: number, z: number) => noise[((x + size) % size) + size * (((y + size) % size) + size * ((z + size) % size))];
+		let inside = 0;
+		let seam = 0;
+		for (let a = 0; a < size; a++)
+			for (let b = 0; b < size; b++) {
+				inside += Math.abs(at(size / 2, a, b) - at(size / 2 - 1, a, b)) + Math.abs(at(a, size / 2, b) - at(a, size / 2 - 1, b)) + Math.abs(at(a, b, size / 2) - at(a, b, size / 2 - 1));
+				seam += Math.abs(at(0, a, b) - at(size - 1, a, b)) + Math.abs(at(a, 0, b) - at(a, size - 1, b)) + Math.abs(at(a, b, 0) - at(a, b, size - 1));
+			}
+		expect(seam / inside).toBeLessThan(1.5);
+		expect(seam / inside).toBeGreaterThan(0.5);
+		// The same seed gives the same noise.
+		expect(tilingNoise(size, 2, 3, 3)).toEqual(noise);
+	});
+
 	test('the smoke is marched only through the box of cells that show any, padded by a cell', () => {
 		const raster = rasterizePlan(planById('studio')!, H, { furniture: false });
 		const clean = volumeOf(raster, () => [0, 0, 0]);

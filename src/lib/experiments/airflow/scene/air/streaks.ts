@@ -21,17 +21,20 @@ import type { QualityTier } from '../look/quality';
 import { paletteTexture } from './palette';
 import { STREAK_BIRTHS, drawBirths, streakWeights } from './birth';
 import type { AirFields } from './fields';
-import { MASK_GLSL, VOLUME_GLSL } from './glsl';
+import { HASH_GLSL, MASK_GLSL, VOLUME_GLSL } from './glsl';
 import { STREAK_AIR, overlayMapping, type OverlayKind } from './legend';
 import { ParticleField } from './particles';
 
 /**
  * The streaks: thousands of particles carried through the whole room by the simulated air (`particles.ts`), each drawn as a thin
- * ribbon from where it is back along the air it came through, `TAIL` seconds of it, so it bends with the flow; it narrows and fades
- * from its head to its tail and is soft at its edges. Each fades in when it is born and out before it dies, and with the air's
- * speed, so still air shows nothing: everything that moves on screen is the solver's air. They are born where the air moves and at
- * the windows that let air in (`birth.ts`). With no overlay on they are all the air's own blue; an overlay colours each point of a
- * streak by its quantity there (air speed, temperature or PM2.5) on that overlay's palette, which is what its legend shows.
+ * ribbon from where it is back along the air it came through, `TAIL` seconds of it but never more than `MAX_PIXELS` on the screen, so
+ * it bends with the flow and a streak near the eye is a short flick, not a long dash. It swells from its tail to just behind a soft
+ * head and narrows to the tail, soft at its edges, so it reads as a wisp of moving air rather than as a falling drop; each is a little
+ * stronger or fainter and wider or narrower than the next. Each fades in when it is born and out before it dies, with the air's
+ * speed, so still air shows nothing, and within `NEAR_FADE` of the eye: everything that moves on screen is the solver's air. They are
+ * born where the air moves and at the windows that let air in (`birth.ts`). With no overlay on they are all the air's own blue; an
+ * overlay colours each point of a streak by its quantity there (air speed, temperature or PM2.5) on that overlay's palette, which is
+ * what its legend shows.
  */
 
 /** How many streaks each quality tier draws. */
@@ -40,6 +43,16 @@ export const STREAK_COUNTS: Readonly<Record<QualityTier, number>> = { high: 15_0
 /** Seconds of travel a streak's tail shows, and the longest it gets, m. */
 export const TAIL = 0.5;
 const MAX_LENGTH = 0.9;
+/**
+ * The longest a streak is drawn on the screen, CSS pixels. Far off, a streak's tail is all of its `TAIL`; close to the eye the same
+ * air would cross half the view in one long dash, the way rain does, so its tail is cut to this, and a near streak is a short flick.
+ */
+export const MAX_PIXELS = 90;
+/**
+ * Distances from the eye over which a streak fades in, m: none within the first, all of it from the second. A visitor standing in a
+ * room sees the air round them as a light veil and the moving air across the room, not a curtain of lines at their face.
+ */
+export const NEAR_FADE: readonly [number, number] = [0.5, 2.0];
 /**
  * A streak's width, m, as drawn near; it never draws thinner than 1.6 CSS pixels or wider than 4 (scaled by the pixel ratio). The low
  * tier (a phone) draws a third as many, on a screen drawn at fewer pixels than it has, so each is wider, or the air is a faint speckle.
@@ -66,6 +79,8 @@ uniform vec2 uResolution;
 uniform float uPixelRatio;
 uniform float uTail;
 uniform float uMaxLength;
+uniform float uMaxPixels;
+uniform vec2 uNearFade;
 uniform float uWidth;
 uniform vec2 uPixels;
 uniform vec2 uSpeedFade;
@@ -82,6 +97,7 @@ varying float vAlpha;
 varying vec3 vColor;
 ${VOLUME_GLSL}
 ${MASK_GLSL}
+${HASH_GLSL}
 ${PALETTE_GLSL}
 
 const int SEGMENTS = ${SEGMENTS};
@@ -110,15 +126,26 @@ void main() {
 	}
 	vec3 velocity = airVelocity(head);
 	float speed = length(velocity);
-	float alpha = uOpacity * smoothstep(0.0, uFadeIn, age) * smoothstep(0.0, uFadeOut, life - age) * smoothstep(uSpeedFade.x, uSpeedFade.y, speed);
+	// How far the head is from the eye, m, and how many device pixels a metre across the view takes there.
+	float distance = (viewMatrix * vec4(head, 1.0)).z * -1.0;
+	float perMetre = projectionMatrix[1][1] * 0.5 * uResolution.y / max(distance, 0.05);
+	// Each streak a little stronger or fainter and wider or narrower than the next, for its whole life, so the air is not a uniform hatching.
+	uint seed = uint(index) * 2654435761u + uint(extra.y);
+	float strength = mix(0.55, 1.0, hash01(seed, 101u));
+	float girth = mix(0.75, 1.3, hash01(seed, 211u));
+	float alpha = uOpacity * strength * smoothstep(0.0, uFadeIn, age) * smoothstep(0.0, uFadeOut, life - age) * smoothstep(uSpeedFade.x, uSpeedFade.y, speed);
+	// Near the eye the air is a veil: the streaks fade out within uNearFade of it.
+	alpha *= smoothstep(uNearFade.x, uNearFade.y, distance);
 	// Written so that a NaN (a particle's state gone bad) hides the streak too: a comparison with NaN is false.
 	if (!(alpha >= 0.004)) {
 		hide();
 		return;
 	}
 	// This vertex's point: traced back from the head through the air (midpoint rule, never through a wall) for its share of the
-	// tail, which is no longer than the streak has lived or than uMaxLength. So a tail bends with the flow it came along.
-	float back = position.x * min(min(uTail, age), uMaxLength / max(speed, 1e-3));
+	// tail, which is no longer than the streak has lived, than uMaxLength, or than uMaxPixels on the screen. So a tail bends with the
+	// flow it came along, and a streak close to the eye is a short flick rather than a long dash across the view.
+	float onScreen = uMaxPixels * uPixelRatio / max(speed * perMetre, 1e-4);
+	float back = position.x * min(min(uTail, age), min(uMaxLength / max(speed, 1e-3), onScreen));
 	int steps = int(ceil(position.x * float(SEGMENTS) - 0.001));
 	float h = back / max(float(steps), 1.0);
 	vec3 p = head;
@@ -143,12 +170,11 @@ void main() {
 	vec2 along = span > 1e-4 ? delta / span : vec2(1.0, 0.0);
 	vec2 side = vec2(-along.y, along.x);
 	// The width the streak would have, in device pixels, narrowing to the tail; below the narrowest drawn it is drawn that wide and fainter instead.
-	float pixels = uWidth * mix(1.0, 0.45, position.x) * projectionMatrix[1][1] * halfSize.y / clip.w;
+	float pixels = uWidth * girth * mix(1.0, 0.45, position.x) * projectionMatrix[1][1] * halfSize.y / clip.w;
 	float drawn = clamp(pixels, uPixels.x * uPixelRatio, uPixels.y * uPixelRatio);
 	alpha *= clamp(pixels / drawn, 0.3, 1.0);
-	// Above the widest drawn it is drawn that wide and fainter too, and it fades out within a metre of the eye: close to the camera
-	// (a visitor standing in a room) the air is a light veil rather than a curtain of lines across the view.
-	alpha *= clamp(drawn / pixels, 0.35, 1.0) * smoothstep(0.35, 1.2, clip.w);
+	// Above the widest drawn it is drawn that wide and fainter too.
+	alpha *= clamp(drawn / pixels, 0.35, 1.0);
 	// The head and the tail reach out by half the width, so a short streak is a round dot rather than nothing.
 	float cap = position.x < 0.001 ? 1.0 : (position.x > 0.999 ? -1.0 : 0.0);
 	clip.xy += (side * position.y + along * cap) * 0.5 * drawn / halfSize * clip.w;
@@ -170,11 +196,13 @@ varying float vAlpha;
 varying vec3 vColor;
 
 void main() {
-	// Soft across, and fading from the head back to the tail. At the tail vQuad.x is 0, and interpolated it can come out a hair
-	// below: pow of a negative number is NaN, and one NaN pixel, blurred by the bloom, blanks the whole picture. So it is clamped,
-	// and anything that is not a number is discarded.
+	// Soft across, and along it a wisp rather than a drop: it swells from nothing at the tail to its fullest a little behind the head,
+	// and the head itself is soft, where a falling drop's would be its brightest and sharpest point. At the tail vQuad.x is 0, and
+	// interpolated it can come out a hair below: pow of a negative number is NaN, and one NaN pixel, blurred by the bloom, blanks the
+	// whole picture. So it is clamped, and anything that is not a number is discarded.
 	float across = 1.0 - smoothstep(0.25, 1.0, abs(vQuad.y));
-	float alpha = vAlpha * across * pow(clamp(vQuad.x, 0.0, 1.0), 1.6);
+	float t = clamp(vQuad.x, 0.0, 1.0);
+	float alpha = vAlpha * across * pow(t, 1.3) * (1.0 - 0.85 * smoothstep(0.72, 1.0, t));
 	if (!(alpha >= 0.002)) discard;
 	gl_FragColor = vec4(vColor, alpha);
 	#include <colorspace_fragment>
@@ -205,6 +233,8 @@ export class Streaks {
 				uPixelRatio: { value: 1 },
 				uTail: { value: TAIL },
 				uMaxLength: { value: MAX_LENGTH },
+				uMaxPixels: { value: MAX_PIXELS },
+				uNearFade: { value: new Vector2(...NEAR_FADE) },
 				uWidth: { value: WIDTH },
 				uPixels: { value: new Vector2(...PIXELS) },
 				uSpeedFade: { value: new Vector2(...SPEED_FADE) },
