@@ -132,6 +132,8 @@ export interface PickScene {
 	probes: readonly Pin[];
 	/** Whether the furniture is built in, so it hides what stands behind it. */
 	furniture: boolean;
+	/** The walls as they stand now (their solid parts, each as high as its wall stands): a ray stops at the first it meets. */
+	walls?: readonly Box[];
 	/** A thing that cannot be clicked right now (an Opening whose wall is cut away below it, say). */
 	hidden?: (target: Target) => boolean;
 }
@@ -145,9 +147,20 @@ export interface Picked extends Target {
 export const PREFER = 0.3;
 const RANK: Record<Target['kind'], number> = { probe: 0, device: 1, opening: 2 };
 
+/** How far along a ray it first meets a standing wall, m, or Infinity. */
+export function wallDistance(origin: Vec3, direction: Vec3, walls: readonly Box[]): number {
+	let nearest = Infinity;
+	for (const box of walls) {
+		const t = rayBox(origin, direction, box);
+		if (t !== null && t < nearest) nearest = t;
+	}
+	return nearest;
+}
+
 /**
  * What a ray from the camera (origin, unit direction) takes: the nearest door, window, device or Probe it meets that no piece of
- * furniture stands in front of, with a Probe or a device preferred over a window just behind it. `kinds` limits what it looks for.
+ * furniture and no standing wall is in front of, with a Probe or a device preferred over a window just behind it. `kinds` limits
+ * what it looks for.
  */
 export function pickTarget(origin: Vec3, direction: Vec3, scene: PickScene, kinds: readonly Target['kind'][] = ['opening', 'device', 'probe']): Picked | null {
 	const hits: Picked[] = [];
@@ -164,7 +177,7 @@ export function pickTarget(origin: Vec3, direction: Vec3, scene: PickScene, kind
 	if (kinds.includes('probe')) for (const pin of scene.probes) consider('probe', pin.id, rayProbe(origin, direction, pin));
 	if (!hits.length) return null;
 
-	let blocked = Infinity;
+	let blocked = scene.walls ? wallDistance(origin, direction, scene.walls) : Infinity;
 	if (scene.furniture)
 		for (const piece of scene.plan.furniture) {
 			const t = rayBox(origin, direction, furnitureBox(piece));
@@ -245,6 +258,11 @@ export interface SelectionHost {
 	plan(): HomePlan;
 	models: ReadonlyMap<string, DeviceModel>;
 	params: SelectionParams & { setup: Setup; probes: readonly Pin[]; drag: DragPreview | null };
+	/**
+	 * The walls as they stand now: their solid parts stop a ray, so nothing behind a full-height wall is chosen, and an Opening whose wall
+	 * is cut away (`cut`) cannot be chosen either. Absent: picking sees through the walls.
+	 */
+	walls?(): { boxes: readonly Box[]; cut(opening: string): boolean };
 }
 
 /** The HUD's one accent, and the ghost's two colours. */
@@ -397,9 +415,15 @@ export class Selection {
 		this.group.add(this.chosen, this.under, this.ghost.group);
 	}
 
-	private scene(): PickScene {
+	private scene(walls = false): PickScene {
 		const { setup, probes } = this.host.params;
-		return { plan: this.host.plan(), devices: setup.devices, models: this.host.models, probes, furniture: setup.furniture };
+		const scene: PickScene = { plan: this.host.plan(), devices: setup.devices, models: this.host.models, probes, furniture: setup.furniture };
+		const standing = walls ? this.host.walls?.() : undefined;
+		if (standing) {
+			scene.walls = standing.boxes;
+			scene.hidden = (target) => target.kind === 'opening' && standing.cut(target.id);
+		}
+		return scene;
 	}
 
 	/** What is under a point of the Stage, in normalized device coordinates. The camera's matrices must be current, as they are after a frame. */
@@ -407,8 +431,24 @@ export class Selection {
 		this.ndc.set(at.x, at.y);
 		this.raycaster.setFromCamera(this.ndc, this.host.camera);
 		const { origin, direction } = this.raycaster.ray;
-		const picked = pickTarget([origin.x, origin.y, origin.z], [direction.x, direction.y, direction.z], this.scene(), kinds);
+		const picked = pickTarget([origin.x, origin.y, origin.z], [direction.x, direction.y, direction.z], this.scene(true), kinds);
 		return picked ? { kind: picked.kind, id: picked.id } : null;
+	}
+
+	/**
+	 * Whether a standing wall is between the camera and a point of the Home: then the pointer is on the wall, not on the floor or the air
+	 * behind it, and a Probe, smoke or a carried device does not go there.
+	 */
+	walled(point: { x: number; y: number; z: number }): boolean {
+		const walls = this.host.walls?.();
+		if (!walls) return false;
+		const origin = this.host.camera.getWorldPosition(this.point);
+		const dx = point.x - origin.x;
+		const dy = point.y - origin.y;
+		const dz = point.z - origin.z;
+		const length = Math.hypot(dx, dy, dz);
+		if (length < 1e-6) return false;
+		return wallDistance([origin.x, origin.y, origin.z], [dx / length, dy / length, dz / length], walls.boxes) < length - 1e-3;
 	}
 
 	/** Where a point of the Home is on the page, CSS pixels from the viewport's corner, or null behind the camera. */

@@ -4,7 +4,10 @@ import { deviceDefaults } from '../../src/lib/experiments/airflow/devices/placem
 import { newDevice } from '../../src/lib/experiments/airflow/devices/placement';
 import { plans } from '../../src/lib/experiments/airflow/homes/plans';
 import { isExterior, type HomePlan, type OpeningSpec } from '../../src/lib/experiments/airflow/homes/types';
-import { anchorOf, deviceBox, openingBox, pickTarget, rayBox, type Vec3 } from '../../src/lib/experiments/airflow/scene/selection';
+import { Home } from '../../src/lib/experiments/airflow/scene/look/home';
+import { Materials } from '../../src/lib/experiments/airflow/scene/look/materials';
+import { anchorOf, deviceBox, openingBox, pickTarget, rayBox, wallDistance, type PickScene, type Vec3 } from '../../src/lib/experiments/airflow/scene/selection';
+import type { WallMode } from '../../src/lib/experiments/airflow/scene/walls/cutaway';
 import { LIMITS, type DeviceState } from '../../src/lib/experiments/airflow/state';
 import { formatSpeed } from '../../src/lib/experiments/airflow/units';
 import { vectorToBearing } from '../../src/lib/experiments/airflow/readout';
@@ -212,6 +215,56 @@ test.describe('picking in the 3D world', () => {
 		expect(pickTarget(back, direction, { ...behind, furniture: true }, ['opening'])).toBeNull();
 		expect(pickTarget(back, direction, { ...behind, furniture: false }, ['opening'])?.id).toBe(window.id);
 	});
+
+	/** The Home's walls in a mode, settled at once, as the scene hands them to picking. */
+	function wallsIn(home: Home, mode: WallMode, look = { camera: { x: 1, z: 1 }, focus: { x: 2, z: 2 }, zoom: 0.2 }) {
+		home.update(look, mode, 0, true);
+		const { walls } = home;
+		return { walls: walls.standingBoxes(), hidden: (target: { kind: string; id: string }) => target.kind === 'opening' && walls.openingCut(target.id) };
+	}
+
+	test('a click stops at a wall that stands and passes over one that is cut down, and a door or window in a cut wall cannot be chosen', () => {
+		const plan = plans.find((p) => p.id === 'two-bedroom')!;
+		const home = new Home(plan, new Materials(1, null), null, { furniture: false });
+		// From the bathroom, at eye height, toward a Probe in Bedroom 2 behind the wall between them (no door in it there).
+		const origin: Vec3 = [6.9, 1.6, 6.5];
+		const pin = { id: 'p1', x: 9.9, y: 1.1, z: 6.5 };
+		const length = Math.hypot(pin.x - origin[0], pin.y - origin[1], pin.z - origin[2]);
+		const direction: Vec3 = [(pin.x - origin[0]) / length, (pin.y - origin[1]) / length, (pin.z - origin[2]) / length];
+		const scene = (mode: WallMode): PickScene => ({ plan, devices: [], models, probes: [pin], furniture: false, ...wallsIn(home, mode) });
+		expect(pickTarget(origin, direction, scene('up')), 'walls up: the wall hides the Probe').toBeNull();
+		expect(wallDistance(origin, direction, wallsIn(home, 'up').walls)).toBeLessThan(length);
+		expect(pickTarget(origin, direction, scene('down'))?.id, 'walls down: the ray passes over the wall').toBe('p1');
+		// Without the walls (as before they were handed over) the Probe was taken through the wall.
+		expect(pickTarget(origin, direction, { plan, devices: [], models, probes: [pin], furniture: false })?.id).toBe('p1');
+
+		// Walls up, every door and window is whole and can be chosen from its room; walls down, none of them can.
+		for (const opening of plan.openings) {
+			const { origin: at, direction: toward } = rayAt(plan, opening);
+			expect(pickTarget(at, toward, scene('up'), ['opening'])?.id, `${opening.id}, walls up`).toBe(opening.id);
+			expect(home.walls.openingCut(opening.id), `${opening.id}, walls up`).toBe(false);
+			expect(pickTarget(at, toward, scene('down'), ['opening']), `${opening.id}, walls down`).toBeNull();
+			expect(home.walls.openingCut(opening.id), `${opening.id}, walls down`).toBe(true);
+		}
+		home.dispose();
+	});
+
+	test('in cutaway, the wall between the camera and the room drops and its windows cannot be chosen, while the far walls keep theirs', () => {
+		const plan = plans.find((p) => p.id === 'two-bedroom')!;
+		const home = new Home(plan, new Materials(1, null), null, { furniture: false });
+		// At eye level outside the west wall, looking east into the living room: the west wall is cut, the walls beyond stand.
+		const look = { camera: { x: -2, z: 5.4 }, focus: { x: 2.4, z: 5.4 }, zoom: 0.1 };
+		const { walls, hidden } = wallsIn(home, 'cutaway', look);
+		const west = plan.openings.filter((o) => 'facade' in o.placement && o.placement.facade === 'west');
+		expect(west.length).toBeGreaterThan(0);
+		for (const opening of west) expect(hidden({ kind: 'opening', id: opening.id }), `${opening.id} is in the cut wall`).toBe(true);
+		const east = plan.openings.filter((o) => 'facade' in o.placement && o.placement.facade === 'east');
+		for (const opening of east) expect(hidden({ kind: 'opening', id: opening.id }), `${opening.id} stands`).toBe(false);
+		// The camera looks over the cut wall into the room: nothing stops the ray before the room.
+		const origin: Vec3 = [-2, 1.6, 5.4];
+		expect(wallDistance(origin, [1, 0, 0], walls)).toBeGreaterThan(2.2);
+		home.dispose();
+	});
 });
 
 test('overlays map to today’s slice layers, and back', () => {
@@ -347,10 +400,11 @@ test.describe('the Inspector, the hover label and the probe cards', () => {
 
 test('the dial turns with the camera: north up the screen when the camera looks north, to the right when it looks west', () => {
 	expect(dialRotation(0)).toBe(0);
-	expect(dialRotation(90)).toBe(90);
-	expect(dialRotation(-30)).toBe(330);
+	// The world's `data-yaw` is the bearing the camera looks toward: 270 is looking west, where north is to the right.
+	expect(dialRotation(270)).toBe(90);
+	expect(dialRotation(30)).toBe(330);
 	expect(dialRotation(Number.NaN)).toBe(0);
-	const north = dialPoint(0, 10, dialRotation(90));
+	const north = dialPoint(0, 10, dialRotation(270));
 	close(north.x, 10);
 	close(north.y, 0);
 });

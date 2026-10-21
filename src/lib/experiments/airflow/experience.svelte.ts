@@ -30,10 +30,8 @@ export interface AirflowOptions {
 
 /** The scene's side of a few things only it can do, filled in once the scene exists. */
 export interface StageBridge {
-	/** Where a screen point lands on the floor or on furniture of the Home, or null if it misses: for dragging a device off the tray. */
+	/** Where a screen point lands on the floor or on furniture of the Home, or null if it misses or a standing wall is in the way: for a device the HUD carries. */
 	pick?: (clientX: number, clientY: number) => { x: number; y: number; z: number } | null;
-	/** Whether the pointer is over the Stage, so a tray drag knows when to preview. */
-	over?: (clientX: number, clientY: number) => boolean;
 	/** Where a thing's context menu hangs on the page, CSS pixels from the viewport's corner, or null when it is gone or behind the camera. */
 	anchor?: (target: Target) => { x: number; y: number } | null;
 }

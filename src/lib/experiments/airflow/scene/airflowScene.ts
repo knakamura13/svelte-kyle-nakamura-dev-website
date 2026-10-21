@@ -12,7 +12,7 @@ import { effectiveOpenings } from '../sim/world';
 import type { OverlayId, View } from '../state';
 import { createAir } from './air';
 import { FOV, SimsCamera } from './camera/controls';
-import { PITCH_MAX, cameraFromSearch, clampTilt, pitchAt } from './camera/sims';
+import { cameraFromSearch } from './camera/sims';
 import { DeviceEditor, type Grab } from './deviceEditor';
 import type { Point3 } from './deviceMath';
 import { DeviceMeshes } from './deviceMeshes';
@@ -62,10 +62,9 @@ export interface AirflowSceneParams extends SessionParams, SelectionParams {
 	moveDevice(id: string, x: number, z: number): string | null;
 	turnDevice(id: string, yaw: number): void;
 	aimDevice(id: string, tilt: number): void;
-	/** What the HUD needs from the world: the floor or furniture under a screen point (for a device it carries), whether a point is over the world, and where a thing's menu hangs. */
+	/** What the HUD needs from the world: the floor or furniture under a screen point (for a device it carries), and where a thing's menu hangs. */
 	bridge: {
 		pick?: (clientX: number, clientY: number) => Point3 | null;
-		over?: (clientX: number, clientY: number) => boolean;
 		anchor?: (target: Target) => { x: number; y: number } | null;
 	};
 }
@@ -191,19 +190,30 @@ export function createAirflowScene(host: WorldHost, params: AirflowSceneParams, 
 		aim: (id, tilt) => params.aimDevice(id, tilt)
 	});
 	scene.add(editor.group);
-	// The Dock drags a device in from its tray: it asks the Stage where a point on the screen lands, in the Stage's own metres.
+	// The HUD: what a click chooses, the outlines of the chosen and hovered things, the carried ghost, where a menu hangs, and clicks that
+	// follow the tool. A click stops at a wall that stands, and an Opening in a wall that is cut away cannot be chosen.
+	const selection = new Selection({
+		camera,
+		rect: host.rect,
+		plan: () => house.plan,
+		models,
+		params,
+		walls: () => ({ boxes: house.home.walls.standingBoxes(), cut: (id) => house.home.walls.openingCut(id) })
+	});
+	scene.add(selection.group);
+	params.bridge.anchor = (target) => selection.anchor(target);
+	// The HUD carries a device in from its catalog: it asks the world where a point on the screen lands, in the world's own metres.
 	const ndcOf = (clientX: number, clientY: number) => {
 		const box = host.rect();
 		return { x: ((clientX - box.left) / box.width) * 2 - 1, y: -(((clientY - box.top) / box.height) * 2 - 1) };
 	};
-	params.bridge.over = (clientX, clientY) => {
-		const box = host.rect();
-		return clientX >= box.left && clientX <= box.right && clientY >= box.top && clientY <= box.bottom;
+	// A carried device lands on the floor or furniture under the pointer, unless a standing wall is in the way.
+	params.bridge.pick = (clientX, clientY) => {
+		const point = pointOnSurface(camera, ndcOf(clientX, clientY), house.plan, house.home.pickables);
+		return point && !selection.walled(point) ? point : null;
 	};
-	params.bridge.pick = (clientX, clientY) => pointOnSurface(camera, ndcOf(clientX, clientY), house.plan, house.home.pickables);
 	let openings = '';
 	let mode = params.view.mode;
-	let topDown = params.view.topDown;
 	let lastUpdate = 0;
 
 	/** The height the pointer reads the air at, pins a probe and releases smoke: the cell layer the slice snapped to, or the height asked for before the first slice. Nothing is drawn there. */
@@ -211,7 +221,10 @@ export function createAirflowScene(host: WorldHost, params: AirflowSceneParams, 
 
 	const input = new AirflowInput({
 		mode: () => params.view.mode,
-		pick: (at) => pointOnPlane(camera, at, planeY(), house.plan, house.home.pickables),
+		pick: (at) => {
+			const point = pointOnPlane(camera, at, planeY(), house.plan, house.home.pickables);
+			return point && !selection.walled(point) ? point : null;
+		},
 		plane: () => ({ width: house.plan.width, depth: house.plan.depth, y: planeY() }),
 		read: (point) => session.hover(point.x, point.z),
 		hover: (point, reading) => {
@@ -233,10 +246,6 @@ export function createAirflowScene(host: WorldHost, params: AirflowSceneParams, 
 		}
 	});
 
-	// The HUD: what a click chooses, the outlines of the chosen and hovered things, the carried ghost, where a menu hangs, and clicks that follow the tool.
-	const selection = new Selection({ camera, rect: host.rect, plan: () => house.plan, models, params });
-	scene.add(selection.group);
-	params.bridge.anchor = (target) => selection.anchor(target);
 	const tools = new ToolInput(input, {
 		tool: () => params.tool,
 		pickAt: (at, kinds) => selection.pickAt(at, kinds),
@@ -248,15 +257,6 @@ export function createAirflowScene(host: WorldHost, params: AirflowSceneParams, 
 		hover: (target) => params.hover(target),
 		carrying: () => !!params.carry
 	});
-
-	/** The old Top-down switch, until the HUD replaces it: straight down from bird's-eye with north up, and back to the default view. */
-	function followTopDown(on: boolean) {
-		if (on) {
-			controls.setZoom(1);
-			controls.goal.yaw = 0;
-			controls.goal.tilt = clampTilt(PITCH_MAX - pitchAt(1), 1);
-		} else controls.reset();
-	}
 
 	return {
 		scene,
@@ -293,10 +293,6 @@ export function createAirflowScene(host: WorldHost, params: AirflowSceneParams, 
 			if (view.mode !== mode) {
 				mode = view.mode;
 				input.reset();
-			}
-			if (view.topDown !== topDown) {
-				topDown = view.topDown;
-				followTopDown(topDown);
 			}
 			const reduced = host.reducedMotion();
 			// The host caps the `dt` it hands over at 50 ms so that an animation never jumps. The session and the tuner want how long the frame really

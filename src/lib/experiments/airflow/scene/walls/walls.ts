@@ -26,6 +26,12 @@ const LIP = 0.012;
 /** Rate of the walls' rise and fall, per second (about a third of a second to settle). */
 const EASE = 9;
 
+/** A box in the plan, metres: x east, y up, z south. */
+export interface WallBox {
+	min: [number, number, number];
+	max: [number, number, number];
+}
+
 /** A mesh that is cut down on the processor, and the height of its frame's origin above the floor. */
 interface CutMesh {
 	mesh: Mesh;
@@ -80,6 +86,10 @@ export class WallsView {
 	 */
 	readonly openingTargets: Object3D[] = [];
 	private readonly views: RunView[] = [];
+	/** The solid parts of the walls (each less its frames' holes), full height, with the index of the wall each belongs to. */
+	private readonly solids: (WallBox & { wall: number })[] = [];
+	/** Each Opening's wall, by index, and the top of its frame, m. */
+	private readonly openingWalls = new Map<string, { wall: number; top: number }>();
 	private readonly posts: { meshes: CutMesh[]; walls: [number, number]; applied: number }[] = [];
 	private readonly openings: OpeningView[] = [];
 	private readonly targetMaterial = new MeshBasicMaterial({ visible: false });
@@ -94,7 +104,7 @@ export class WallsView {
 	) {
 		this.runs = wallRuns(plan);
 		this.lines = wallLines(this.runs);
-		for (const run of this.runs) this.views.push(this.buildRun(run));
+		for (const run of this.runs) this.views.push(this.buildRun(run, this.views.length));
 		this.buildPosts();
 	}
 
@@ -106,7 +116,7 @@ export class WallsView {
 		return { color: paintFor(room), outside: false };
 	}
 
-	private buildRun(run: WallRun): RunView {
+	private buildRun(run: WallRun, index: number): RunView {
 		const { ceiling } = this.plan;
 		const { materials } = this;
 		const t = run.thickness / 2;
@@ -123,6 +133,8 @@ export class WallsView {
 		// The wall less a hole for every frame, each face in the paint of the Room it faces, the top in the cap colour.
 		const layouts = frameLayouts(run, ceiling);
 		for (const piece of wallPieces(run.from, run.to, ceiling, layouts.map((l) => l.hole))) {
+			const solid = wallBox(run, piece.u0, piece.u1, -t, t);
+			this.solids.push({ wall: index, min: [solid.x0, piece.y0, solid.z0], max: [solid.x1, piece.y1, solid.z1] });
 			const mid = (piece.u0 + piece.u1) / 2;
 			const plus = this.paintAt(run, mid, 1);
 			const minus = this.paintAt(run, mid, -1);
@@ -155,6 +167,7 @@ export class WallsView {
 
 		const view: RunView = { run, meshes: [], parts: [], height: ceiling, goal: ceiling, applied: ceiling };
 		for (const { spec, frame, hole, members } of layouts) {
+			this.openingWalls.set(spec.id, { wall: index, top: spec.sill + spec.height });
 			const door = spec.kind === 'door' || spec.kind === 'sliding-door';
 			for (const m of members) box(trim, m.u0, m.u1, m.y0, m.y1, -t - LIP, t + LIP, { colors: WALL_COLORS.trim });
 			if (!door && hole.y0 > 0.02) {
@@ -341,6 +354,27 @@ export class WallsView {
 	/** The height each wall stands at now, m. */
 	get heights(): number[] {
 		return this.views.map((view) => view.height);
+	}
+
+	/**
+	 * The walls as they stand now, for picking: each solid part of a wall (its doors and windows are holes) as a box as high as its wall
+	 * stands, so a ray stops at a full-height wall and passes over one that is cut away.
+	 */
+	standingBoxes(): WallBox[] {
+		const boxes: WallBox[] = [];
+		for (const solid of this.solids) {
+			const top = Math.min(solid.max[1], this.views[solid.wall]?.height ?? solid.max[1]);
+			if (top <= solid.min[1] + 1e-3) continue;
+			boxes.push({ min: solid.min, max: [solid.max[0], top, solid.max[2]] });
+		}
+		return boxes;
+	}
+
+	/** Whether an Opening's wall stands lower than the top of its frame now (cut away, or down), so the Opening is not whole and cannot be chosen. */
+	openingCut(id: string): boolean {
+		const found = this.openingWalls.get(id);
+		if (!found) return false;
+		return (this.views[found.wall]?.height ?? Infinity) < found.top - 0.01;
 	}
 
 	/** Once a frame: eases every wall toward its height (all at once when `instant`). Returns true while any is still moving. */

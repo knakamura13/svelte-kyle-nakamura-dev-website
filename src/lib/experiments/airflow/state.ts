@@ -89,7 +89,6 @@ export interface View {
 	sensitivity: number;
 	/** Height above the floor, m, at which the pointer reads the air, pins a probe and releases smoke: the slice the solver reads there. No plane is drawn. */
 	sliceHeight: number;
-	topDown: boolean;
 	/** Whether the little dots that follow the air are drawn. */
 	tracers: boolean;
 	mode: PointerMode;
@@ -125,7 +124,7 @@ export const DEFAULT_CONDITIONS: Conditions = { windFrom: 270, windSpeed: 0, out
  *
  * The overlay starts Off: the streaks show the air on their own (scene/air), and an overlay colours them by its quantity.
  */
-export const DEFAULT_VIEW: Omit<View, 'units'> = { layer: 'speed', sensitivity: 0.5, sliceHeight: 1.1, topDown: false, tracers: true, mode: 'look', overlay: 'off', walls: 'cutaway', quality: 'auto' };
+export const DEFAULT_VIEW: Omit<View, 'units'> = { layer: 'speed', sensitivity: 0.5, sliceHeight: 1.1, tracers: true, mode: 'look', overlay: 'off', walls: 'cutaway', quality: 'auto' };
 
 export const DEFAULT_CLOCK: Clock = { paused: false, speed: 1 };
 
