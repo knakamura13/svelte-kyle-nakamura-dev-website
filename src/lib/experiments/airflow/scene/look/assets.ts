@@ -37,7 +37,7 @@ export const FURNITURE_FILES = [
 ] as const;
 
 /** The Kenney Nature Kit models that stand round the Home. */
-export const NATURE_FILES = ['tree_oak', 'tree_default', 'tree_fat', 'tree_detailed', 'plant_bushDetailed', 'grass_large', 'flower_redA', 'flower_yellowB', 'flower_purpleA', 'rock_smallA'] as const;
+export const NATURE_FILES = ['tree_oak', 'tree_default', 'tree_fat', 'tree_detailed', 'grass_large', 'flower_redA', 'flower_yellowB', 'flower_purpleA', 'rock_smallA'] as const;
 
 export type FurnitureFile = (typeof FURNITURE_FILES)[number];
 export type NatureFile = (typeof NATURE_FILES)[number];

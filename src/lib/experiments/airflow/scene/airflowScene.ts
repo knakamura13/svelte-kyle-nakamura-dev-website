@@ -33,7 +33,7 @@ const COMPACT_SPACING = ARROW_SPACING * 2;
 const COMPASS_OFFSET = 0.9;
 
 /** Room names and compass letters show only this far out (zoom 0 is eye level, 1 bird's-eye): close in they would be in the way. */
-const LABEL_ZOOM = 0.55;
+const LABEL_ZOOM = 0.7;
 
 /** Where a device's symbol is drawn while the slice is off: just over the floor, round its feet. */
 const FLOOR_SYMBOLS = 0.02;

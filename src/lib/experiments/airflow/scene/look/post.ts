@@ -115,7 +115,7 @@ export class Post {
 		this.composer.addPass(new RenderPass(scene, camera));
 		if (quality.ao) {
 			const gtao = new ScaledGTAOPass(scene, camera, width, height, quality.ao.scale);
-			gtao.updateGtaoMaterial({ radius: 0.5, distanceExponent: 1, thickness: 0.6, scale: 1.4, samples: quality.ao.samples, distanceFallOff: 1, screenSpaceRadius: false });
+			gtao.updateGtaoMaterial({ radius: 0.4, distanceExponent: 1, thickness: 0.35, scale: 1.4, samples: quality.ao.samples, distanceFallOff: 1, screenSpaceRadius: false });
 			gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 12 });
 			gtao.blendIntensity = 1;
 			this.composer.addPass(gtao);

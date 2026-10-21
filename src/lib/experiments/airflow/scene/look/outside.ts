@@ -1,4 +1,5 @@
-import { Color, Group, InstancedMesh, Matrix4, Mesh, PlaneGeometry, Quaternion, Vector3, type BufferGeometry, type Material, type MeshStandardMaterial, type Object3D, type Texture } from 'three';
+import { Color, Group, IcosahedronGeometry, InstancedMesh, Matrix4, Mesh, MeshStandardMaterial, PlaneGeometry, Quaternion, Vector3, type BufferGeometry, type Material, type Object3D, type Texture } from 'three';
+import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { isExterior, type HomePlan } from '../../homes/types';
 import { EXTERIOR_WALL } from '../wallPieces';
 import type { LookAssets, NatureFile } from './assets';
@@ -192,28 +193,28 @@ export function buildOutside(plan: HomePlan, materials: Materials, assets: LookA
 	};
 	for (const tree of trees(plan)) place(tree);
 
-	// Shrubs along the facades the default view looks at, between the windows, and flowers either side of the front door.
+	// Round shrubs along the facades the default view looks at, between the windows, and flowers either side of the front walk.
 	const busy = (facade: string, at: number) =>
-		plan.openings.some((o) => isExterior(o.placement) && o.placement.facade === facade && Math.abs(o.placement.center - at) < o.width / 2 + 0.45);
-	for (const facade of ['south', 'west'] as const) {
-		const length = facade === 'south' ? plan.width : plan.depth;
-		for (let at = 0.9; at < length - 0.6; at += 1.5 + random() * 0.6) {
+		plan.openings.some((o) => isExterior(o.placement) && o.placement.facade === facade && Math.abs(o.placement.center - at) < o.width / 2 + 0.4);
+	const shrubs = new Shrubs(owned);
+	for (const facade of ['south', 'west', 'north', 'east'] as const) {
+		const length = facade === 'south' || facade === 'north' ? plan.width : plan.depth;
+		for (let at = 0.7; at < length - 0.5; at += 1.1 + random() * 0.9) {
 			if (busy(facade, at)) continue;
-			const [x, z] = outFrom(plan, facade, at, 0.45);
-			place({ file: 'plant_bushDetailed', x, z, height: 0.55 + random() * 0.25, turn: random() * Math.PI * 2 });
+			const [x, z] = outFrom(plan, facade, at, 0.42 + random() * 0.12);
+			group.add(shrubs.make(x, z, 0.22 + random() * 0.14, random));
 		}
 	}
 	if (door) {
 		const flowers: NatureFile[] = ['flower_redA', 'flower_yellowB', 'flower_purpleA'];
 		for (const side of [-1, 1]) {
-			for (let n = 0; n < 5; n++) {
-				const along = door.center + side * (1.15 + random() * 0.9);
-				const [x, z] = outFrom(plan, door.facade, along, 0.3 + random() * 0.7);
-				place({ file: flowers[n % flowers.length], x, z, height: 0.32 + random() * 0.18, turn: random() * Math.PI * 2 });
+			for (let n = 0; n < 6; n++) {
+				const [x, z] = outFrom(plan, door.facade, door.center + side * (0.85 + random() * 0.25), 0.95 + n * 0.62 + random() * 0.2);
+				place({ file: flowers[n % flowers.length], x, z, height: 0.2 + random() * 0.1, turn: random() * Math.PI * 2 });
 			}
 		}
 		const [rx, rz] = outFrom(plan, door.facade, door.center + 2.6, 2.2);
-		place({ file: 'rock_smallA', x: rx, z: rz, height: 0.35, turn: 0.7 });
+		place({ file: 'rock_smallA', x: rx, z: rz, height: 0.3, turn: 0.7 });
 	}
 
 	// Tufts of long grass scattered over the lawn near the Home, as one instanced mesh per part of the model.
@@ -245,6 +246,54 @@ export function buildOutside(plan: HomePlan, materials: Materials, assets: LookA
 		});
 	}
 	return { group, dispose: () => dispose(group, owned) };
+}
+
+/**
+ * Round, low shrubs, built here because the kit's are spiky: two to four lumpy, flat-shaded blobs in greens, toy-like as the trees are.
+ * Every blob is one shared, seeded geometry, scaled and turned.
+ */
+class Shrubs {
+	private readonly blob: BufferGeometry;
+	private readonly leaves: MeshStandardMaterial[];
+
+	constructor(owned: (BufferGeometry | Material | Texture)[]) {
+		const random = seeded(4242);
+		// Positions only, so the corners the faces share merge into one vertex and the lumps do not open seams.
+		const ico = new IcosahedronGeometry(1, 1);
+		ico.deleteAttribute('uv');
+		ico.deleteAttribute('normal');
+		const blob = mergeVertices(ico);
+		ico.dispose();
+		const position = blob.getAttribute('position');
+		const at = new Vector3();
+		for (let i = 0; i < position.count; i++) {
+			at.fromBufferAttribute(position, i).multiplyScalar(0.86 + random() * 0.28);
+			position.setXYZ(i, at.x, at.y * 0.82, at.z);
+		}
+		blob.computeVertexNormals();
+		this.blob = blob;
+		this.leaves = [0x5d8a42, 0x6c9a4a, 0x527c3c].map((color) => new MeshStandardMaterial({ color, roughness: 0.82, flatShading: true }));
+		owned.push(blob, ...this.leaves);
+	}
+
+	/** A shrub `radius` metres round, standing on the lawn at (x, z). */
+	make(x: number, z: number, radius: number, random: () => number): Group {
+		const shrub = new Group();
+		const blobs = 2 + Math.floor(random() * 3);
+		for (let n = 0; n < blobs; n++) {
+			const mesh = new Mesh(this.blob, this.leaves[Math.floor(random() * this.leaves.length)]);
+			const size = radius * (n === 0 ? 1 : 0.62 + random() * 0.3);
+			const angle = random() * Math.PI * 2;
+			const reach = n === 0 ? 0 : radius * 0.7;
+			mesh.scale.setScalar(size);
+			mesh.rotation.set(random() * Math.PI, random() * Math.PI, 0);
+			mesh.position.set(Math.cos(angle) * reach, size * 0.62, Math.sin(angle) * reach);
+			mesh.castShadow = mesh.receiveShadow = true;
+			shrub.add(mesh);
+		}
+		shrub.position.set(x, GRADE, z);
+		return shrub;
+	}
 }
 
 function sizeOf(object: Object3D) {
