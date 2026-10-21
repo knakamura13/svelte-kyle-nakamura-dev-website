@@ -28,28 +28,29 @@ const HOMES = ['studio', 'one-bedroom', 'two-bedroom', 'house'];
 
 const describe = (r: any) => {
 	const sizes = r.changes.map((c: any) => `${c.size} m at ${c.at.toFixed(1)} s`).join(', then ');
-	return `${r.plan.padEnd(12)} ${r.kind === 'webgpu' ? 'GPU' : 'worker'} ${String(r.speed).padStart(2)}x  ${sizes}  |  ${r.finalCells} cells  settled ${r.settled}  last change at ${r.lastChangeAt.toFixed(1)} s of ${r.seconds.toFixed(1)} s  |  fps median ${r.fps.median.toFixed(1)} (slowest ${r.fps.slowest.toFixed(1)})  rate ${r.rate.toFixed(2)}  unfinished at most ${r.maxInFlight}${r.limit ? ` of ${r.limit}` : ''}`;
+	const warm = r.warmUp?.measured ? `warm-up ${r.warmUp.seconds.toFixed(2)} s, a step ${r.warmUp.measured.ms.toFixed(2)} ms at ${r.warmUp.measured.cells} cells  |  ` : '';
+	return `${r.plan.padEnd(12)} ${r.kind === 'webgpu' ? 'GPU' : 'worker'} ${String(r.speed).padStart(2)}x  ${warm}${sizes}  |  ${r.finalCells} cells  settled ${r.settled}  last change at ${r.lastChangeAt.toFixed(1)} s of ${r.seconds.toFixed(1)} s  |  fps median ${r.fps.median.toFixed(1)} (slowest ${r.fps.slowest.toFixed(1)})  rate ${r.rate.toFixed(2)}  unfinished at most ${r.maxInFlight}${r.limit ? ` of ${r.limit}` : ''}`;
 };
 
-test.describe('on the GPU every Home gets a fine grid, settles on it, and the page keeps drawing', () => {
+test.describe('on the GPU every Home gets a fine grid from its warm-up, before it is shown, and keeps it, and the page keeps drawing', () => {
 	for (const plan of HOMES)
 		test(plan, async () => {
 			test.setTimeout(120_000);
 			// Five times real time is what the Scenarios start at.
-			const r = await call('tuneRun', plan, { speed: 5 });
+			const r = await call('tuneRun', plan, { speed: 5, seconds: 20 });
 			console.log(describe(r));
 			console.log(`    said: ${JSON.stringify(r.announced)}`);
+			expect(r.warmUp.measured, 'the device was measured before the world was shown').not.toBeNull();
+			expect(r.warmUp.seconds, 'in a moment').toBeLessThan(3);
 			expect(r.fps.median, 'frames a second').toBeGreaterThanOrEqual(30);
-			expect(r.finalSize, 'a fine grid on this machine').toBeLessThanOrEqual(0.15 + 1e-9);
+			expect(r.finalSize, 'a fine grid on this machine').toBeLessThanOrEqual(0.1 + 1e-9);
 			expect(r.settled, 'the tuner has settled').toBe(true);
-			expect(r.seconds - r.lastChangeAt, 'and the grid has stood still for the last six seconds').toBeGreaterThanOrEqual(6);
-			const sizes: number[] = r.changes.map((c: any) => c.size);
-			sizes.forEach((size, n) => n > 0 && expect(size, 'each change was to a finer grid: nothing went up and down').toBeLessThan(sizes[n - 1]));
-			expect(r.rate, 'the solver kept up with real time').toBeGreaterThanOrEqual(0.95);
+			expect(r.changes, 'the grid the visitor first sees is the grid: nothing changes in view').toHaveLength(1);
+			expect(r.rate, 'the solver kept up with the clock').toBeGreaterThanOrEqual(0.95 * 5);
 			expect(r.maxInFlight, 'the queue stayed inside its limit').toBeLessThanOrEqual(r.limit);
 			expect(r.errors).toEqual([]);
-			// Each retune was said once, in one short sentence.
-			expect(r.announced).toHaveLength(r.changes.length - 1);
+			// A grid picked before anything was shown is not news.
+			expect(r.announced).toEqual([]);
 		});
 });
 
@@ -86,30 +87,33 @@ test('a grid too fine for the device, at 20 times real time, does not grow a que
 	expect(unbounded.drainMs, 'and the picture is seconds behind').toBeGreaterThan(1000);
 });
 
-test.describe('on the worker (no WebGPU) every Home runs close to real time on the grid the tuner picks', () => {
+test.describe('on the worker (no WebGPU) every Home runs close to real time on the grid its warm-up picks', () => {
 	for (const plan of HOMES)
 		test(plan, async () => {
 			test.setTimeout(120_000);
-			const r = await call('tuneRun', plan, { kind: 'cpu', speed: 1 });
+			const r = await call('tuneRun', plan, { kind: 'cpu', speed: 1, seconds: 20 });
 			console.log(describe(r));
 			console.log(`    said: ${JSON.stringify(r.announced)}`);
+			expect(r.warmUp.measured, 'the worker was measured before the world was shown').not.toBeNull();
 			expect(r.settled).toBe(true);
+			expect(r.changes, 'nothing changes in view').toHaveLength(1);
 			expect(r.errors).toEqual([]);
-			// The tuner never leaves a grid that the solver keeps up with less than 80% of real time on (it steps down), and it climbs only
-			// while a window is at 95% or better. This is a measurement on a machine that may be busy: what it saw is in the status doc.
+			// The warm-up allows the worker 80% of its thread at real time. This is a measurement on a machine that may be busy: what it saw is in the status doc.
 			expect(r.rate, 'the worker keeps up with real time on the grid it picked').toBeGreaterThanOrEqual(0.8);
 		});
 });
 
 // One test for the smallest Home and one for the largest, so each can be run on its own (a Home takes the whole five minutes).
 for (const plan of ['studio', 'house'])
-	test(`five minutes on the GPU, the ${plan}: the grid settles in the first minute and never changes again`, async () => {
+	test(`five minutes on the GPU, the ${plan}: the grid the warm-up picks is the grid for all of it`, async () => {
 		test.setTimeout(400_000);
 		// Nothing ends the run early (the quiet time is never reached), so the Home runs the whole five minutes.
 		const r = await call('tuneRun', plan, { speed: 5, seconds: 300, quiet: 1e9 });
 		console.log(`${describe(r)}  |  ${r.changes.length} sizes in all, over ${r.seconds.toFixed(0)} s`);
+		console.log(`    said: ${JSON.stringify(r.announced)}`);
 		expect(r.seconds, 'the whole five minutes ran').toBeGreaterThanOrEqual(299);
-		expect(r.lastChangeAt, 'the last change came early, and the grid stood still for the rest').toBeLessThan(60);
+		expect(r.changes, 'on a quiet machine nothing ever changes: no restart and no step down').toHaveLength(1);
+		expect(r.lastChangeAt, 'and in any case nothing in the first minute').toBeLessThan(1);
 		expect(r.settled).toBe(true);
 		expect(r.fps.median, 'frames a second').toBeGreaterThanOrEqual(30);
 		expect(r.rate, 'the solver kept up with the clock at the end').toBeGreaterThanOrEqual(0.9 * 5);
