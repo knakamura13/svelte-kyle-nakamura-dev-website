@@ -7,16 +7,18 @@ import type { HomePlan } from '../homes/types';
 import type { AirflowReadout } from '../readouts';
 import { chooseBackend } from '../sim/backends';
 import { cellFromSearch, detectSmallDevice } from '../sim/device';
-import { SMOKE, SMOKE_DENSE, SimulationSession, TRACERS, type SessionParams } from '../sim/session';
+import { SimulationSession, type SessionParams } from '../sim/session';
 import { effectiveOpenings } from '../sim/world';
+import type { OverlayId, Quality } from '../state';
+import { createAir } from './air';
 import { ARROW_SPACING, DirectionArrows } from './arrows';
 import { DeviceEditor, type Grab } from './deviceEditor';
 import { DeviceMeshes } from './deviceMeshes';
 import type { Point3 } from './deviceMath';
 import { Dollhouse, dollhouseRig } from './dollhouse';
 import { AirflowInput } from './input';
+import { chooseQuality, type QualityTier } from './look/quality';
 import { Markers } from './markers';
-import { SmokePoints, TracerPoints } from './particles';
 import { pointOnPlane, pointOnSurface } from './pick';
 import { SliceLayer } from './sliceLayer';
 
@@ -87,6 +89,7 @@ export const createAirflowScene: SceneFactory<AirflowSceneParams, AirflowReadout
 
 	// The grid is the device's to say: measured by the tuner, the coarsest on a phone or a small tablet, or exactly what `?cell=0.15` asks for.
 	const backend = chooseBackend({ small: detectSmallDevice(), fixedCell: cellFromSearch(location.search) });
+	// The air is drawn from a volume of the whole box (scene/air), so the backend's own tracers and smoke particles are not kept.
 	const session = new SimulationSession({
 		params,
 		plans: params.plans,
@@ -97,13 +100,16 @@ export const createAirflowScene: SceneFactory<AirflowSceneParams, AirflowReadout
 		readout,
 		invalidate: host.invalidate,
 		reducedMotion: host.reducedMotion,
-		announce: (message) => params.announce(message)
+		announce: (message) => params.announce(message),
+		particles: false,
+		volume: true
 	});
-	const tracers = new TracerPoints(TRACERS);
-	const smoke = new SmokePoints(SMOKE);
 	const devices = new DeviceMeshes(models);
 	const markers = new Markers(host.labels);
-	scene.add(tracers.points, smoke.points, devices.group, markers.group);
+	scene.add(devices.group, markers.group);
+	/** The tier `auto` stands for on this device, worked out once. */
+	const autoTier = chooseQuality({ search: location.search, small: detectSmallDevice(), cores: navigator.hardwareConcurrency });
+	const tierOf = (quality: Quality): QualityTier => (quality === 'auto' ? autoTier : quality);
 
 	function buildHouse(plan: HomePlan): House {
 		const dollhouse = new Dollhouse(plan, { furniture: params.setup.furniture, tint: TINT });
@@ -139,6 +145,15 @@ export const createAirflowScene: SceneFactory<AirflowSceneParams, AirflowReadout
 	}
 
 	let house = buildHouse(planOf(params.setup.plan));
+	const air = createAir({
+		scene,
+		camera,
+		world: () => (session.world?.raster.plan.id === house.plan.id ? session.world : null),
+		clay: () => [house.dollhouse.group, devices.group],
+		quality: tierOf(params.view.quality)
+	});
+	let overlay: { kind: OverlayId; sensitivity: number } | null = null;
+	let quality = params.view.quality;
 	const editor = new DeviceEditor({
 		camera,
 		devices,
@@ -163,8 +178,6 @@ export const createAirflowScene: SceneFactory<AirflowSceneParams, AirflowReadout
 	};
 	params.bridge.pick = (clientX, clientY) => pointOnSurface(camera, ndcOf(clientX, clientY), house.plan, house.dollhouse.pickables);
 	let openings = '';
-	let version = -1;
-	let sensitivity = NaN;
 	let mode = params.view.mode;
 	let framed: { plan: string; topDown: boolean; setup: RigSetup } | null = null;
 	let lastUpdate = 0;
@@ -213,7 +226,6 @@ export const createAirflowScene: SceneFactory<AirflowSceneParams, AirflowReadout
 				disposeHouse(house);
 				house = buildHouse(planOf(setup.plan));
 				openings = '';
-				version = -1;
 			}
 			const spacing = host.compact() ? COMPACT_SPACING : ARROW_SPACING;
 			if (spacing !== house.spacing) {
@@ -222,7 +234,6 @@ export const createAirflowScene: SceneFactory<AirflowSceneParams, AirflowReadout
 				house.arrows = new DirectionArrows(house.plan.width, house.plan.depth, spacing);
 				house.spacing = spacing;
 				scene.add(house.arrows.mesh);
-				version = -1;
 			}
 			if (view.mode !== mode) {
 				mode = view.mode;
@@ -247,28 +258,23 @@ export const createAirflowScene: SceneFactory<AirflowSceneParams, AirflowReadout
 				dollhouse.setOpenings(amounts);
 			}
 
-			// The newest snapshot, but only once it is of this home.
+			// The newest snapshot, but only once it is of this home. The slice plane is no longer drawn: the air fills the rooms instead
+			// (scene/air). The slice is still read, for the hover readout and the height a probe or a puff of smoke is placed at.
 			const { latest, world } = session;
-			const live = !!latest.slice && !!world && world.raster.plan.id === house.plan.id;
-			house.slice.mesh.visible = live;
-			house.arrows.mesh.visible = live && view.layer === 'direction';
-			tracers.setVisible(live && view.tracers);
-			smoke.setVisible(live);
-			if (live) {
-				const slice = latest.slice!;
-				const scale = { sensitivity: view.sensitivity, baseline: 0 };
-				house.slice.setHeight(slice.y);
-				house.slice.update(slice, view.layer, scale);
-				house.arrows.setHeight(slice.y);
-				if (view.layer === 'direction') house.arrows.update(slice, scale);
-				// The particles only need uploading when there are new positions, or the speed scale moved under the tracers.
-				if (latest.version !== version || scale.sensitivity !== sensitivity) {
-					version = latest.version;
-					sensitivity = scale.sensitivity;
-					if (latest.tracers) tracers.update(latest.tracers, scale);
-					if (latest.smoke) smoke.update(latest.smoke, { dense: SMOKE_DENSE });
-				}
+			const live = !!world && world.raster.plan.id === house.plan.id;
+			house.slice.mesh.visible = false;
+			house.arrows.mesh.visible = false;
+			if (!overlay || overlay.kind !== view.overlay || overlay.sensitivity !== view.sensitivity) {
+				overlay = { kind: view.overlay, sensitivity: view.sensitivity };
+				air.setOverlay(view.overlay, { sensitivity: view.sensitivity });
 			}
+			if (view.quality !== quality) {
+				quality = view.quality;
+				air.setQuality(tierOf(quality));
+			}
+			air.setStreaks(view.tracers);
+			// The streaks move with the air in real time, as the air would carry them; a paused clock holds them where they are.
+			if (air.update(live ? latest.volume : null, params.clock.paused ? 0 : Math.min(real, 0.05))) moving = true;
 
 			devices.update(setup.devices, session.simTime, planeY(), params.selected);
 			editor.update(setup.devices.find((d) => d.id === params.selected));
@@ -284,14 +290,13 @@ export const createAirflowScene: SceneFactory<AirflowSceneParams, AirflowReadout
 		dispose() {
 			input.reset();
 			readout.hover = null;
+			air.dispose();
 			session.dispose();
 			backend.dispose();
 			disposeHouse(house);
 			markers.dispose();
 			editor.dispose();
 			devices.dispose();
-			tracers.dispose();
-			smoke.dispose();
 			disposeTree(scene);
 		}
 	};

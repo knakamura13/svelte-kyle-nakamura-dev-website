@@ -94,7 +94,7 @@ export interface View {
 	tracers: boolean;
 	mode: PointerMode;
 	units: UnitSystem;
-	/** The HUD's overlay. Until the overlays are drawn, Air speed, Temperature and Smoke pick the slice's layer, and Off hides the slice. */
+	/** The HUD's overlay: Off, or the field that tints the rooms over a world turned to clay (scene/air/overlay.ts). */
 	overlay: OverlayId;
 	/** The HUD's wall mode, for the cutaway walls to follow. */
 	walls: WallMode;
@@ -123,10 +123,9 @@ export const DEFAULT_CONDITIONS: Conditions = { windFrom: 270, windSpeed: 0, out
  * room air nearly the same pale blue as still air, and that 0.5 (0 to 1.5 m/s) shows it better. Below 1 the scale covers less, so
  * weaker flow shows in stronger color.
  *
- * The overlay starts on Air speed, which is today's slice, so the page looks as it did before the HUD. The redesign wants it Off
- * (the streaks show the air on their own); that is the default to set once the streaks are drawn.
+ * The overlay starts Off: the streaks show the air on their own (scene/air), and an overlay turns the world to clay.
  */
-export const DEFAULT_VIEW: Omit<View, 'units'> = { layer: 'speed', sensitivity: 0.5, sliceHeight: 1.1, topDown: false, tracers: true, mode: 'look', overlay: 'speed', walls: 'cutaway', quality: 'auto' };
+export const DEFAULT_VIEW: Omit<View, 'units'> = { layer: 'speed', sensitivity: 0.5, sliceHeight: 1.1, topDown: false, tracers: true, mode: 'look', overlay: 'off', walls: 'cutaway', quality: 'auto' };
 
 export const DEFAULT_CLOCK: Clock = { paused: false, speed: 1 };
 
