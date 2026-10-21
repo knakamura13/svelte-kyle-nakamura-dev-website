@@ -18,7 +18,7 @@ import type { Volume } from '../../solver/volume';
 import type { OverlayId } from '../../state';
 import { PALETTE_GLSL } from '../../viz/palettes';
 import type { QualityTier } from '../look/quality';
-import { paletteTexture } from '../sliceLayer';
+import { paletteTexture } from './palette';
 import { STREAK_BIRTHS, drawBirths, streakWeights } from './birth';
 import type { AirFields } from './fields';
 import { MASK_GLSL, VOLUME_GLSL } from './glsl';

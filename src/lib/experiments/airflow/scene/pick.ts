@@ -28,7 +28,7 @@ export function pointOnPlane(camera: Camera, at: { x: number; y: number }, y: nu
 
 /**
  * Where the pointer looks at the floor or at a piece of furniture, whichever is nearer, in the solver's axes: the point a device
- * dragged across the home would stand at. The floor and the furniture are the `surfaces` (the dollhouse's `pickables`); a ray that
+ * dragged across the home would stand at. The floor and the furniture are the `surfaces` (the Home's `pickables`); a ray that
  * meets neither, or meets one outside the footprint, gives null. `at` is in normalized device coordinates.
  */
 export function pointOnSurface(camera: Camera, at: { x: number; y: number }, footprint: { width: number; depth: number }, surfaces: readonly Object3D[]): Point3 | null {

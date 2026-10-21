@@ -3,6 +3,7 @@ import type { World } from '../../sim/world';
 import type { Volume } from '../../solver/volume';
 import type { OverlayId } from '../../state';
 import type { QualityTier } from '../look/quality';
+import { RENDER_ORDER } from '../renderOrder';
 import { DepthPrepass } from './depth';
 import { AirFields } from './fields';
 import { MarchTarget } from './march';
@@ -116,8 +117,8 @@ export function createAir(options: AirOptions): Air {
 	overlay.mesh.renderOrder = 0;
 	smoke.mesh.renderOrder = 1;
 	march.scene.add(overlay.mesh, smoke.mesh);
-	march.composite.renderOrder = 15;
-	streaks.mesh.renderOrder = 17;
+	march.composite.renderOrder = RENDER_ORDER.march;
+	streaks.mesh.renderOrder = RENDER_ORDER.streaks;
 	group.add(march.composite, streaks.mesh);
 
 	let world: World | null = null;
@@ -140,7 +141,7 @@ export function createAir(options: AirOptions): Air {
 		const low = tier === 'low';
 		if (low && !puffs) {
 			puffs = new SmokePuffs(fields, precise);
-			puffs.mesh.renderOrder = 16;
+			puffs.mesh.renderOrder = RENDER_ORDER.puffs;
 			group.add(puffs.mesh);
 			if (fields.newest && world) puffs.births(fields.newest, world.raster);
 		} else if (!low && puffs) {

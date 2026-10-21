@@ -10,7 +10,7 @@ import { isExterior, type Furniture, type HomePlan, type OpeningSpec } from '../
 import type { DeviceState, Pin, Setup, Target, Tool } from '../state';
 import { DeviceMeshes } from './deviceMeshes';
 import { SLOP_PX } from './input';
-import { RENDER_ORDER } from './sliceLayer';
+import { RENDER_ORDER } from './renderOrder';
 
 /**
  * What a click on the 3D world chooses, for the HUD's context menus and Inspector: a door or window, a fan or purifier, or a Probe.

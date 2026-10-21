@@ -5,7 +5,7 @@ import { LIMITS, type DeviceState } from '../state';
 import { tiltFromPointer, yawFromPointer, type Point3 } from './deviceMath';
 import { DeviceMeshes } from './deviceMeshes';
 import { pointOnSurface } from './pick';
-import { RENDER_ORDER } from './sliceLayer';
+import { RENDER_ORDER } from './renderOrder';
 
 /**
  * Choosing, moving, turning and aiming devices on the Stage with a pointer, and the ghost a device dragged from the Dock's tray

@@ -1,7 +1,7 @@
 import { BackSide, BoxGeometry, Color, Mesh, ShaderMaterial, Vector2, Vector3, type DataTexture, type Material, type Object3D, type Texture } from 'three';
 import type { OverlayId } from '../../state';
 import { PALETTE_GLSL } from '../../viz/palettes';
-import { paletteTexture } from '../sliceLayer';
+import { paletteTexture } from './palette';
 import { COLOUR_ONLY, type DepthUniforms } from './depth';
 import type { AirFields } from './fields';
 import { BOX_GLSL, DEPTH_GLSL, HASH_GLSL, VOLUME_GLSL } from './glsl';

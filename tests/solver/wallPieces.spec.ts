@@ -133,7 +133,3 @@ test('a frame’s jambs, head and sill fill its hole around the clear opening', 
 			expect(hole.u1).toBeLessThanOrEqual(run.to + 1e-9);
 		}
 });
-
-test.fixme('interior walls never overlap at T and L junctions', () => {
-	// Not written yet: needs a hand-made plan with T and L junctions of inside walls.
-});
