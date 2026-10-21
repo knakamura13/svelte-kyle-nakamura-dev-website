@@ -318,6 +318,9 @@ export interface SelectionHost {
 	walls?(): { boxes: readonly Box[]; cut(opening: string): number | null };
 }
 
+/** How close two labels' points may be on the page, CSS px across and up, before one sits on the other: a Room's name and a Probe's "Probe 1 0.4 mph". */
+const LABEL_CLEAR = { x: 150, y: 36 };
+
 /** The window frames' white, for the strips that mark a window on a cut wall's cap, and the most strips a Home has. */
 const SILL_COLOR = 0xf2eee6;
 const MAX_SILLS = 48;
@@ -539,6 +542,19 @@ export class Selection {
 		const length = Math.hypot(dx, dy, dz);
 		if (length < 1e-6) return false;
 		return wallDistance([origin.x, origin.y, origin.z], [dx / length, dy / length, dz / length], walls.boxes) < length - 1e-3;
+	}
+
+	/**
+	 * Whether a label over `point` would sit on one over any of `others` (a Room's name under a Probe's label, say): their points within
+	 * `LABEL_CLEAR` CSS pixels of each other across and up, the size of two labels side by side.
+	 */
+	crowded(point: Vec3, others: readonly Vec3[]): boolean {
+		const at = this.project(point);
+		if (!at) return false;
+		return others.some((other) => {
+			const there = this.project(other);
+			return !!there && Math.abs(there.x - at.x) < LABEL_CLEAR.x && Math.abs(there.y - at.y) < LABEL_CLEAR.y;
+		});
 	}
 
 	/** Where a point of the Home is on the page, CSS pixels from the viewport's corner, or null behind the camera. */

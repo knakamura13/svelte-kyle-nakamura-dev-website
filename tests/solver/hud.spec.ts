@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { PerspectiveCamera } from 'three';
 import { DEVICE_MODELS } from '../../src/lib/experiments/airflow/devices/catalog';
 import { deviceDefaults } from '../../src/lib/experiments/airflow/devices/placement';
 import { newDevice } from '../../src/lib/experiments/airflow/devices/placement';
@@ -6,9 +7,9 @@ import { plans } from '../../src/lib/experiments/airflow/homes/plans';
 import { isExterior, type HomePlan, type OpeningSpec } from '../../src/lib/experiments/airflow/homes/types';
 import { Home } from '../../src/lib/experiments/airflow/scene/look/home';
 import { Materials } from '../../src/lib/experiments/airflow/scene/look/materials';
-import { anchorOf, cutSill, deviceBox, openingBox, pickTarget, rayBox, wallDistance, type PickScene, type Vec3 } from '../../src/lib/experiments/airflow/scene/selection';
+import { Selection, anchorOf, cutSill, deviceBox, openingBox, pickTarget, rayBox, wallDistance, type PickScene, type Vec3 } from '../../src/lib/experiments/airflow/scene/selection';
 import { CUT_HEIGHT, DOWN_HEIGHT, type WallMode } from '../../src/lib/experiments/airflow/scene/walls/cutaway';
-import { LIMITS, type DeviceState } from '../../src/lib/experiments/airflow/state';
+import { LIMITS, blankSetup, type DeviceState } from '../../src/lib/experiments/airflow/state';
 import { formatSpeed } from '../../src/lib/experiments/airflow/units';
 import { vectorToBearing } from '../../src/lib/experiments/airflow/directionWords';
 import { carryHint, isClick, turnCarried } from '../../src/lib/experiments/airflow/ui/hud/carry';
@@ -370,6 +371,36 @@ test.describe('picking in the 3D world', () => {
 			expect(sill.min).toEqual([-0.2, CUT_HEIGHT, expect.closeTo(placement.center - opening.width / 2, 9)]);
 			expect(sill.max).toEqual([0, expect.closeTo(CUT_HEIGHT + 0.012, 9), expect.closeTo(placement.center + opening.width / 2, 9)]);
 		}
+		home.dispose();
+	});
+
+	test('a Room’s name gives way to a Probe’s label on top of it, and a compass letter behind a standing wall is hidden', () => {
+		const plan = plans.find((p) => p.id === 'two-bedroom')!;
+		const home = new Home(plan, new Materials(1, null), null, { furniture: false });
+		// The default view's kind of camera: south-west of the Home, well out and looking down at its middle.
+		const camera = new PerspectiveCamera(45, 1440 / 900, 0.05, 600);
+		camera.position.set(-2, 9, 15);
+		camera.lookAt(plan.width / 2, 0, plan.depth / 2);
+		camera.updateMatrixWorld();
+		const look = { camera: { x: -2, z: 15 }, focus: { x: plan.width / 2, z: plan.depth / 2 }, zoom: 0.9 };
+		home.update(look, 'cutaway', 0, true);
+		const selection = new Selection({
+			camera,
+			rect: () => ({ left: 0, top: 0, width: 1440, height: 900 }) as DOMRect,
+			plan: () => plan,
+			models,
+			params: { tool: 'select', selection: null, hovered: null, select: () => {}, hover: () => {}, setup: blankSetup(plan.id), probes: [], drag: null },
+			walls: () => ({ boxes: home.walls.standingBoxes(), cut: (id) => home.walls.openingCut(id) })
+		});
+		const living = home.roomAnchors.find((anchor) => anchor.id === 'living')!.position;
+		const room: Vec3 = [living.x, living.y, living.z];
+		expect(selection.crowded(room, [[living.x + 0.2, 1.2, living.z]]), 'a Probe at the middle of the room').toBe(true);
+		expect(selection.crowded(room, [[living.x + 2.5, 1.2, living.z]]), 'one across the room').toBe(false);
+		expect(selection.crowded(room, []), 'no Probes').toBe(false);
+		// North of the Home, 1.8 m out, the letter N is behind the north wall, which stands; S, in front of the cut south wall, is not.
+		expect(selection.walled({ x: plan.width / 2, y: 0, z: -1.8 }), 'N').toBe(true);
+		expect(selection.walled({ x: plan.width / 2, y: 0, z: plan.depth + 1.8 }), 'S').toBe(false);
+		selection.dispose();
 		home.dispose();
 	});
 });
