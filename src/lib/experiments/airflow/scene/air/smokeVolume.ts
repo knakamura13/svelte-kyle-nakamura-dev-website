@@ -241,12 +241,12 @@ void main() {
 			float sun = (phase0 * exp(-toward) + 0.5 * phase1 * exp(-0.5 * toward) + 0.25 * phase2 * exp(-0.25 * toward)) / 1.75;
 			// The sky's light and the room's comes mostly from above: the smoke over a point dims it, so a plume's underside and middle are
 			// darker than its top and its edges, and its billows have form.
-			float over = extinctionNow(p + vec3(0.0, 0.2, 0.0)) * 0.2 + extinctionNow(p + vec3(0.0, 0.55, 0.0)) * 0.35;
+			float over = extinctionNow(p + vec3(0.0, 0.35, 0.0)) * 0.55;
 			vec3 lit = uSkyLight * BOUNCE * mix(0.42, 1.0, exp(-uShade * over)) + uSunLight * sun;
 			float alpha = 1.0 - exp(-sigma * dt);
 			light += transmittance * alpha * uAlbedo * lit;
 			transmittance *= 1.0 - alpha;
-			if (transmittance < 0.01) break;
+			if (transmittance < 0.02) break;
 		}
 		t += dt;
 	}
@@ -350,7 +350,7 @@ export class SmokeVolume {
 		this.mesh.visible = max.x > min.x && max.y > min.y && max.z > min.z;
 		this.mesh.position.copy(min);
 		this.mesh.scale.set(Math.max(1e-3, max.x - min.x), Math.max(1e-3, max.y - min.y), Math.max(1e-3, max.z - min.z));
-		uniforms.uStep.value = Math.max(0.03, 0.4 * step);
+		uniforms.uStep.value = Math.max(0.03, 0.5 * step);
 	}
 
 	setMaxSteps(steps: number) {
