@@ -52,6 +52,10 @@
 		experience.setView({ tracers });
 		experience.announce(describeToggle('Tracers', tracers));
 	};
+	const setSlice = (slice: boolean) => {
+		experience.setView({ slice });
+		experience.announce(describeToggle('Slice', slice));
+	};
 </script>
 
 <div class="dock-field view-layer">
@@ -93,9 +97,10 @@
 </div>
 
 <div class="dock-field">
+	<Switch checked={view.slice} onchange={setSlice} label="Slice" />
 	<Switch checked={view.topDown} onchange={setTopDown} label="Top-down view" />
 	<Switch checked={view.tracers} onchange={setTracers} label="Tracers" />
-	<p class="dock-notice">Tracers are the little dots that drift with the air.</p>
+	<p class="dock-notice">The Slice is the coloured plane at the slice height; off, the air and smoke show through the whole room. Tracers are the little dots that drift with the air.</p>
 </div>
 
 <div class="dock-field view-units">

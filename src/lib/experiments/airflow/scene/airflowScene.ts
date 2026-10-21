@@ -1,7 +1,6 @@
 import { PerspectiveCamera, Scene } from 'three';
-import { disposeTree, studio } from '$lib/experiments/engine/kit';
+import { disposeTree } from '$lib/experiments/engine/kit';
 import type { Label } from '$lib/experiments/engine/labels';
-import type { RigSetup, SceneFactory } from '$lib/experiments/engine/types';
 import type { DeviceModel } from '../devices/types';
 import type { HomePlan } from '../homes/types';
 import type { AirflowReadout } from '../readouts';
@@ -9,25 +8,35 @@ import { chooseBackend } from '../sim/backends';
 import { cellFromSearch, detectSmallDevice } from '../sim/device';
 import { SMOKE, SMOKE_DENSE, SimulationSession, TRACERS, type SessionParams } from '../sim/session';
 import { effectiveOpenings } from '../sim/world';
+import type { View } from '../state';
 import { ARROW_SPACING, DirectionArrows } from './arrows';
+import { FOV, SimsCamera } from './camera/controls';
+import { PITCH_MAX, cameraFromSearch, clampTilt, pitchAt } from './camera/sims';
 import { DeviceEditor, type Grab } from './deviceEditor';
-import { DeviceMeshes } from './deviceMeshes';
 import type { Point3 } from './deviceMath';
-import { Dollhouse, dollhouseRig } from './dollhouse';
+import { DeviceMeshes } from './deviceMeshes';
 import { AirflowInput } from './input';
+import { Home } from './look/home';
+import { Lighting } from './look/lighting';
+import { Materials } from './look/materials';
+import type { World, WorldHost } from './look/stage';
 import { Markers } from './markers';
 import { SmokePoints, TracerPoints } from './particles';
 import { pointOnPlane, pointOnSurface } from './pick';
 import { SliceLayer } from './sliceLayer';
-
-/** The Stage's tint: the site's mist, so the 3D view matches the page around it. */
-const TINT = 0xdde7ee;
+import { nextWallMode } from './walls/cutaway';
 
 /** On a compact Stage the arrows sit twice as far apart, so each stays a readable size. */
 const COMPACT_SPACING = ARROW_SPACING * 2;
 
 /** How far outside the footprint the compass letters sit, m: past the outside walls, which are 0.2 m thick. */
-const COMPASS_OFFSET = 0.7;
+const COMPASS_OFFSET = 0.9;
+
+/** Room names and compass letters show only this far out (zoom 0 is eye level, 1 bird's-eye): close in they would be in the way. */
+const LABEL_ZOOM = 0.55;
+
+/** Where a device's symbol is drawn while the slice is off: just over the floor, round its feet. */
+const FLOOR_SYMBOLS = 0.02;
 
 /**
  * What the scene reads and calls. The page's `AirflowExperience` is this object: the scene reads `setup`, `view`,
@@ -44,6 +53,8 @@ export interface AirflowSceneParams extends SessionParams {
 	setEmitting(on: boolean): void;
 	/** Tells a screen reader something the simulation did on its own. */
 	announce(message: string): void;
+	/** Changes how the visitor is looking (the walls' C key steps `walls`). */
+	setView(patch: Partial<View>): void;
 	/** The device whose handles are showing, and the one being dragged from the Dock's tray with where it would land (null for neither). */
 	selected: string | null;
 	drag: { model: string; x: number; y: number; z: number; ok: boolean; reason: string | null } | null;
@@ -59,7 +70,7 @@ export interface AirflowSceneParams extends SessionParams {
 /** Everything that belongs to one home, so a new plan swaps it as a piece. */
 interface House {
 	plan: HomePlan;
-	dollhouse: Dollhouse;
+	home: Home;
 	slice: SliceLayer;
 	arrows: DirectionArrows;
 	spacing: number;
@@ -67,21 +78,21 @@ interface House {
 }
 
 /**
- * The airflow Stage: the home as a dollhouse with the simulation drawn into it. A horizontal slice plane colored by the
- * layer the visitor picked, direction arrows on it for the direction layer, tracers that drift with the air, smoke, the
- * fans and purifiers, and the rings and pins the visitor places. The pointer and the keys read the slice, pin probes and
- * release smoke (`input.ts`). Everything is in the solver's metres, so nothing is converted between the two.
+ * The airflow world: the Home (`look/home.ts`: painted walls that cut away, floors, furniture, the lawn and the planting) in late
+ * afternoon light (`look/lighting.ts`), with the live simulation in it: tracers that drift with the air and smoke, through the whole
+ * volume of the rooms, the fans and purifiers, the rings and pins the visitor places, and, when the visitor turns it on, the slice
+ * plane coloured by the layer they picked. The Sims camera (`camera/controls.ts`) frames it; the host (`look/stage.ts`) draws it and
+ * hands it the input. Everything is in the solver's metres, so nothing is converted between the two.
  *
  * It owns the `SimulationSession`: that builds the world and steps it each frame this runs, and this draws the newest
  * snapshot it has. A home or a restart that needs a new world keeps the old picture out of the way (`live`) until the new
- * world has its first slice, so the slice never lies over a different home.
+ * world has its first slice, so the air never shows over a different home.
  */
-export const createAirflowScene: SceneFactory<AirflowSceneParams, AirflowReadout> = (host, params, readout) => {
+export function createAirflowScene(host: WorldHost, params: AirflowSceneParams, readout: AirflowReadout): World {
 	const scene = new Scene();
-	// The rig pulls the camera back by the home's width on a narrow Stage (77 m for the house at 390 px), so the kit's usual
-	// fog would wash the home out. The kit's floor pool sits inside the dollhouse, whose plinth runs down to -0.16.
-	studio(scene, TINT, { pool: 22, poolY: -0.17, fog: [200, 500] });
-	const camera = new PerspectiveCamera(30, 1, 0.1, 400);
+	const camera = new PerspectiveCamera(FOV, 1, 0.05, 600);
+	const lighting = new Lighting(scene);
+	const materials = new Materials(host.quality().anisotropy, host.assets);
 	const models = new Map(params.models.map((model) => [model.id, model]));
 	const planOf = (id: string) => params.plans.find((plan) => plan.id === id) ?? params.plans[0];
 
@@ -106,12 +117,13 @@ export const createAirflowScene: SceneFactory<AirflowSceneParams, AirflowReadout
 	scene.add(tracers.points, smoke.points, devices.group, markers.group);
 
 	function buildHouse(plan: HomePlan): House {
-		const dollhouse = new Dollhouse(plan, { furniture: params.setup.furniture, tint: TINT });
+		const home = new Home(plan, materials, host.assets, { furniture: params.setup.furniture });
 		const slice = new SliceLayer(plan.width, plan.depth);
 		const spacing = host.compact() ? COMPACT_SPACING : ARROW_SPACING;
 		const arrows = new DirectionArrows(plan.width, plan.depth, spacing);
-		scene.add(dollhouse.group, slice.mesh, arrows.mesh);
-		const labels: Label[] = dollhouse.roomAnchors.map((anchor) => {
+		scene.add(home.group, slice.mesh, arrows.mesh);
+		lighting.fit(home.bounds);
+		const labels: Label[] = home.roomAnchors.map((anchor) => {
 			const label = host.labels.add({ name: anchor.name, tone: 'room', side: 'above' });
 			label.position.copy(anchor.position);
 			return label;
@@ -127,24 +139,45 @@ export const createAirflowScene: SceneFactory<AirflowSceneParams, AirflowReadout
 			label.position.set(x, 0, z);
 			labels.push(label);
 		}
-		return { plan, dollhouse, slice, arrows, spacing, labels };
+		return { plan, home, slice, arrows, spacing, labels };
 	}
 
 	function disposeHouse(old: House) {
 		for (const label of old.labels) host.labels.remove(label);
 		scene.remove(old.slice.mesh, old.arrows.mesh);
-		old.dollhouse.dispose();
+		old.home.dispose();
 		old.slice.dispose();
 		old.arrows.dispose();
 	}
 
 	let house = buildHouse(planOf(params.setup.plan));
+	const controls = new SimsCamera(
+		camera,
+		{
+			reducedMotion: host.reducedMotion,
+			size: () => {
+				const box = host.rect();
+				return { width: box.width, height: box.height };
+			},
+			// A double click flies to the floor of the Home under the pointer.
+			floorAt: (ndc) => pointOnPlane(camera, ndc, 0, house.plan)
+		},
+		house.home.bounds
+	);
+	// A QA link (and the check-in screenshots) can start the camera anywhere: `?camera=x,z,heading,zoom,tilt`.
+	const asked = cameraFromSearch(location.search);
+	if (asked) controls.jumpTo(asked);
+	/** Where the camera is and what it looks at, for the cutaway. */
+	const look = () => ({ camera: { x: controls.pose.position[0], z: controls.pose.position[2] }, focus: controls.focus, zoom: controls.state.zoom });
+	// The walls start where the first view wants them, not standing and then dropping as the world appears.
+	house.home.update(look(), params.view.walls, 0, true);
+
 	const editor = new DeviceEditor({
 		camera,
 		devices,
 		models,
 		height: () => host.rect().height,
-		surfaces: () => house.dollhouse.pickables,
+		surfaces: () => house.home.pickables,
 		footprint: () => house.plan,
 		select: (id) => params.selectDevice(id),
 		move: (id, x, z) => void params.moveDevice(id, x, z),
@@ -161,12 +194,12 @@ export const createAirflowScene: SceneFactory<AirflowSceneParams, AirflowReadout
 		const box = host.rect();
 		return clientX >= box.left && clientX <= box.right && clientY >= box.top && clientY <= box.bottom;
 	};
-	params.bridge.pick = (clientX, clientY) => pointOnSurface(camera, ndcOf(clientX, clientY), house.plan, house.dollhouse.pickables);
+	params.bridge.pick = (clientX, clientY) => pointOnSurface(camera, ndcOf(clientX, clientY), house.plan, house.home.pickables);
 	let openings = '';
 	let version = -1;
 	let sensitivity = NaN;
 	let mode = params.view.mode;
-	let framed: { plan: string; topDown: boolean; setup: RigSetup } | null = null;
+	let topDown = params.view.topDown;
 	let lastUpdate = 0;
 
 	/** Height of the slice plane as drawn: the cell layer the solver snapped to, or the requested height before the first slice. */
@@ -174,7 +207,7 @@ export const createAirflowScene: SceneFactory<AirflowSceneParams, AirflowReadout
 
 	const input = new AirflowInput({
 		mode: () => params.view.mode,
-		pick: (at) => pointOnPlane(camera, at, planeY(), house.plan, house.dollhouse.pickables),
+		pick: (at) => pointOnPlane(camera, at, planeY(), house.plan, house.home.pickables),
 		plane: () => ({ width: house.plan.width, depth: house.plan.depth, y: planeY() }),
 		read: (point) => session.hover(point.x, point.z),
 		hover: (point, reading) => {
@@ -196,15 +229,34 @@ export const createAirflowScene: SceneFactory<AirflowSceneParams, AirflowReadout
 		}
 	});
 
+	/** The old Top-down switch, until the HUD replaces it: straight down from bird's-eye with north up, and back to the default view. */
+	function followTopDown(on: boolean) {
+		if (on) {
+			controls.setZoom(1);
+			controls.goal.yaw = 0;
+			controls.goal.tilt = clampTilt(PITCH_MAX - pitchAt(1), 1);
+		} else controls.reset();
+	}
+
 	return {
 		scene,
 		camera,
-		rig: dollhouseRig(house.plan, params.view.topDown),
+		controls,
 		input,
-		framing() {
-			const { topDown } = params.view;
-			if (!framed || framed.plan !== house.plan.id || framed.topDown !== topDown) framed = { plan: house.plan.id, topDown, setup: dollhouseRig(house.plan, topDown) };
-			return framed.setup;
+		setEnvironment(environment) {
+			if (host.assets) lighting.setSky(host.assets.sky, environment);
+		},
+		setQuality(quality) {
+			lighting.setQuality(quality);
+		},
+		takeShadowChange: () => house.home.takeShadowChange(),
+		aoBox: () => house.home.aoBox(),
+		key(event) {
+			// The temporary C key steps the walls through cutaway, up and down, until the HUD's bottom bar has the toggle.
+			if (event.key !== 'c' && event.key !== 'C') return false;
+			if (event.altKey || event.ctrlKey || event.metaKey) return false;
+			params.setView({ walls: nextWallMode(params.view.walls) });
+			return true;
 		},
 		update(dt) {
 			const { setup, view } = params;
@@ -212,6 +264,8 @@ export const createAirflowScene: SceneFactory<AirflowSceneParams, AirflowReadout
 				input.reset();
 				disposeHouse(house);
 				house = buildHouse(planOf(setup.plan));
+				controls.setBounds(house.home.bounds);
+				house.home.update(look(), view.walls, 0, true);
 				openings = '';
 				version = -1;
 			}
@@ -228,39 +282,48 @@ export const createAirflowScene: SceneFactory<AirflowSceneParams, AirflowReadout
 				mode = view.mode;
 				input.reset();
 			}
+			if (view.topDown !== topDown) {
+				topDown = view.topDown;
+				followTopDown(topDown);
+			}
 			const reduced = host.reducedMotion();
-			// The Stage caps the `dt` it hands over at 50 ms so that an animation never jumps. The session and the tuner want how long the frame really
+			// The host caps the `dt` it hands over at 50 ms so that an animation never jumps. The session and the tuner want how long the frame really
 			// took: a page drawing at 8 frames a second is not at 20, and a tab that was hidden for a minute is not one slow frame.
 			const now = performance.now();
 			const real = lastUpdate ? (now - lastUpdate) / 1000 : dt;
 			lastUpdate = now;
 			let moving = session.update(real);
 
-			// The home follows the setup: furniture, plan view, and every door and window as far open as the solver has it.
-			const { dollhouse } = house;
-			dollhouse.setTopDown(view.topDown);
-			dollhouse.setFurniture(setup.furniture);
+			// The camera first, so the walls are cut for where it is now.
+			const turning = controls.update(dt);
+			const { home } = house;
+			home.setFurniture(setup.furniture);
 			const amounts = Object.fromEntries(effectiveOpenings(house.plan, setup, models));
 			const signature = JSON.stringify(amounts);
 			if (signature !== openings) {
 				openings = signature;
-				dollhouse.setOpenings(amounts);
+				home.setOpenings(amounts);
 			}
+			const easing = home.update(look(), view.walls, dt, reduced);
+			const named = controls.state.zoom > LABEL_ZOOM;
+			for (const label of house.labels) label.enabled = named;
 
 			// The newest snapshot, but only once it is of this home.
 			const { latest, world } = session;
 			const live = !!latest.slice && !!world && world.raster.plan.id === house.plan.id;
-			house.slice.mesh.visible = live;
-			house.arrows.mesh.visible = live && view.layer === 'direction';
+			house.slice.mesh.visible = live && view.slice;
+			house.arrows.mesh.visible = live && view.slice && view.layer === 'direction';
 			tracers.setVisible(live && view.tracers);
 			smoke.setVisible(live);
 			if (live) {
 				const slice = latest.slice!;
 				const scale = { sensitivity: view.sensitivity, baseline: 0 };
-				house.slice.setHeight(slice.y);
-				house.slice.update(slice, view.layer, scale);
-				house.arrows.setHeight(slice.y);
-				if (view.layer === 'direction') house.arrows.update(slice, scale);
+				if (view.slice) {
+					house.slice.setHeight(slice.y);
+					house.slice.update(slice, view.layer, scale);
+					house.arrows.setHeight(slice.y);
+					if (view.layer === 'direction') house.arrows.update(slice, scale);
+				}
 				// The particles only need uploading when there are new positions, or the speed scale moved under the tracers.
 				if (latest.version !== version || scale.sensitivity !== sensitivity) {
 					version = latest.version;
@@ -270,16 +333,15 @@ export const createAirflowScene: SceneFactory<AirflowSceneParams, AirflowReadout
 				}
 			}
 
-			devices.update(setup.devices, session.simTime, planeY(), params.selected);
+			// A device's ring and arrow lie on the slice while it shows (it hides what stands below it), and round its feet while it does not.
+			devices.update(setup.devices, session.simTime, view.slice ? planeY() : FLOOR_SYMBOLS, params.selected);
 			editor.update(setup.devices.find((d) => d.id === params.selected));
 			editor.setGhost(params.drag);
 			markers.syncProbes(params.probes, readout.probes, view.units);
 			markers.update(dt, reduced);
 
-			// Settle the walls at the camera (all at once for reduced motion), and keep drawing while anything still moves.
-			const easing = dollhouse.update(camera, reduced ? Infinity : dt);
 			if (input.tick()) moving = true;
-			return moving || easing || markers.animating;
+			return moving || turning || easing || markers.animating;
 		},
 		dispose() {
 			input.reset();
@@ -292,7 +354,9 @@ export const createAirflowScene: SceneFactory<AirflowSceneParams, AirflowReadout
 			devices.dispose();
 			tracers.dispose();
 			smoke.dispose();
+			lighting.dispose();
+			materials.dispose();
 			disposeTree(scene);
 		}
 	};
-};
+}

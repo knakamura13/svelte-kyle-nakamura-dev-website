@@ -160,6 +160,17 @@ export class SimsCamera {
 		this.touched = true;
 	}
 
+	/** Puts the camera at a state at once, goal and all, within the usual limits: a link's `?camera=` (`cameraFromSearch`). */
+	jumpTo(state: Partial<CameraState>) {
+		Object.assign(this.goal, state);
+		this.goal.zoom = clampZoom(this.goal.zoom);
+		this.goal.tilt = clampTilt(this.goal.tilt, this.goal.zoom);
+		this.setFocus(this.goal.x, this.goal.z);
+		Object.assign(this.state, this.goal);
+		Object.assign(this.motion, still());
+		this.apply();
+	}
+
 	/**
 	 * Takes a pointer for the camera: a right or middle button, Alt with the left, or a finger the tools did not take. The page has
 	 * already offered a left press to the tools. Returns true when the camera took it.

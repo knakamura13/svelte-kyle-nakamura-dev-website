@@ -167,6 +167,24 @@ export function pose(state: CameraState, bounds: CameraBounds, far: number): Cam
 	};
 }
 
+/**
+ * A camera that `?camera=x,z,heading,zoom,tilt` in the address asks for, for QA and for screenshots: the focus in metres, the way the
+ * camera looks in degrees clockwise from north (as the page's `data-yaw` reports it), the zoom from 0 to 1 and the tilt in degrees.
+ * Missing or unreadable parts are left out; null when there is no such parameter.
+ */
+export function cameraFromSearch(search: string): Partial<CameraState> | null {
+	const asked = new URLSearchParams(search).get('camera');
+	if (!asked) return null;
+	const [x, z, heading, zoom, tilt] = asked.split(',').map((part) => (part.trim() === '' ? NaN : Number(part)));
+	const state: Partial<CameraState> = {};
+	if (Number.isFinite(x)) state.x = x;
+	if (Number.isFinite(z)) state.z = z;
+	if (Number.isFinite(heading)) state.yaw = wrapAngle(-heading * DEG);
+	if (Number.isFinite(zoom)) state.zoom = clampZoom(zoom);
+	if (Number.isFinite(tilt)) state.tilt = tilt * DEG;
+	return Object.keys(state).length ? state : null;
+}
+
 /** An angle brought into (-π, π]. */
 export function wrapAngle(angle: number): number {
 	const turn = Math.PI * 2;
