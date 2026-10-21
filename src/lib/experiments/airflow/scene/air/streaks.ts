@@ -54,6 +54,11 @@ export const MAX_PIXELS = 90;
  */
 export const NEAR_FADE: readonly [number, number] = [0.5, 2.0];
 /**
+ * Distances from the eye, m, over which a streak goes from a wisp (within the first: soft-headed, and stronger or fainter, wider or
+ * narrower than the next) to the plain streak of the views from further out (beyond the second), which check-in 2 approved as they are.
+ */
+export const NEAR_LOOK: readonly [number, number] = [3, 7];
+/**
  * A streak's width, m, as drawn near; it never draws thinner than 1.6 CSS pixels or wider than 4 (scaled by the pixel ratio). The low
  * tier (a phone) draws a third as many, on a screen drawn at fewer pixels than it has, so each is wider, or the air is a faint speckle.
  */
@@ -81,6 +86,7 @@ uniform float uTail;
 uniform float uMaxLength;
 uniform float uMaxPixels;
 uniform vec2 uNearFade;
+uniform vec2 uNearLook;
 uniform float uWidth;
 uniform vec2 uPixels;
 uniform vec2 uSpeedFade;
@@ -95,6 +101,7 @@ attribute float aParticle;
 varying vec2 vQuad;
 varying float vAlpha;
 varying vec3 vColor;
+varying float vNear;
 ${VOLUME_GLSL}
 ${MASK_GLSL}
 ${HASH_GLSL}
@@ -129,10 +136,12 @@ void main() {
 	// How far the head is from the eye, m, and how many device pixels a metre across the view takes there.
 	float distance = (viewMatrix * vec4(head, 1.0)).z * -1.0;
 	float perMetre = projectionMatrix[1][1] * 0.5 * uResolution.y / max(distance, 0.05);
-	// Each streak a little stronger or fainter and wider or narrower than the next, for its whole life, so the air is not a uniform hatching.
+	// Close to the eye each streak is a little stronger or fainter and wider or narrower than the next, for its whole life, so the air
+	// is not a uniform hatching; further out they are all alike, as they were.
+	float near = 1.0 - smoothstep(uNearLook.x, uNearLook.y, distance);
 	uint seed = uint(index) * 2654435761u + uint(extra.y);
-	float strength = mix(0.55, 1.0, hash01(seed, 101u));
-	float girth = mix(0.75, 1.3, hash01(seed, 211u));
+	float strength = mix(1.0, mix(0.55, 1.0, hash01(seed, 101u)), near);
+	float girth = mix(1.0, mix(0.75, 1.3, hash01(seed, 211u)), near);
 	float alpha = uOpacity * strength * smoothstep(0.0, uFadeIn, age) * smoothstep(0.0, uFadeOut, life - age) * smoothstep(uSpeedFade.x, uSpeedFade.y, speed);
 	// Near the eye the air is a veil: the streaks fade out within uNearFade of it.
 	alpha *= smoothstep(uNearFade.x, uNearFade.y, distance);
@@ -141,10 +150,15 @@ void main() {
 		hide();
 		return;
 	}
+	// How steeply the air at the head rises or falls: 0 level, 1 straight up or down.
+	float upright = abs(velocity.y) / max(speed, 1e-4);
 	// This vertex's point: traced back from the head through the air (midpoint rule, never through a wall) for its share of the
 	// tail, which is no longer than the streak has lived, than uMaxLength, or than uMaxPixels on the screen. So a tail bends with the
-	// flow it came along, and a streak close to the eye is a short flick rather than a long dash across the view.
-	float onScreen = uMaxPixels * uPixelRatio / max(speed * perMetre, 1e-4);
+	// flow it came along, and a streak close to the eye is a short flick rather than a long dash across the view. Each streak's reach on
+	// the screen is a little different from the next, and one in air that rises or falls steeply reaches about half as far: a fall of air
+	// from a window is short flicks of different lengths, not the even, upright dashes of rain.
+	float reach = mix(0.55, 1.0, hash01(seed, 307u)) * mix(1.0, 0.45, smoothstep(0.5, 0.92, upright));
+	float onScreen = uMaxPixels * reach * uPixelRatio / max(speed * perMetre, 1e-4);
 	float back = position.x * min(min(uTail, age), min(uMaxLength / max(speed, 1e-3), onScreen));
 	int steps = int(ceil(position.x * float(SEGMENTS) - 0.001));
 	float h = back / max(float(steps), 1.0);
@@ -180,6 +194,7 @@ void main() {
 	clip.xy += (side * position.y + along * cap) * 0.5 * drawn / halfSize * clip.w;
 	gl_Position = clip;
 	vQuad = vec2(1.0 - position.x, position.y);
+	vNear = near;
 	vAlpha = alpha;
 	// The overlay's quantity at this point of the streak on the overlay's palette (streakColor in legend.ts), or the air's own colour.
 	if (uColored > 0.5) {
@@ -194,15 +209,16 @@ const FRAGMENT = /* glsl */ `
 varying vec2 vQuad;
 varying float vAlpha;
 varying vec3 vColor;
+varying float vNear;
 
 void main() {
-	// Soft across, and along it a wisp rather than a drop: it swells from nothing at the tail to its fullest a little behind the head,
-	// and the head itself is soft, where a falling drop's would be its brightest and sharpest point. At the tail vQuad.x is 0, and
-	// interpolated it can come out a hair below: pow of a negative number is NaN, and one NaN pixel, blurred by the bloom, blanks the
-	// whole picture. So it is clamped, and anything that is not a number is discarded.
+	// Soft across, and fading from the head back to the tail. Close to the eye it is a wisp rather than a drop: it swells from nothing
+	// at the tail to its fullest a little behind the head, and the head itself is soft, where a falling drop's would be its brightest and
+	// sharpest point. At the tail vQuad.x is 0, and interpolated it can come out a hair below: pow of a negative number is NaN, and one
+	// NaN pixel, blurred by the bloom, blanks the whole picture. So it is clamped, and anything that is not a number is discarded.
 	float across = 1.0 - smoothstep(0.25, 1.0, abs(vQuad.y));
 	float t = clamp(vQuad.x, 0.0, 1.0);
-	float alpha = vAlpha * across * pow(t, 1.3) * (1.0 - 0.85 * smoothstep(0.72, 1.0, t));
+	float alpha = vAlpha * across * pow(t, mix(1.6, 1.3, vNear)) * (1.0 - 0.85 * vNear * smoothstep(0.72, 1.0, t));
 	if (!(alpha >= 0.002)) discard;
 	gl_FragColor = vec4(vColor, alpha);
 	#include <colorspace_fragment>
@@ -235,6 +251,7 @@ export class Streaks {
 				uMaxLength: { value: MAX_LENGTH },
 				uMaxPixels: { value: MAX_PIXELS },
 				uNearFade: { value: new Vector2(...NEAR_FADE) },
+				uNearLook: { value: new Vector2(...NEAR_LOOK) },
 				uWidth: { value: WIDTH },
 				uPixels: { value: new Vector2(...PIXELS) },
 				uSpeedFade: { value: new Vector2(...SPEED_FADE) },

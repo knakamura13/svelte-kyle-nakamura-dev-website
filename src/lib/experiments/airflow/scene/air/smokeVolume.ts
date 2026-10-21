@@ -44,11 +44,11 @@ export const SMOKE_LOOK = {
 	decades: 2.5,
 	/**
 	 * Extinction of thick smoke (`dense`), per metre, and the power of the concentration it grows with. The plume a cooking burst makes,
-	 * about `dense` near its source and half a metre across, hides most of what is behind it (five sixths); a room of smoke a tenth as
-	 * strong tints what is behind it by about an eighth across four metres. Above `cap` times `dense` it is no thicker. Lighter than
+	 * about `dense` near its source and half a metre across, hides most of what is behind it (six sevenths); a room of smoke a tenth as
+	 * strong tints what is behind it by about a seventh across four metres. Above `cap` times `dense` it is no thicker. Lighter than
 	 * the soft volume of check-in 2, so that a room a burst has filled is not one white wall and the wisps of `SMOKE_DETAIL` show in it.
 	 */
-	extinction: 3.5,
+	extinction: 4,
 	power: 2,
 	cap: 6,
 	/** The share of the light smoke scatters, as a colour: a cool grey-white, so the late sun on it reads as smoke rather than as the walls' cream. */
@@ -61,16 +61,17 @@ export const SMOKE_LOOK = {
 
 /**
  * The smoke's detail: the field averages blocks of solver cells, so on its own it draws a soft cloud. A tiling noise (`noise.ts`) is
- * carried by the simulated air through the smoke and gathers the smoke the field holds into thin, curling sheets, the ridges of the
- * noise where it crosses its middle, drawn out along the flow: seen edge on, a sheet is a wisp. Thin smoke (low on the log scale of
- * `SMOKE_LOOK`) is all sheets; thick smoke keeps some of its body between them, so a plume's core billows and its edges fray. It never
- * adds smoke where the field has none, and on average it keeps as much as the field holds.
+ * carried by the simulated air through the smoke, drawn out along the flow, and shapes the smoke the field holds there. Thick smoke (the
+ * core of a plume, from about twice `SMOKE_LOOK.dense`) billows: it keeps its body where the noise is above a low threshold, with pockets
+ * where it is not. Thin smoke (its edges) frays: it is gathered onto the noise's ridges, curling sheets that read as wisps edge on. The
+ * smoke also shades itself, its insides and undersides darker under the smoke above them, so the billows have form. Nothing is added
+ * where the field has no smoke, and a region keeps about the smoke it holds.
  */
 export const SMOKE_DETAIL = {
-	/** How strongly the noise gathers the smoke, 0 (the field as it is) to 1. */
+	/** How strongly the noise shapes the smoke, 0 (the field as it is) to 1. */
 	strength: 1,
-	/** The noise's tile, m: its coarsest features are half of it across, its finest a sixteenth. */
-	scale: 3,
+	/** The noise's tile, m: its coarsest features are half of it across, its finest about a sixteenth. */
+	scale: 2,
 	/**
 	 * Seconds a copy of the noise is carried by the air before it is renewed. Two copies half a period apart are blended, each fading
 	 * out as it gets old and stretched (the flow noise of Neyret, "Advected textures", 2003).
@@ -79,10 +80,17 @@ export const SMOKE_DETAIL = {
 	/** How much the noise is drawn out along fast air (its features that much longer along the flow), at and above `stretchSpeed` m/s. */
 	stretch: 3,
 	stretchSpeed: 0.5,
-	/** How thin the sheets are: the power the ridge is raised to (the higher, the thinner and denser each sheet). */
-	sharpness: 6,
-	/** The share of the field's smoke left as it is between the sheets, for the thinnest smoke and for the thickest. */
-	body: [0, 0.15] as readonly [number, number]
+	/** How thin a wisp is: the power the noise's ridge is raised to. */
+	sharpness: 5,
+	/** The noise's threshold under which thick smoke and thin smoke have pockets. */
+	billow: [0.3, 0.5] as readonly [number, number],
+	/**
+	 * Where smoke goes from thin to thick, as decades of its concentration over `SMOKE_LOOK.dense`: the smoke that shows at all is from about
+	 * a fifth of `dense` (an extinction of a sixth of a metre) up, so that is the thin end, and twice `dense` the thick one.
+	 */
+	thick: [-0.65, 0.3] as readonly [number, number],
+	/** How much the smoke above a point darkens the sky's light on it, per unit of optical depth. */
+	shade: 0.8
 } as const;
 
 /** Blending for colour already multiplied by its opacity, as the marches draw into their target. */
@@ -129,8 +137,9 @@ uniform float uNoiseScale;
 uniform float uPeriod;
 uniform vec2 uStretch;
 uniform float uSharpness;
-uniform vec2 uBody;
-uniform float uDecades;
+uniform vec2 uBillow;
+uniform vec2 uThick;
+uniform float uShade;
 varying vec3 vWorld;
 ${VOLUME_GLSL}
 ${HASH_GLSL}
@@ -154,37 +163,48 @@ float extinction(vec3 p) {
 	return extinctionOf(airLook(p).b);
 }
 
+/** The same from the newer read alone: one fetch, for the light's samples, which a tenth of a second's blend changes by nothing seen. */
+float extinctionNow(vec3 p) {
+	return extinctionOf(texture(uLookB, p / uExtent).b);
+}
+
 /**
- * The sheets at p: 0 between them to about uSharpness + 1 on them, 1 on average. The noise is carried by the air (velocity v, m/s) and
- * drawn out along it, and warped by a finer copy of itself, so its ridges (where it crosses its middle) curl. Two copies, half a
- * period apart, are each carried from where they began their period; each fades out as it nears its end, when the other is fresh.
+ * The detail's noise at p, 0 to 1 and evenly spread: carried by the air (velocity v, m/s) and drawn out along it, warped by a finer copy
+ * of itself so its shapes curl, in two copies half a period apart, each carried from where it began its period and fading out as it
+ * nears its end, when the other is fresh. Two noises blended lose contrast in the middle of the blend, so it is given back.
  */
-float sheets(vec3 p, vec3 v) {
+float detail(vec3 p, vec3 v) {
 	float speed = length(v);
 	vec3 along = speed > 1e-4 ? v / speed : vec3(0.0, 1.0, 0.0);
 	float squash = 1.0 / mix(1.0, uStretch.x, smoothstep(0.0, uStretch.y, speed));
 	float clock = fract(uTime / uPeriod);
 	float sum = 0.0;
+	float weights = 0.0;
 	for (int k = 0; k < 2; k++) {
 		float phase = fract(clock + 0.5 * float(k));
+		float w = 1.0 - abs(2.0 * phase - 1.0);
 		vec3 q = p - v * (phase * uPeriod);
 		float parallel = dot(q, along);
 		q += along * (parallel * squash - parallel);
 		q = q / uNoiseScale + float(k) * vec3(0.31, 0.57, 0.13);
-		q += 0.35 * (texture(uNoise, q * 2.03 + 0.37).r - 0.5);
-		float ridge = 1.0 - abs(2.0 * texture(uNoise, q).r - 1.0);
-		sum += (1.0 - abs(2.0 * phase - 1.0)) * pow(ridge, uSharpness) * (uSharpness + 1.0);
+		float fine = texture(uNoise, q * 2.03 + 0.37).r;
+		sum += w * (0.74 * texture(uNoise, q + 0.32 * (fine - 0.5)).r + 0.26 * fine);
+		weights += w * w;
 	}
-	return sum;
+	return clamp(0.5 + (sum - 0.5) / sqrt(max(weights, 0.25)) * 1.25, 0.0, 1.0);
 }
 
 /**
- * What the detail leaves of smoke whose look is at \`level\` (0 thin to 1 thick, on the log scale of SMOKE_LOOK), as a factor of its
- * extinction: the sheets, with some of the smoke's body kept between them, more of it in thick smoke.
+ * What the detail leaves of smoke of concentration c, as a factor of its extinction: thick smoke billows round pockets where the noise is
+ * low, thin smoke (the edges of a plume) is gathered onto the noise's ridges, and what is left is that much denser, so a region keeps
+ * about the smoke it holds.
  */
-float wisps(float sheet, float level) {
-	float body = mix(uBody.x, uBody.y, smoothstep(0.1, 0.9, level));
-	return mix(1.0, mix(sheet, 1.0, body), uDetail);
+float wisps(float n, float c) {
+	float thick = smoothstep(uThick.x, uThick.y, log2(max(c / uDense, 1e-6)) * 0.30102999566);
+	float threshold = mix(uBillow.y, uBillow.x, thick);
+	float billow = smoothstep(threshold - 0.1, threshold + 0.1, n) / (1.0 - threshold);
+	float ridge = pow(1.0 - abs(2.0 * n - 1.0), uSharpness) * (uSharpness + 1.0);
+	return mix(1.0, mix(ridge, billow, thick), uDetail);
 }
 
 void main() {
@@ -204,24 +224,25 @@ void main() {
 	float phase2 = henyeyGreenstein(cosine, 0.25 * uAnisotropy);
 	vec3 light = vec3(0.0);
 	float transmittance = 1.0;
-	float denseLog = log2(uDense) * 0.30102999566;
 	for (int i = 0; i < 160; i++) {
 		if (float(i) >= steps) break;
 		vec3 p = origin + direction * t;
 		float c = airLook(p).b;
 		float sigma = extinctionOf(c);
 		if (sigma > 1e-3) {
-			// The field's own smoke, broken into wisps by the detail the air carries.
-			float level = clamp((log2(c) * 0.30102999566 - denseLog) / uDecades + 1.0, 0.0, 1.0);
-			sigma *= wisps(sheets(p, airVelocity(p)), level);
+			// The field's own smoke, shaped by the detail the air carries.
+			sigma *= wisps(detail(p, texture(uVelocityB, p / uExtent).xyz), c);
 		}
 		if (sigma > 1e-3) {
 			// The smoke between here and the sun, from two samples toward it. Light that smoke has scattered more than once gets through
 			// more of it and less in one direction (the octaves of Wrenninge et al.), which keeps thick smoke white rather than grey.
-			// A sheet of the detail shades itself too, over the few centimetres of its own depth, so a dense wisp is darker than its edges.
-			float toward = extinction(p + uSunDirection * 0.12) * 0.18 + extinction(p + uSunDirection * 0.42) * 0.42 + sigma * 0.05;
+			// A wisp shades itself too, over the few centimetres of its own depth, so a dense one is darker than its edges.
+			float toward = extinctionNow(p + uSunDirection * 0.12) * 0.18 + extinctionNow(p + uSunDirection * 0.42) * 0.42 + sigma * 0.05;
 			float sun = (phase0 * exp(-toward) + 0.5 * phase1 * exp(-0.5 * toward) + 0.25 * phase2 * exp(-0.25 * toward)) / 1.75;
-			vec3 lit = uSkyLight * BOUNCE + uSunLight * sun;
+			// The sky's light and the room's comes mostly from above: the smoke over a point dims it, so a plume's underside and middle are
+			// darker than its top and its edges, and its billows have form.
+			float over = extinctionNow(p + vec3(0.0, 0.2, 0.0)) * 0.2 + extinctionNow(p + vec3(0.0, 0.55, 0.0)) * 0.35;
+			vec3 lit = uSkyLight * BOUNCE * mix(0.42, 1.0, exp(-uShade * over)) + uSunLight * sun;
 			float alpha = 1.0 - exp(-sigma * dt);
 			light += transmittance * alpha * uAlbedo * lit;
 			transmittance *= 1.0 - alpha;
@@ -302,8 +323,9 @@ export class SmokeVolume {
 				uPeriod: { value: SMOKE_DETAIL.period },
 				uStretch: { value: new Vector2(SMOKE_DETAIL.stretch, SMOKE_DETAIL.stretchSpeed) },
 				uSharpness: { value: SMOKE_DETAIL.sharpness },
-				uBody: { value: new Vector2(...SMOKE_DETAIL.body) },
-				uDecades: { value: SMOKE_LOOK.decades }
+				uBillow: { value: new Vector2(...SMOKE_DETAIL.billow) },
+				uThick: { value: new Vector2(...SMOKE_DETAIL.thick) },
+				uShade: { value: SMOKE_DETAIL.shade }
 			},
 			side: BackSide,
 			transparent: true,
@@ -328,7 +350,7 @@ export class SmokeVolume {
 		this.mesh.visible = max.x > min.x && max.y > min.y && max.z > min.z;
 		this.mesh.position.copy(min);
 		this.mesh.scale.set(Math.max(1e-3, max.x - min.x), Math.max(1e-3, max.y - min.y), Math.max(1e-3, max.z - min.z));
-		uniforms.uStep.value = Math.max(0.03, 0.5 * step);
+		uniforms.uStep.value = Math.max(0.03, 0.4 * step);
 	}
 
 	setMaxSteps(steps: number) {
