@@ -258,6 +258,26 @@ const grainWood: Paint = (data, size) => {
 		}
 };
 
+/**
+ * Soft, tileable fractal noise as plain numbers in [0, 1] (grey, no colour space), `size` pixels a side with `cells` lattice cells
+ * across its coarsest octave: for breaking up a texture's repeat over a large surface.
+ */
+export function noiseTexture(size: number, cells: number, octaves: number, seed: number): CanvasTexture {
+	const noise = fbm(cells, cells, octaves, seed);
+	const texture = canvasTexture(
+		size,
+		(data, n) => {
+			for (let y = 0; y < n; y++)
+				for (let x = 0; x < n; x++) {
+					const value = 255 * noise(x / n, y / n);
+					put(data, (x + y * n) * 4, value, value, value);
+				}
+		},
+		false
+	);
+	return texture;
+}
+
 export type TextureName = 'wood-floor' | 'stone-tile' | 'bath-tile' | 'plaster' | 'siding' | 'paving' | 'grass' | 'weave' | 'grain';
 
 const RECIPES: Record<TextureName, { size: number; paint: Paint; color: boolean }> = {

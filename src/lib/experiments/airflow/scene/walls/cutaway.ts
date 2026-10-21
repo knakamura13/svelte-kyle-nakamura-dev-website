@@ -25,6 +25,11 @@ export interface WallLine {
 	az: number;
 	bx: number;
 	bz: number;
+	/**
+	 * For an outside wall, which side of the line is outdoors: 1 for its left seen from a to b, -1 for its right. Absent (or 0) for a
+	 * wall inside the Home.
+	 */
+	outdoors?: -1 | 0 | 1;
 }
 
 export interface CutawayView {
@@ -34,6 +39,11 @@ export interface CutawayView {
 	focus: { x: number; z: number };
 	/** How far past a wall's ends, m, a line of sight may cross the wall's line and still count as crossing the wall. */
 	corridor: number;
+	/**
+	 * How far out the camera is, 0 (eye level) to 1 (bird's-eye). From `FAR_ZOOM` out, every wall that faces the camera drops as
+	 * well, as The Sims cuts a whole house open from above. Absent: only the line of sight counts.
+	 */
+	zoom?: number;
 }
 
 /** A camera this close to a wall's line, m, is in it (or right at its face): the wall drops. */
@@ -42,6 +52,15 @@ const IN_WALL = 0.3;
 const ON_LINE = 0.05;
 /** A cut wall stays cut until the camera is this much further past it, m. */
 const KEEP = 0.25;
+/** From this zoom out, walls that face the camera drop: inside walls, and outside walls seen from outdoors. A cut wall keeps its cut to a little closer in. */
+export const FAR_ZOOM = 0.5;
+const FAR_KEEP = 0.04;
+/**
+ * How square to the line of sight a wall must be to face the camera: the cosine between its normal and the view, seen from above. 0.6
+ * is about 53°, so at a three-quarter view both runs of a square plan drop, and looking along one run only the walls across it do.
+ */
+const FACING = 0.6;
+const FACING_KEEP = 0.06;
 
 /** The corridor for a zoom (0 at eye level, 1 at bird's-eye), m: narrow close in, wide far out. */
 export function corridorFor(zoom: number): number {
@@ -53,6 +72,10 @@ export function corridorFor(zoom: number): number {
 /** Whether each wall is cut in cutaway mode. `previous` is the last answer, for walls that were cut and should stay so a little longer. */
 export function cutWalls(walls: readonly WallLine[], view: CutawayView, previous?: readonly boolean[]): boolean[] {
 	const { camera, focus } = view;
+	// The line of sight seen from above, for the far rule.
+	const vx = focus.x - camera.x;
+	const vz = focus.z - camera.z;
+	const vl = Math.hypot(vx, vz);
 	return walls.map((wall, n) => {
 		const was = previous?.length === walls.length ? previous[n] : false;
 		const keep = was ? KEEP : 0;
@@ -67,6 +90,12 @@ export function cutWalls(walls: readonly WallLine[], view: CutawayView, previous
 		const along = (x: number, z: number) => ux * (x - wall.ax) + uz * (z - wall.az);
 		const sc = side(camera.x, camera.z);
 		const sf = side(focus.x, focus.z);
+		// Far out, a wall that faces the camera drops: any inside wall, and an outside wall seen from outdoors. The walls that run along
+		// the line of sight and the far side of the Home stand, so the rooms keep their shape.
+		if (view.zoom !== undefined && view.zoom >= FAR_ZOOM - (was ? FAR_KEEP : 0) && vl > 1e-6) {
+			const facing = Math.abs((vx * -uz + vz * ux) / vl);
+			if (facing > FACING - (was ? FACING_KEEP : 0) && (!wall.outdoors || Math.sign(sc) === wall.outdoors)) return true;
+		}
 		// The camera stands in the wall, or at its face.
 		if (Math.abs(sc) < IN_WALL + keep) {
 			const u = along(camera.x, camera.z);
