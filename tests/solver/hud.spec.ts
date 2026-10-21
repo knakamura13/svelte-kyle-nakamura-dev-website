@@ -18,7 +18,7 @@ import { ROOM_TINTS, homeCard, planThumbnail } from '../../src/lib/experiments/a
 import { inventory, menuFor, openingState, powerState, probeCards, targetWords, type HomeContext } from '../../src/lib/experiments/airflow/ui/hud/inventory';
 import { placeCard } from '../../src/lib/experiments/airflow/ui/hud/layout';
 import { deviceMenu, openingMenu } from '../../src/lib/experiments/airflow/ui/hud/menus';
-import { AIR_PRESETS, WIND_PRESETS, activePreset, airPreset, stepValue, WINDOW_PRESETS } from '../../src/lib/experiments/airflow/ui/hud/presets';
+import { AIR_PRESETS, BEAUFORT, KNOT, PM25_AQI, WIND_PRESETS, activePreset, airPreset, aqiCategory, beaufortForce, stepValue, WINDOW_PRESETS } from '../../src/lib/experiments/airflow/ui/hud/presets';
 import { OVERLAYS, overlayOfLayer } from '../../src/lib/experiments/airflow/ui/hud/tools';
 
 /** The HUD's pure parts (milestone 3 of the immersive redesign): the compass dial, the presets, the card placement, the menu models and picking. */
@@ -75,6 +75,72 @@ test.describe('presets', () => {
 		}
 		expect(activePreset(WINDOW_PRESETS, 0.5)?.id).toBe('half');
 		expect(activePreset(WINDOW_PRESETS, 0.3)).toBeNull();
+	});
+
+	test('each outdoor air preset is in the AQI category it names, by the EPA’s PM2.5 breakpoints (May 2026 TAD, Table 6)', () => {
+		// The published table, transcribed: the top of each category, µg/m³, 24-hour mean.
+		expect(PM25_AQI.map((band) => [band.category, band.upTo])).toEqual([
+			['Good', 9.0],
+			['Moderate', 35.4],
+			['Unhealthy for Sensitive Groups', 55.4],
+			['Unhealthy', 125.4],
+			['Very Unhealthy', 225.4],
+			['Hazardous', Infinity]
+		]);
+		expect(PM25_AQI.map((band) => band.aqi)).toEqual([
+			[0, 50],
+			[51, 100],
+			[101, 150],
+			[151, 200],
+			[201, 300],
+			[301, 500]
+		]);
+		// The edges: a concentration is truncated to one decimal, and Hazardous goes on past the AQI's 500 (325.4 µg/m³).
+		expect([9.0, 9.05, 9.1, 35.4, 35.49, 35.5, 125.5, 225.4, 225.5, 325.4, 500].map(aqiCategory)).toEqual([
+			'Good',
+			'Good',
+			'Moderate',
+			'Moderate',
+			'Moderate',
+			'Unhealthy for Sensitive Groups',
+			'Very Unhealthy',
+			'Very Unhealthy',
+			'Hazardous',
+			'Hazardous',
+			'Hazardous'
+		]);
+		for (const preset of AIR_PRESETS) expect(aqiCategory(preset.value), preset.id).toBe(preset.category);
+		expect(AIR_PRESETS.map((preset) => preset.category)).toEqual(['Good', 'Moderate', 'Very Unhealthy', 'Hazardous']);
+	});
+
+	test('each wind preset is its Beaufort force’s mean on the control’s step, and inside that force’s limits', () => {
+		// The published scale in knots (NWS Storm Prediction Center; the Met Office gives the same limits and the means).
+		expect(Object.values(BEAUFORT).map((band) => [band.force, band.knots[0], band.knots[1], band.mean])).toEqual([
+			[0, 0, 0.99, 0],
+			[1, 1, 3, 2],
+			[2, 4, 6, 5],
+			[3, 7, 10, 9],
+			[4, 11, 16, 13],
+			[5, 17, 21, 19],
+			[6, 22, 27, 24],
+			[7, 28, 33, 30]
+		]);
+		close(KNOT, 0.514444, 6);
+		expect(WIND_PRESETS.map((preset) => [preset.id, preset.label, preset.value])).toEqual([
+			['calm', 'Calm', 0],
+			['light', 'Light breeze', 2.5],
+			['gentle', 'Gentle breeze', 4.5],
+			['fresh', 'Fresh breeze', 10],
+			['strong', 'Strong breeze', 12.5]
+		]);
+		for (const preset of WIND_PRESETS) {
+			expect(beaufortForce(preset.value), preset.id).toBe(preset.force);
+			const band = Object.values(BEAUFORT).find((b) => b.force === preset.force)!;
+			// The mean, in m/s, is within half a step of the preset.
+			expect(Math.abs(band.mean * KNOT - preset.value), preset.id).toBeLessThanOrEqual(0.25);
+		}
+		// A speed is rounded to whole knots first, so a force begins half a knot below its lowest whole knot.
+		expect([0, 0.25, 0.6, 1.5, 3.4, 5.6, 8.6, 11.5, 14.5, 20].map(beaufortForce)).toEqual([0, 0, 1, 1, 3, 4, 5, 6, 7, 8]);
 	});
 
 	test('a stepper moves one step of the visitor’s units and stops at the limits', () => {
