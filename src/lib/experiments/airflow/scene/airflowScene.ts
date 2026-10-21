@@ -5,6 +5,7 @@ import type { RigSetup, SceneFactory } from '$lib/experiments/engine/types';
 import type { DeviceModel } from '../devices/types';
 import type { HomePlan } from '../homes/types';
 import type { AirflowReadout } from '../readouts';
+import type { Target } from '../state';
 import { chooseBackend } from '../sim/backends';
 import { cellFromSearch, detectSmallDevice } from '../sim/device';
 import { SMOKE, SMOKE_DENSE, SimulationSession, TRACERS, type SessionParams } from '../sim/session';
@@ -18,6 +19,7 @@ import { AirflowInput } from './input';
 import { Markers } from './markers';
 import { SmokePoints, TracerPoints } from './particles';
 import { pointOnPlane, pointOnSurface } from './pick';
+import { Selection, ToolInput, type DragPreview, type SelectionParams } from './selection';
 import { SliceLayer } from './sliceLayer';
 
 /** The Stage's tint: the site's mist, so the 3D view matches the page around it. */
@@ -33,7 +35,11 @@ const COMPASS_OFFSET = 0.7;
  * What the scene reads and calls. The page's `AirflowExperience` is this object: the scene reads `setup`, `view`,
  * `clock`, `probes`, `emission` and the rest each frame, and writes `readout`.
  */
-export interface AirflowSceneParams extends SessionParams {
+export interface AirflowSceneParams extends SessionParams, SelectionParams {
+	/** The HUD is over the world (`?hud`): clicks follow its tool, and the chosen and hovered things are outlined. Read once. */
+	hud: boolean;
+	/** A device the HUD is carrying, which a click puts down instead of choosing what is under it. */
+	carry: object | null;
 	plans: readonly HomePlan[];
 	models: readonly DeviceModel[];
 	/** Pins a probe at a point of the slice. Returns its id, or null when the home already holds the most it allows. */
@@ -46,14 +52,18 @@ export interface AirflowSceneParams extends SessionParams {
 	announce(message: string): void;
 	/** The device whose handles are showing, and the one being dragged from the Dock's tray with where it would land (null for neither). */
 	selected: string | null;
-	drag: { model: string; x: number; y: number; z: number; ok: boolean; reason: string | null } | null;
+	drag: DragPreview | null;
 	selectDevice(id: string | null): void;
 	/** Moves a placed device to where the pointer took it, turns it to face a bearing, aims it up or down. Each says what it did, politely, once the visitor stops. */
 	moveDevice(id: string, x: number, z: number): string | null;
 	turnDevice(id: string, yaw: number): void;
 	aimDevice(id: string, tilt: number): void;
-	/** What the Dock needs from the Stage to drag a device in from its tray: whether a screen point is over the Stage, and the floor or furniture it is over. */
-	bridge: { pick?: (clientX: number, clientY: number) => Point3 | null; over?: (clientX: number, clientY: number) => boolean };
+	/** What the Dock needs from the Stage to drag a device in from its tray: whether a screen point is over the Stage, and the floor or furniture it is over; and where the HUD hangs a thing's menu. */
+	bridge: {
+		pick?: (clientX: number, clientY: number) => Point3 | null;
+		over?: (clientX: number, clientY: number) => boolean;
+		anchor?: (target: Target) => { x: number; y: number } | null;
+	};
 }
 
 /** Everything that belongs to one home, so a new plan swaps it as a piece. */
@@ -196,11 +206,27 @@ export const createAirflowScene: SceneFactory<AirflowSceneParams, AirflowReadout
 		}
 	});
 
+	// The HUD (redesign milestone 3): what a click chooses, the outlines of the chosen and hovered things, the carried ghost, where a menu hangs, and clicks that follow the tool.
+	const selection = params.hud ? new Selection({ camera, rect: host.rect, plan: () => house.plan, models, params }) : null;
+	if (selection) scene.add(selection.group);
+	params.bridge.anchor = (target) => selection?.anchor(target) ?? null;
+	const tools = selection && new ToolInput(input, {
+		tool: () => params.tool,
+		pickAt: (at, kinds) => selection.pickAt(at, kinds),
+		grab: (at) => {
+			const grab = editor.grabAt(at, params.selected);
+			return grab && { device: grab.id, body: grab.part === 'body' };
+		},
+		select: (target, menu) => params.select(target, menu),
+		hover: (target) => params.hover(target),
+		carrying: () => !!params.carry
+	});
+
 	return {
 		scene,
 		camera,
 		rig: dollhouseRig(house.plan, params.view.topDown),
-		input,
+		input: tools ?? input,
 		framing() {
 			const { topDown } = params.view;
 			if (!framed || framed.plan !== house.plan.id || framed.topDown !== topDown) framed = { plan: house.plan.id, topDown, setup: dollhouseRig(house.plan, topDown) };
@@ -250,7 +276,7 @@ export const createAirflowScene: SceneFactory<AirflowSceneParams, AirflowReadout
 			// The newest snapshot, but only once it is of this home.
 			const { latest, world } = session;
 			const live = !!latest.slice && !!world && world.raster.plan.id === house.plan.id;
-			house.slice.mesh.visible = live;
+			house.slice.mesh.visible = live && view.overlay !== 'off';
 			house.arrows.mesh.visible = live && view.layer === 'direction';
 			tracers.setVisible(live && view.tracers);
 			smoke.setVisible(live);
@@ -272,7 +298,8 @@ export const createAirflowScene: SceneFactory<AirflowSceneParams, AirflowReadout
 
 			devices.update(setup.devices, session.simTime, planeY(), params.selected);
 			editor.update(setup.devices.find((d) => d.id === params.selected));
-			editor.setGhost(params.drag);
+			editor.setGhost(selection ? null : params.drag);
+			if (selection?.update(dt, host.reducedMotion())) moving = true;
 			markers.syncProbes(params.probes, readout.probes, view.units);
 			markers.update(dt, reduced);
 
@@ -288,6 +315,7 @@ export const createAirflowScene: SceneFactory<AirflowSceneParams, AirflowReadout
 			backend.dispose();
 			disposeHouse(house);
 			markers.dispose();
+			selection?.dispose();
 			editor.dispose();
 			devices.dispose();
 			tracers.dispose();
