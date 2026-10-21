@@ -98,18 +98,131 @@ export function farDistance(bounds: CameraBounds, fov: number, aspect: number): 
 }
 
 /**
- * On a screen taller than it is wide (a phone held upright) the default view is from nearly bird's-eye, tilted back a little, and
- * turned to look along the Home's long side, so its length runs up the screen and all of it fits.
+ * The part of the view the camera frames the home in, as insets from each edge, CSS px: on a phone, the screen between the top bar and
+ * the toolbar, with room over the toolbar for a sheet at its peek (`ui/hud/Hud.svelte`). Null frames the whole view.
  */
-export const PORTRAIT_YAW = -70 * DEG;
+export interface ViewFrame {
+	top: number;
+	right: number;
+	bottom: number;
+	left: number;
+}
+
+/** The narrowest a frame may leave the view, as a share of its width or height, so a frame from a HUD caught mid-layout cannot squash it. */
+const FRAME_LEAST = 0.3;
+
+/**
+ * The lens for a frame: the vertical field of view and the aspect of the framed part of the view (for `farDistance`), and how far its
+ * middle is from the view's middle, px right and down, which the camera shifts its picture by so that what it looks at is in the
+ * middle of the frame. The picture keeps its scale: a pixel is the same angle with or without a frame.
+ */
+export function frameLens(view: { width: number; height: number }, frame: ViewFrame | null, fov: number): { fov: number; aspect: number; shift: { x: number; y: number } } {
+	const width = Math.max(1, view.width);
+	const height = Math.max(1, view.height);
+	if (!frame) return { fov, aspect: width / height, shift: { x: 0, y: 0 } };
+	const inner = { width: Math.max(width * FRAME_LEAST, width - frame.left - frame.right), height: Math.max(height * FRAME_LEAST, height - frame.top - frame.bottom) };
+	// The frame's middle, clamped so that a squashed frame still has its middle inside the view.
+	const x = Math.min(width - inner.width / 2, Math.max(inner.width / 2, frame.left + inner.width / 2));
+	const y = Math.min(height - inner.height / 2, Math.max(inner.height / 2, frame.top + inner.height / 2));
+	return {
+		fov: 2 * Math.atan(Math.tan(fov / 2) * (inner.height / height)),
+		aspect: inner.width / inner.height,
+		shift: { x: x - width / 2, y: y - height / 2 }
+	};
+}
+
+/**
+ * On a screen taller than it is wide (a phone held upright) the default view is from nearly bird's-eye, tilted back a little, and
+ * turned to look along the Home's long side, so its length runs up the screen and all of it fits. Turned a little off the long side,
+ * so the walls still read in three quarters, but less than a desktop's view: each degree further round widens the Home on a narrow screen.
+ */
+export const PORTRAIT_YAW = -76 * DEG;
 export const PORTRAIT_TILT = -14 * DEG;
 export const PORTRAIT_ZOOM = 0.88;
+/**
+ * A framed default view (a phone's) comes in as close as keeps the whole Home in the frame: its walls, and this much ground round its
+ * footprint, m, inside this share of the frame's half-width and half-height.
+ */
+export const FIT_GROUND = 0.5;
+export const FIT_FILL = 0.94;
+
+/** What the default view fits the Home to: the frame's lens (`frameLens`) and the bird's-eye distance (`farDistance`) for it. */
+export interface ViewFit {
+	fov: number;
+	aspect: number;
+	far: number;
+}
 
 /** The default view of a Home: its middle, from the south-west, far enough out to see all of it on a screen of this `aspect` (width over height). */
-export function homeView(bounds: CameraBounds, aspect = 1.6): CameraState {
+export function homeView(bounds: CameraBounds, aspect = 1.6, fit?: ViewFit): CameraState {
 	const middle = { x: bounds.width / 2, z: bounds.depth / 2 };
-	if (aspect < 1) return { ...middle, yaw: bounds.width >= bounds.depth ? PORTRAIT_YAW : HOME_YAW, zoom: PORTRAIT_ZOOM, tilt: PORTRAIT_TILT };
+	if (aspect < 1) {
+		const view = { ...middle, yaw: bounds.width >= bounds.depth ? PORTRAIT_YAW : HOME_YAW, zoom: PORTRAIT_ZOOM, tilt: PORTRAIT_TILT };
+		return fit ? { ...view, zoom: fitZoom(view, bounds, fit) } : view;
+	}
 	return { ...middle, yaw: HOME_YAW, zoom: HOME_ZOOM, tilt: HOME_TILT };
+}
+
+/** The corners a framed view keeps in sight: the footprint, `ground` m out, on the floor, and the tops of the outside walls. */
+export function homeCorners(bounds: CameraBounds, ground = FIT_GROUND): [number, number, number][] {
+	const corners: [number, number, number][] = [];
+	for (const [x, z] of [
+		[0, 0],
+		[1, 0],
+		[0, 1],
+		[1, 1]
+	]) {
+		corners.push([x ? bounds.width + ground : -ground, 0, z ? bounds.depth + ground : -ground]);
+		corners.push([x ? bounds.width : 0, bounds.ceiling, z ? bounds.depth : 0]);
+	}
+	return corners;
+}
+
+/**
+ * Where a point is seen through a camera at `view`, as shares of the lens's half-width and half-height from its middle (inside the lens
+ * is -1 to 1 both ways, y up), or null when it is behind the camera.
+ */
+export function projectThrough(view: CameraPose, point: readonly [number, number, number], lens: { fov: number; aspect: number }): { x: number; y: number } | null {
+	const [px, py, pz] = view.position;
+	const forward = normalize([view.target[0] - px, view.target[1] - py, view.target[2] - pz]);
+	const right = normalize([-forward[2], 0, forward[0]]);
+	const up = [right[1] * forward[2] - right[2] * forward[1], right[2] * forward[0] - right[0] * forward[2], right[0] * forward[1] - right[1] * forward[0]];
+	const d = [point[0] - px, point[1] - py, point[2] - pz];
+	const depth = d[0] * forward[0] + d[1] * forward[1] + d[2] * forward[2];
+	if (!(depth > 1e-6)) return null;
+	const tan = Math.tan(lens.fov / 2);
+	return { x: (d[0] * right[0] + d[1] * right[1] + d[2] * right[2]) / depth / (tan * lens.aspect), y: (d[0] * up[0] + d[1] * up[1] + d[2] * up[2]) / depth / tan };
+}
+
+function normalize(v: number[]): [number, number, number] {
+	const length = Math.hypot(v[0], v[1], v[2]) || 1;
+	return [v[0] / length, v[1] / length, v[2] / length];
+}
+
+/**
+ * The closest zoom from half way out to bird's-eye at which a view of `view`'s focus, yaw and tilt keeps the whole Home in the lens
+ * (`homeCorners`, inside `FIT_FILL` of it), or bird's-eye when nothing closer does. The extent shrinks as the zoom grows, so a halving
+ * search finds it.
+ */
+export function fitZoom(view: CameraState, bounds: CameraBounds, fit: ViewFit): number {
+	const corners = homeCorners(bounds);
+	const fits = (zoom: number) => {
+		const seen = pose({ ...view, zoom, tilt: clampTilt(view.tilt, zoom) }, bounds, fit.far);
+		return corners.every((corner) => {
+			const at = projectThrough(seen, corner, fit);
+			return !!at && Math.abs(at.x) <= FIT_FILL && Math.abs(at.y) <= FIT_FILL;
+		});
+	};
+	let lo = 0.5;
+	let hi = 1;
+	if (!fits(hi)) return hi;
+	if (fits(lo)) return lo;
+	for (let i = 0; i < 18; i++) {
+		const mid = (lo + hi) / 2;
+		if (fits(mid)) hi = mid;
+		else lo = mid;
+	}
+	return Math.round(hi * 1000) / 1000;
 }
 
 /**
