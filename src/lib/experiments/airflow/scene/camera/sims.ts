@@ -136,7 +136,7 @@ export function frameLens(view: { width: number; height: number }, frame: ViewFr
  * turned to look along the Home's long side, so its length runs up the screen and all of it fits. Turned a little off the long side,
  * so the walls still read in three quarters, but less than a desktop's view: each degree further round widens the Home on a narrow screen.
  */
-export const PORTRAIT_YAW = -76 * DEG;
+export const PORTRAIT_YAW = -82 * DEG;
 export const PORTRAIT_TILT = -14 * DEG;
 export const PORTRAIT_ZOOM = 0.88;
 /**

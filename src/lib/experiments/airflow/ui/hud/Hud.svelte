@@ -72,9 +72,24 @@
 			top: t + gap,
 			bottom: (b && b.height > 0 ? height - b.top : 0) + gap
 		};
-		const toolbar = ui.phone ? left?.querySelector<HTMLElement>('.rail')?.getBoundingClientRect() : undefined;
-		experience.bridge.frame = toolbar && toolbar.height > 0 ? { top: Math.round(t + FRAME_GAP), right: 0, bottom: Math.round(height - toolbar.top + FRAME_GAP + PEEK_ROOM), left: 0 } : null;
+		// The frame is measured from the layout, not the painted boxes: the bars rise into place as the page opens, and a frame taken
+		// mid-rise would shift the picture by a few pixels when the next measure corrects it.
+		const toolbar = ui.phone ? left?.querySelector<HTMLElement>('.rail') : null;
+		const bar = top?.querySelector<HTMLElement>('.topbar');
+		const pill = weather?.querySelector<HTMLElement>('.weather');
+		experience.bridge.frame =
+			toolbar && toolbar.offsetHeight > 0
+				? { top: Math.round(Math.max(layoutBottom(bar), layoutBottom(pill)) + FRAME_GAP), right: 0, bottom: Math.round(height - layoutTop(toolbar) + FRAME_GAP + PEEK_ROOM), left: 0 }
+				: null;
 	}
+
+	/** Where an element is laid out, px from the top of the window, without the transforms its animations add. */
+	function layoutTop(element: HTMLElement | null | undefined) {
+		let y = 0;
+		for (let at: HTMLElement | null = element ?? null; at; at = at.offsetParent as HTMLElement | null) y += at.offsetTop;
+		return y;
+	}
+	const layoutBottom = (element: HTMLElement | null | undefined) => (element ? layoutTop(element) + element.offsetHeight : 0);
 
 	onMount(() => {
 		const phone = matchMedia('(max-width: 699px)');
