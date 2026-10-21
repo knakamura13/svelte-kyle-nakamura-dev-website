@@ -1,12 +1,12 @@
 import type { LayerId, OverlayId, UnitSystem } from '../../state';
 import { dockLegend, type DockLegend } from '../../viz/dockLegend';
-import { scaleMapping, type ScaleMapping } from '../../viz/palettes';
+import { STOPS, colorFor, hexToRgb, scaleMapping, type Rgb, type ScaleMapping } from '../../viz/palettes';
 
 /**
- * The overlays' scales, shared by the shader that tints the rooms (`overlay.ts`) and the legend the HUD draws under it, so a colour
- * means the same in both. Each overlay is one of the slice's old layers drawn through the whole volume: Air speed on the blue ramp,
- * Temperature on the diverging scale centred on where the indoor air started, and Smoke on the orange ramp over four decades of
- * PM2.5. Pure, so Node tests it.
+ * The overlays' scales, shared by the shaders (`streaks.ts` and `overlay.ts`) and the legend the HUD draws, so a colour means the
+ * same in both. An overlay colours the streaks by its quantity, with a faint haze of the same colours through the rooms: Air speed
+ * on the blue ramp, Temperature on the diverging scale centred on where the indoor air started, and Smoke on the orange ramp over four
+ * decades of PM2.5. These are the slice's old layers and palettes; no plane is drawn. Pure, so Node tests it.
  */
 
 export type OverlayKind = Exclude<OverlayId, 'off'>;
@@ -24,18 +24,35 @@ export function overlayMapping(kind: OverlayKind, sensitivity: number): ScaleMap
 }
 
 /**
- * How strongly the overlay tints air at a place on its scale, 0 to 1, before the depth of air it is seen through: faint for still,
+ * The colour a streak takes under an overlay, for a value in the overlay's own unit (m/s, K above the reference, ppm): the palette
+ * at the value's place on the scale, sRGB from 0 to 1, as the streaks' shader computes it. With the overlay Off it is `STREAK_AIR`.
+ */
+export function streakColor(kind: OverlayId, value: number, sensitivity: number, out: Rgb = [0, 0, 0]): Rgb {
+	if (kind !== 'off') return colorFor(OVERLAY_LAYER[kind], value, { sensitivity, baseline: 0 }, out);
+	out[0] = STREAK_AIR[0];
+	out[1] = STREAK_AIR[1];
+	out[2] = STREAK_AIR[2];
+	return out;
+}
+
+/** The streaks' colour with no overlay on: the blue the old tracers began at, which reads on a pale wall and on a dark floor. */
+export const STREAK_AIR: Readonly<Rgb> = hexToRgb(STOPS.blue[5]);
+
+/**
+ * How strongly the haze tints air at a place on its scale, 0 to 1, before the depth of air it is seen through: nothing for still,
  * clean air at its starting temperature, full where the value is strong. Speed and smoke grow with their fraction; temperature grows
- * either way from the middle. The shader computes the same (`OVERLAY_STRENGTH_GLSL`).
+ * either way from the middle. The haze's shader computes the same.
  */
 export function overlayStrength(kind: OverlayKind, t: number) {
 	const x = Math.min(1, Math.max(0, t));
-	const signal = kind === 'temperature' ? Math.abs(2 * x - 1) : x;
-	return OVERLAY_FLOOR[kind] + (1 - OVERLAY_FLOOR[kind]) * signal;
+	return kind === 'temperature' ? Math.abs(2 * x - 1) : x;
 }
 
-/** The faint tint of air with nothing to show, so the rooms still read as full of air: none for smoke, whose absence is the news. */
-export const OVERLAY_FLOOR: Readonly<Record<OverlayKind, number>> = { speed: 0.12, temperature: 0.1, smoke: 0 };
+/**
+ * The haze through the rooms under an overlay: how much a metre of air at full strength tints, per metre, and the most it may cover
+ * whatever is behind it, so a room always reads through it.
+ */
+export const HAZE = { density: 0.5, cap: 0.22 } as const;
 
 export interface OverlayLegendOptions {
 	units: UnitSystem;

@@ -5,21 +5,22 @@ import { paletteTexture } from '../sliceLayer';
 import type { DepthUniforms } from './depth';
 import type { AirFields } from './fields';
 import { BOX_GLSL, DEPTH_GLSL, HASH_GLSL, VOLUME_GLSL } from './glsl';
-import { OVERLAY_FLOOR, overlayMapping, type OverlayKind } from './legend';
+import { HAZE, overlayMapping, type OverlayKind } from './legend';
 import { PREMULTIPLIED } from './smokeVolume';
 
-export { OVERLAY_FLOOR, overlayLegend, overlayMapping, overlayStrength, type OverlayKind, type OverlayLegend, type OverlayLegendOptions } from './legend';
+export { HAZE, STREAK_AIR, overlayLegend, overlayMapping, overlayStrength, streakColor, type OverlayKind, type OverlayLegend, type OverlayLegendOptions } from './legend';
 
 /**
- * The overlays, as Cities: Skylines draws its info views: with one on, the world turns a neutral clay and the field is a translucent
- * tint through the rooms. A ray from the camera is marched through the home's box up to the nearest surface (`depth.ts`), and the
- * air it passes tints it by its value on the overlay's palette, the more strongly the stronger the value (`overlayStrength`), so a
- * jet of fast air or a pocket of smoke stands out of clear air. The palettes and the mapping are the slice's (`viz/palettes.ts`), so
- * the legend (`overlayLegend`) reads the same as before.
+ * What an overlay adds besides colouring the streaks (`streaks.ts`): a faint haze of the same colours through the rooms, so a jet of
+ * fast air, a pocket of cold air or a cloud of smoke shows between the streaks too. A ray from the camera is marched through the
+ * home's box up to the nearest surface (`depth.ts`), and the air it passes tints it by its value on the overlay's palette, the more
+ * strongly the stronger the value (`overlayStrength`); air with nothing to show adds nothing. However much air a ray crosses, the haze
+ * covers at most `HAZE.cap` of what is behind it, so the room always reads through it. There is no plane: the field is drawn where
+ * the air is.
+ *
+ * The world keeps its own colours, a little muted (`Mute`), so the overlay's colours stand out of it.
  */
 
-/** How much a metre of air at full strength tints, per metre. Through a room of about 4 m, strong air is nearly opaque and faint air a wash. */
-const DENSITY = 0.85;
 /** The most steps a ray takes. */
 const MAX_STEPS = 72;
 
@@ -41,8 +42,8 @@ uniform float uMaxSteps;
 uniform float uChannel;
 uniform float uLog;
 uniform float uDiverging;
-uniform float uFloor;
 uniform float uDensity;
+uniform float uCap;
 uniform vec2 uViewport;
 varying vec3 vWorld;
 ${VOLUME_GLSL}
@@ -77,16 +78,16 @@ void main() {
 		float x = uLog > 0.5 ? log2(max(value, 1e-30)) * 0.30102999566 : value;
 		float fraction = scaleFraction(x);
 		float signal = uDiverging > 0.5 ? abs(2.0 * fraction - 1.0) : fraction;
-		float sigma = uDensity * air * (uFloor + (1.0 - uFloor) * signal);
-		float alpha = 1.0 - exp(-sigma * dt);
+		float alpha = 1.0 - exp(-uDensity * air * signal * dt);
 		color += transmittance * alpha * toLinear(paletteColor(fraction));
 		transmittance *= 1.0 - alpha;
-		if (transmittance < 0.02) break;
 	}
 	float opacity = 1.0 - transmittance;
 	if (opacity < 0.003) discard;
+	// Never more than the cap, so the room reads through it: colour and opacity scaled together keep the haze's hue.
+	float keep = min(1.0, uCap / opacity);
 	// Into the march target (march.ts): linear, and already multiplied by its opacity.
-	gl_FragColor = vec4(color, opacity);
+	gl_FragColor = vec4(color * keep, opacity * keep);
 }
 `;
 
@@ -112,8 +113,8 @@ export class Overlay {
 				uChannel: { value: 0 },
 				uLog: { value: 0 },
 				uDiverging: { value: 0 },
-				uFloor: { value: 0 },
-				uDensity: { value: DENSITY },
+				uDensity: { value: HAZE.density },
+				uCap: { value: HAZE.cap },
 				uPalette: { value: this.palettes.speed as Texture },
 				uMapping: { value: new Vector2(1, 0) },
 				uViewport: viewport
@@ -129,7 +130,7 @@ export class Overlay {
 		this.mesh.visible = false;
 	}
 
-	/** Shows `kind` (or nothing, for Off) at the view's sensitivity. */
+	/** Shows the haze of `kind` (or nothing, for Off) at the view's sensitivity. */
 	setKind(kind: OverlayId, sensitivity: number) {
 		this.kind = kind;
 		this.mesh.visible = kind !== 'off';
@@ -141,7 +142,6 @@ export class Overlay {
 		uniforms.uChannel.value = mapping.channel;
 		uniforms.uLog.value = mapping.log ? 1 : 0;
 		uniforms.uDiverging.value = kind === 'temperature' ? 1 : 0;
-		uniforms.uFloor.value = OVERLAY_FLOOR[kind];
 	}
 
 	/** The home's box, m, and the volume's finest cell edge, which sets the step. */
@@ -160,32 +160,25 @@ export class Overlay {
 	}
 }
 
-/** The clay the world turns to under an overlay: a light, warm neutral, matte. */
-export const CLAY = new Color(0xd9d5ce);
+/** How far the world's colours move toward grey while an overlay is on: lightly, so a room is still its own colour. */
+export const MUTE = 0.3;
 
-type Colored = Material & { color: Color; map?: Texture | null; emissive?: Color; roughness?: number; metalness?: number; vertexColors: boolean };
-
-/** What a material was before it turned to clay. */
-interface Saved {
-	color: Color;
-	map: Texture | null;
-	emissive: Color | null;
-	roughness: number | undefined;
-	metalness: number | undefined;
-	vertexColors: boolean;
+/** A colour moved `share` of the way to the grey of its own luminance (in the linear colours three.js keeps): lighter and darker stay so. */
+export function muted(color: Color, share = MUTE, out = new Color()) {
+	const grey = 0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b;
+	return out.setRGB(color.r + (grey - color.r) * share, color.g + (grey - color.g) * share, color.b + (grey - color.b) * share);
 }
 
-const luminance = (c: Color) => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+type Colored = Material & { color: Color };
 
 /**
- * Turns the world to clay and back by changing its own materials in place, so whatever a material does in its own shader (a wall
- * cut down on the GPU, a faded wall) carries on: each lit material loses its texture and its colour for the clay, a little lighter
- * or darker as it was, and goes matte. Called each frame while an overlay is on, so what is added meanwhile (a fan dropped in,
- * another Home) turns too; a material already clay is left alone.
+ * Mutes the world's colours a little while an overlay is on, and gives them back, by changing each lit material's colour in place:
+ * nothing else about a material changes, so its textures, its own shader (a wall cut down on the GPU) and its transparency (a faded
+ * wall, glass) carry on, and no shader is compiled. Called each frame while an overlay is on, so what is added meanwhile (a fan dropped
+ * in, another Home) is muted too; a material already muted is left alone.
  */
-export class Clay {
-	private readonly saved = new Map<Colored, Saved>();
-	private readonly scratch = new Color();
+export class Mute {
+	private readonly saved = new Map<Colored, Color>();
 
 	get active() {
 		return this.saved.size > 0;
@@ -196,44 +189,18 @@ export class Clay {
 			root.traverse((object) => {
 				const material = (object as Object3D & { material?: Material | Material[] }).material;
 				if (!material) return;
-				for (const m of Array.isArray(material) ? material : [material]) this.turn(m as Colored);
+				for (const m of Array.isArray(material) ? material : [material]) this.mute(m as Colored);
 			});
 	}
 
-	private turn(material: Colored) {
+	private mute(material: Colored) {
 		if (this.saved.has(material) || !material.color || !('isMeshStandardMaterial' in material || 'isMeshLambertMaterial' in material || 'isMeshPhongMaterial' in material)) return;
-		this.saved.set(material, {
-			color: material.color.clone(),
-			map: material.map ?? null,
-			emissive: material.emissive ? material.emissive.clone() : null,
-			roughness: material.roughness,
-			metalness: material.metalness,
-			vertexColors: material.vertexColors
-		});
-		const shade = 0.86 + 0.24 * Math.min(1, luminance(material.color));
-		material.color.copy(this.scratch.copy(CLAY).multiplyScalar(shade));
-		material.emissive?.setRGB(0, 0, 0);
-		if (material.roughness !== undefined) material.roughness = Math.max(material.roughness, 0.85);
-		if (material.metalness !== undefined) material.metalness = 0;
-		if (material.map || material.vertexColors) {
-			material.map = null;
-			material.vertexColors = false;
-			material.needsUpdate = true;
-		}
+		this.saved.set(material, material.color.clone());
+		muted(material.color, MUTE, material.color);
 	}
 
 	restore() {
-		for (const [material, saved] of this.saved) {
-			material.color.copy(saved.color);
-			if (saved.emissive) material.emissive?.copy(saved.emissive);
-			if (saved.roughness !== undefined) material.roughness = saved.roughness;
-			if (saved.metalness !== undefined) material.metalness = saved.metalness;
-			if (saved.map || saved.vertexColors) {
-				material.map = saved.map;
-				material.vertexColors = saved.vertexColors;
-				material.needsUpdate = true;
-			}
-		}
+		for (const [material, color] of this.saved) material.color.copy(color);
 		this.saved.clear();
 	}
 }

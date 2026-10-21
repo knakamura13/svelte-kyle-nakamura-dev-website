@@ -1,23 +1,28 @@
 import {
 	BufferAttribute,
+	Color,
 	DoubleSide,
 	InstancedBufferAttribute,
 	InstancedBufferGeometry,
 	Mesh,
 	NormalBlending,
+	SRGBColorSpace,
 	ShaderMaterial,
 	Vector2,
 	type DataTexture,
+	type Texture,
 	type WebGLRenderer
 } from 'three';
 import type { Raster } from '../../homes/rasterize';
 import type { Volume } from '../../solver/volume';
-import { PALETTE_GLSL, scaleMapping } from '../../viz/palettes';
+import type { OverlayId } from '../../state';
+import { PALETTE_GLSL } from '../../viz/palettes';
 import type { QualityTier } from '../look/quality';
 import { paletteTexture } from '../sliceLayer';
 import { STREAK_BIRTHS, drawBirths, streakWeights } from './birth';
 import type { AirFields } from './fields';
 import { MASK_GLSL, VOLUME_GLSL } from './glsl';
+import { STREAK_AIR, overlayMapping, type OverlayKind } from './legend';
 import { ParticleField } from './particles';
 
 /**
@@ -25,7 +30,8 @@ import { ParticleField } from './particles';
  * ribbon from where it is back along the air it came through, `TAIL` seconds of it, so it bends with the flow; it narrows and fades
  * from its head to its tail and is soft at its edges. Each fades in when it is born and out before it dies, and with the air's
  * speed, so still air shows nothing: everything that moves on screen is the solver's air. They are born where the air moves and at
- * the windows that let air in (`birth.ts`).
+ * the windows that let air in (`birth.ts`). With no overlay on they are all the air's own blue; an overlay colours each point of a
+ * streak by its quantity there (air speed, temperature or PM2.5) on that overlay's palette, which is what its legend shows.
  */
 
 /** How many streaks each quality tier draws. */
@@ -62,7 +68,10 @@ uniform vec2 uSpeedFade;
 uniform float uFadeIn;
 uniform float uFadeOut;
 uniform float uOpacity;
-uniform float uPlain;
+uniform float uColored;
+uniform vec3 uAirColor;
+uniform float uChannel;
+uniform float uLog;
 attribute float aParticle;
 varying vec2 vQuad;
 varying float vAlpha;
@@ -138,8 +147,12 @@ void main() {
 	gl_Position = clip;
 	vQuad = vec2(1.0 - position.x, position.y);
 	vAlpha = alpha;
-	vec3 palette = toLinear(paletteColor(max(TRACER_FLOOR, scaleFraction(pointSpeed))));
-	vColor = mix(palette, vec3(1.0), uPlain);
+	// The overlay's quantity at this point of the streak on the overlay's palette (streakColor in legend.ts), or the air's own colour.
+	if (uColored > 0.5) {
+		float value = uChannel < 0.5 ? pointSpeed : (uChannel < 1.5 ? airLook(p).g : airLook(p).b);
+		float x = uLog > 0.5 ? log2(max(value, 1e-30)) * 0.30102999566 : value;
+		vColor = toLinear(paletteColor(scaleFraction(x)));
+	} else vColor = uAirColor;
 }
 `;
 
@@ -161,7 +174,7 @@ void main() {
 export class Streaks {
 	readonly mesh: Mesh<InstancedBufferGeometry, ShaderMaterial>;
 	field: ParticleField;
-	private readonly palette: DataTexture;
+	private readonly palettes: Record<OverlayKind, DataTexture>;
 	private readonly resolution = new Vector2();
 
 	constructor(
@@ -170,7 +183,7 @@ export class Streaks {
 		private precise = true
 	) {
 		this.field = this.makeField(count);
-		this.palette = paletteTexture('speed');
+		this.palettes = { speed: paletteTexture('speed'), temperature: paletteTexture('temperature'), smoke: paletteTexture('particulates') };
 		const material = new ShaderMaterial({
 			vertexShader: VERTEX,
 			fragmentShader: FRAGMENT,
@@ -188,8 +201,11 @@ export class Streaks {
 				uFadeIn: { value: FADE_IN },
 				uFadeOut: { value: FADE_OUT },
 				uOpacity: { value: 0.85 },
-				uPlain: { value: 0 },
-				uPalette: { value: this.palette },
+				uColored: { value: 0 },
+				uAirColor: { value: new Color().setRGB(...STREAK_AIR, SRGBColorSpace) },
+				uChannel: { value: 0 },
+				uLog: { value: 0 },
+				uPalette: { value: this.palettes.speed as Texture },
 				uMapping: { value: new Vector2(1, 0) }
 			},
 			transparent: true,
@@ -205,7 +221,6 @@ export class Streaks {
 			renderer.getDrawingBufferSize(this.resolution);
 			material.uniforms.uPixelRatio.value = renderer.getPixelRatio();
 		};
-		this.setScale(0.5);
 	}
 
 	private makeField(count: number) {
@@ -245,15 +260,16 @@ export class Streaks {
 		uniforms.uExtra.value = this.field.extra;
 	}
 
-	/** The view's sensitivity, which sets the speed at which a streak is the darkest blue. */
-	setScale(sensitivity: number) {
-		const { scale, offset } = scaleMapping('speed', { sensitivity, baseline: 0 });
-		this.mesh.material.uniforms.uMapping.value.set(scale, offset);
-	}
-
-	/** Plain white streaks (over an overlay, whose colours they would muddle) or streaks coloured by speed. */
-	setPlain(plain: boolean) {
-		this.mesh.material.uniforms.uPlain.value = plain ? 1 : 0;
+	/** Colours the streaks by an overlay's quantity on its palette, at the view's sensitivity, or (Off) all in the air's own colour. */
+	setOverlay(kind: OverlayId, sensitivity: number) {
+		const { uniforms } = this.mesh.material;
+		uniforms.uColored.value = kind === 'off' ? 0 : 1;
+		if (kind === 'off') return;
+		const mapping = overlayMapping(kind, sensitivity);
+		uniforms.uPalette.value = this.palettes[kind];
+		uniforms.uMapping.value.set(mapping.scale, mapping.offset);
+		uniforms.uChannel.value = mapping.channel;
+		uniforms.uLog.value = mapping.log ? 1 : 0;
 	}
 
 	/** Draws a new round of births from a volume and the plan's geometry. */
@@ -279,6 +295,6 @@ export class Streaks {
 		this.field.dispose();
 		this.mesh.geometry.dispose();
 		this.mesh.material.dispose();
-		this.palette.dispose();
+		for (const palette of Object.values(this.palettes)) palette.dispose();
 	}
 }

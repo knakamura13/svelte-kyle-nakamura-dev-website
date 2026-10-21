@@ -4,8 +4,9 @@ import { planById, plans } from '../../src/lib/experiments/airflow/homes/plans';
 import { rasterizePlan, type Raster } from '../../src/lib/experiments/airflow/homes/rasterize';
 import { STREAK_BIRTHS, drawBirths, inAir, inflowFaces, puffWeights, seeded, smokeLevel, streakWeights } from '../../src/lib/experiments/airflow/scene/air/birth';
 import { lookOf } from '../../src/lib/experiments/airflow/scene/air/fields';
-import { OVERLAY_FLOOR, overlayLegend, overlayMapping, overlayStrength } from '../../src/lib/experiments/airflow/scene/air/legend';
+import { HAZE, STREAK_AIR, overlayLegend, overlayMapping, overlayStrength, streakColor } from '../../src/lib/experiments/airflow/scene/air/legend';
 import { MASK_STRIDE, faceByte, passes, solidMask } from '../../src/lib/experiments/airflow/scene/air/mask';
+import { MUTE, Mute, muted } from '../../src/lib/experiments/airflow/scene/air/overlay';
 import { SMOKE_LOOK, smokeBounds } from '../../src/lib/experiments/airflow/scene/air/smokeVolume';
 import { World } from '../../src/lib/experiments/airflow/sim/world';
 import { CpuBackend } from '../../src/lib/experiments/airflow/solver/cpu/backend';
@@ -13,7 +14,9 @@ import { Grid } from '../../src/lib/experiments/airflow/solver/grid';
 import { FLOW_STRIDE, SCALAR_STRIDE, volumeSpec, type Volume } from '../../src/lib/experiments/airflow/solver/volume';
 import { blankSetup, type Setup } from '../../src/lib/experiments/airflow/state';
 import { dockLegend } from '../../src/lib/experiments/airflow/viz/dockLegend';
-import { scaleMapping } from '../../src/lib/experiments/airflow/viz/palettes';
+import { legendFor } from '../../src/lib/experiments/airflow/viz/legend';
+import { PALETTES, STOPS, hexToRgb, sampleLut, scaleMapping } from '../../src/lib/experiments/airflow/viz/palettes';
+import { Color, Mesh, MeshBasicMaterial, MeshStandardMaterial, BoxGeometry, Group } from 'three';
 
 /**
  * The air's pure parts (scene/air): the solid mask that keeps streaks out of walls and furniture, where streaks and smoke puffs are
@@ -231,14 +234,64 @@ test.describe('the overlays’ scales and legends', () => {
 		expect(overlayMapping('smoke', 2)).toEqual({ ...scaleMapping('particulates', { sensitivity: 2, baseline: 0 }), layer: 'particulates', channel: 2 });
 	});
 
-	test('the tint is faint where there is nothing to show and full where the value is strong', () => {
-		expect(overlayStrength('speed', 0)).toBe(OVERLAY_FLOOR.speed);
+	test('an overlay colours the streaks on its palette exactly as its legend reads, and Off leaves them the air’s own blue', () => {
+		const format = { speed: String, temperature: String, particulates: String };
+		for (const kind of ['speed', 'temperature', 'smoke'] as const)
+			for (const sensitivity of [0.5, 1, 2]) {
+				const { layer } = overlayMapping(kind, sensitivity);
+				const legend = legendFor(layer, { sensitivity, baseline: 0, format });
+				const stops = [...legend.ticks, ...(legend.midpoint ? [legend.midpoint] : [])];
+				expect(stops.length).toBeGreaterThan(2);
+				for (const tick of stops) {
+					const drawn = streakColor(kind, tick.value, sensitivity);
+					const shown = sampleLut(PALETTES[layer], tick.at, false);
+					for (let c = 0; c < 3; c++) expect(drawn[c], `${kind} at ${tick.value} (sensitivity ${sensitivity})`).toBeCloseTo(shown[c], 6);
+				}
+			}
+		// Faster air is darker blue, cooler air bluer and warmer air oranger than the starting temperature, and smoke darker orange.
+		const [slow, fast] = [streakColor('speed', 0.1, 0.5), streakColor('speed', 1.2, 0.5)];
+		expect(fast[0] + fast[1] + fast[2]).toBeLessThan(slow[0] + slow[1] + slow[2]);
+		const [cool, warm] = [streakColor('temperature', -2, 0.5), streakColor('temperature', 2, 0.5)];
+		expect(cool[2]).toBeGreaterThan(cool[0]);
+		expect(warm[0]).toBeGreaterThan(warm[2]);
+		expect(streakColor('off', 3, 0.5)).toEqual([...STREAK_AIR]);
+		expect([...STREAK_AIR]).toEqual(hexToRgb(STOPS.blue[5]));
+	});
+
+	test('the haze adds nothing where there is nothing to show, and never covers more than a quarter of the room behind it', () => {
+		expect(overlayStrength('speed', 0), 'still air').toBe(0);
+		expect(overlayStrength('smoke', 0), 'clean air').toBe(0);
+		expect(overlayStrength('temperature', 0.5), 'the starting temperature').toBe(0);
 		expect(overlayStrength('speed', 1)).toBe(1);
-		expect(overlayStrength('smoke', 0), 'clean air is clear').toBe(0);
-		expect(overlayStrength('temperature', 0.5), 'the starting temperature').toBe(OVERLAY_FLOOR.temperature);
 		expect(overlayStrength('temperature', 0)).toBe(1);
 		expect(overlayStrength('temperature', 1)).toBe(1);
 		expect(overlayStrength('temperature', 0.25)).toBeCloseTo(overlayStrength('temperature', 0.75), 12);
+		expect(HAZE.cap).toBeGreaterThan(0);
+		expect(HAZE.cap).toBeLessThanOrEqual(0.25);
+	});
+
+	test('the world keeps its own colours under an overlay, muted a little, and gets them back exactly', () => {
+		const red = new Color(1, 0, 0);
+		const softened = muted(red);
+		const luminance = (c: Color) => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+		expect(luminance(softened), 'as light as it was').toBeCloseTo(luminance(red), 12);
+		expect(softened.r).toBeCloseTo(1 - (1 - 0.2126) * MUTE, 12);
+		expect(softened.r, 'still red').toBeGreaterThan(softened.g * 5);
+		const grey = new Color(0.4, 0.4, 0.4);
+		expect(muted(grey).toArray()).toEqual(grey.toArray().map((v) => expect.closeTo(v, 12)));
+
+		const wall = new MeshStandardMaterial({ color: 0x88aa66 });
+		const mark = new MeshBasicMaterial({ color: 0xff3300 });
+		const world = new Group().add(new Mesh(new BoxGeometry(), wall), new Mesh(new BoxGeometry(), mark));
+		const [wallColor, markColor] = [wall.color.clone(), mark.color.clone()];
+		const mute = new Mute();
+		mute.apply([world]);
+		mute.apply([world]);
+		expect(wall.color.toArray()).toEqual(muted(wallColor).toArray().map((v) => expect.closeTo(v, 12)));
+		expect(mark.color.equals(markColor), 'an unlit mark keeps its colour').toBe(true);
+		mute.restore();
+		expect(wall.color.equals(wallColor)).toBe(true);
+		expect(mute.active).toBe(false);
 	});
 
 	test('the legend is the slice’s, in the page’s units, and Off has none', () => {

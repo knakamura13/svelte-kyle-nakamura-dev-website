@@ -11,7 +11,6 @@ import { SimulationSession, type SessionParams } from '../sim/session';
 import { effectiveOpenings } from '../sim/world';
 import type { OverlayId, Quality } from '../state';
 import { createAir } from './air';
-import { ARROW_SPACING, DirectionArrows } from './arrows';
 import { DeviceEditor, type Grab } from './deviceEditor';
 import { DeviceMeshes } from './deviceMeshes';
 import type { Point3 } from './deviceMath';
@@ -20,13 +19,9 @@ import { AirflowInput } from './input';
 import { chooseQuality, type QualityTier } from './look/quality';
 import { Markers } from './markers';
 import { pointOnPlane, pointOnSurface } from './pick';
-import { SliceLayer } from './sliceLayer';
 
 /** The Stage's tint: the site's mist, so the 3D view matches the page around it. */
 const TINT = 0xdde7ee;
-
-/** On a compact Stage the arrows sit twice as far apart, so each stays a readable size. */
-const COMPACT_SPACING = ARROW_SPACING * 2;
 
 /** How far outside the footprint the compass letters sit, m: past the outside walls, which are 0.2 m thick. */
 const COMPASS_OFFSET = 0.7;
@@ -62,21 +57,18 @@ export interface AirflowSceneParams extends SessionParams {
 interface House {
 	plan: HomePlan;
 	dollhouse: Dollhouse;
-	slice: SliceLayer;
-	arrows: DirectionArrows;
-	spacing: number;
 	labels: Label[];
 }
 
 /**
- * The airflow Stage: the home as a dollhouse with the simulation drawn into it. A horizontal slice plane colored by the
- * layer the visitor picked, direction arrows on it for the direction layer, tracers that drift with the air, smoke, the
- * fans and purifiers, and the rings and pins the visitor places. The pointer and the keys read the slice, pin probes and
- * release smoke (`input.ts`). Everything is in the solver's metres, so nothing is converted between the two.
+ * The airflow Stage: the home as a dollhouse with the simulation drawn into it: the air (scene/air: streaks that ride it, the
+ * smoke, and the overlays, which colour the streaks), the fans and purifiers, and the rings and pins the visitor places. No plane is
+ * drawn. The pointer and the keys read the air at the slice's height, pin probes and release smoke there (`input.ts`); the slice is
+ * still read for that, and for the hover readout. Everything is in the solver's metres, so nothing is converted between the two.
  *
  * It owns the `SimulationSession`: that builds the world and steps it each frame this runs, and this draws the newest
- * snapshot it has. A home or a restart that needs a new world keeps the old picture out of the way (`live`) until the new
- * world has its first slice, so the slice never lies over a different home.
+ * snapshot it has. A home or a restart that needs a new world keeps the old air out of the way until the new world's first
+ * volume, so the air of one home never lies over another.
  */
 export const createAirflowScene: SceneFactory<AirflowSceneParams, AirflowReadout> = (host, params, readout) => {
 	const scene = new Scene();
@@ -113,10 +105,7 @@ export const createAirflowScene: SceneFactory<AirflowSceneParams, AirflowReadout
 
 	function buildHouse(plan: HomePlan): House {
 		const dollhouse = new Dollhouse(plan, { furniture: params.setup.furniture, tint: TINT });
-		const slice = new SliceLayer(plan.width, plan.depth);
-		const spacing = host.compact() ? COMPACT_SPACING : ARROW_SPACING;
-		const arrows = new DirectionArrows(plan.width, plan.depth, spacing);
-		scene.add(dollhouse.group, slice.mesh, arrows.mesh);
+		scene.add(dollhouse.group);
 		const labels: Label[] = dollhouse.roomAnchors.map((anchor) => {
 			const label = host.labels.add({ name: anchor.name, tone: 'room', side: 'above' });
 			label.position.copy(anchor.position);
@@ -133,15 +122,12 @@ export const createAirflowScene: SceneFactory<AirflowSceneParams, AirflowReadout
 			label.position.set(x, 0, z);
 			labels.push(label);
 		}
-		return { plan, dollhouse, slice, arrows, spacing, labels };
+		return { plan, dollhouse, labels };
 	}
 
 	function disposeHouse(old: House) {
 		for (const label of old.labels) host.labels.remove(label);
-		scene.remove(old.slice.mesh, old.arrows.mesh);
 		old.dollhouse.dispose();
-		old.slice.dispose();
-		old.arrows.dispose();
 	}
 
 	let house = buildHouse(planOf(params.setup.plan));
@@ -149,7 +135,7 @@ export const createAirflowScene: SceneFactory<AirflowSceneParams, AirflowReadout
 		scene,
 		camera,
 		world: () => (session.world?.raster.plan.id === house.plan.id ? session.world : null),
-		clay: () => [house.dollhouse.group, devices.group],
+		muted: () => [house.dollhouse.group, devices.group],
 		quality: tierOf(params.view.quality)
 	});
 	let overlay: { kind: OverlayId; sensitivity: number } | null = null;
@@ -182,7 +168,7 @@ export const createAirflowScene: SceneFactory<AirflowSceneParams, AirflowReadout
 	let framed: { plan: string; topDown: boolean; setup: RigSetup } | null = null;
 	let lastUpdate = 0;
 
-	/** Height of the slice plane as drawn: the cell layer the solver snapped to, or the requested height before the first slice. */
+	/** The height the pointer reads the air at, pins a probe and releases smoke: the cell layer the slice snapped to, or the height asked for before the first slice. Nothing is drawn there. */
 	const planeY = () => session.latest.slice?.y ?? params.view.sliceHeight;
 
 	const input = new AirflowInput({
@@ -227,14 +213,6 @@ export const createAirflowScene: SceneFactory<AirflowSceneParams, AirflowReadout
 				house = buildHouse(planOf(setup.plan));
 				openings = '';
 			}
-			const spacing = host.compact() ? COMPACT_SPACING : ARROW_SPACING;
-			if (spacing !== house.spacing) {
-				scene.remove(house.arrows.mesh);
-				house.arrows.dispose();
-				house.arrows = new DirectionArrows(house.plan.width, house.plan.depth, spacing);
-				house.spacing = spacing;
-				scene.add(house.arrows.mesh);
-			}
 			if (view.mode !== mode) {
 				mode = view.mode;
 				input.reset();
@@ -258,12 +236,10 @@ export const createAirflowScene: SceneFactory<AirflowSceneParams, AirflowReadout
 				dollhouse.setOpenings(amounts);
 			}
 
-			// The newest snapshot, but only once it is of this home. The slice plane is no longer drawn: the air fills the rooms instead
-			// (scene/air). The slice is still read, for the hover readout and the height a probe or a puff of smoke is placed at.
+			// The newest volume, but only once it is of this home. No plane is drawn: the air fills the rooms instead (scene/air). The
+			// slice is still read, for the hover readout and the height a probe or a puff of smoke is placed at.
 			const { latest, world } = session;
 			const live = !!world && world.raster.plan.id === house.plan.id;
-			house.slice.mesh.visible = false;
-			house.arrows.mesh.visible = false;
 			if (!overlay || overlay.kind !== view.overlay || overlay.sensitivity !== view.sensitivity) {
 				overlay = { kind: view.overlay, sensitivity: view.sensitivity };
 				air.setOverlay(view.overlay, { sensitivity: view.sensitivity });

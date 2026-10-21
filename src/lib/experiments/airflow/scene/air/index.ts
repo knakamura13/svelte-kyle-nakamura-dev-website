@@ -7,21 +7,22 @@ import { DepthPrepass } from './depth';
 import { AirFields } from './fields';
 import { MarchTarget } from './march';
 import { solidMask, type SolidMask } from './mask';
-import { Clay, Overlay } from './overlay';
+import { Mute, Overlay } from './overlay';
 import { SMOKE_STEPS, SmokePuffs, SmokeVolume, smokeBounds, type SmokeLighting } from './smokeVolume';
 import { STREAK_COUNTS, Streaks } from './streaks';
 
-export { overlayLegend, type OverlayLegend, type OverlayLegendOptions } from './legend';
+export { STREAK_AIR, overlayLegend, streakColor, type OverlayLegend, type OverlayLegendOptions } from './legend';
 export { STREAK_COUNTS } from './streaks';
 
 /**
- * The air, drawn from the solver: streaks that ride the simulated air through every room, the PM2.5 as smoke, and the overlays
- * that tint the rooms by speed, temperature or smoke over a world turned to clay. Everything that moves here moves because the
- * solver's air does; nothing drifts on its own.
+ * The air, drawn from the solver: streaks that ride the simulated air through every room, and the PM2.5 as smoke. An overlay (Air
+ * speed, Temperature or Smoke) colours the streaks by its quantity, with a faint haze of the same colours through the rooms, and
+ * mutes the world's colours a little; Off adds nothing. No plane is drawn. Everything that moves here moves because the solver's air
+ * does; nothing drifts on its own.
  *
  * The scene hands it each volume the session reads (`SessionOptions.volume`) with the real seconds the air should move this frame
  * (0 while the clock is paused, which holds the streaks still). Its GPU work (moving the streaks, the depth pre-pass that the smoke
- * and the overlay stop at) runs at the start of each render of `camera`, from the scene's `onBeforeRender`, because that is where
+ * and the haze stop at) runs at the start of each render of `camera`, from the scene's `onBeforeRender`, because that is where
  * the renderer is to be had; any other render of the scene (a pass with an override material, another camera) leaves the air out.
  */
 
@@ -30,8 +31,8 @@ export interface AirOptions {
 	camera: PerspectiveCamera;
 	/** The running world, whose geometry keeps the streaks out of walls and furniture, or null before there is one. */
 	world: () => World | null;
-	/** What turns to clay while an overlay is on: the home, its furniture and the devices. */
-	clay?: () => Iterable<Object3D>;
+	/** What is muted a little while an overlay is on: the home, its furniture and the devices. */
+	muted?: () => Iterable<Object3D>;
 	quality?: QualityTier;
 }
 
@@ -40,16 +41,13 @@ export interface Air {
 	readonly group: Group;
 	/** Takes the newest volume (null when there is none of the running world) and moves the air on by `dt` real seconds. Returns true while it needs frames to settle. */
 	update(volume: Volume | null, dt: number): boolean;
-	/** Off, or the field the overlay tints the rooms with, at the view's sensitivity (default 0.5). */
+	/** Off, or the quantity the overlay colours the streaks and the haze by, at the view's sensitivity (default 0.5). */
 	setOverlay(kind: OverlayId, options?: { sensitivity?: number }): void;
 	setQuality(tier: QualityTier): void;
 	/** Whether the streaks are drawn (the Dock's Tracers). */
 	setStreaks(on: boolean): void;
 	dispose(): void;
 }
-
-/** How thick the smoke is drawn under the Air speed and Temperature overlays, against its full look. */
-const SMOKE_UNDER_OVERLAY = 0.35;
 
 /** How often the lights are looked for again, in updates: a light added or replaced is picked up within a second. */
 const LIGHT_REFRESH = 60;
@@ -107,8 +105,8 @@ export function createAir(options: AirOptions): Air {
 	const smoke = new SmokeVolume(fields, depth.uniforms, march.size);
 	const overlay = new Overlay(fields, depth.uniforms, march.size);
 	let puffs: SmokePuffs | null = null;
-	const clay = new Clay();
-	// The overlay's tint, then the smoke over it, are marched into their own target; that is laid over the world, and the streaks over all.
+	const mute = new Mute();
+	// The overlay's haze, then the smoke over it, are marched into their own target; that is laid over the world, and the streaks over all.
 	overlay.mesh.renderOrder = 0;
 	smoke.mesh.renderOrder = 1;
 	march.scene.add(overlay.mesh, smoke.mesh);
@@ -131,8 +129,6 @@ export function createAir(options: AirOptions): Air {
 	const lighting: SmokeLighting = { sunDirection: new Vector3(0, 1, 0), sun: new Color(), sky: new Color() };
 	const box = new Vector3(1, 1, 1);
 	let finest = 0.15;
-	/** The box of visible smoke in the two volumes being blended, kept so the smoke can be shown again without waiting for a read. */
-	let bounds: ReturnType<typeof smokeBounds> = null;
 
 	const setSmokeMode = () => {
 		const low = tier === 'low';
@@ -140,7 +136,6 @@ export function createAir(options: AirOptions): Air {
 			puffs = new SmokePuffs(fields, precise);
 			puffs.mesh.renderOrder = 16;
 			group.add(puffs.mesh);
-			puffs.mesh.visible = kind !== 'smoke';
 			if (fields.newest && world) puffs.births(fields.newest, world.raster);
 		} else if (!low && puffs) {
 			group.remove(puffs.mesh);
@@ -205,7 +200,6 @@ export function createAir(options: AirOptions): Air {
 		fields.clear();
 		streaks.reset();
 		puffs?.reset();
-		bounds = null;
 		smoke.mesh.visible = false;
 	}
 
@@ -233,8 +227,7 @@ export function createAir(options: AirOptions): Air {
 				fields.push(volume, now);
 				streaks.births(volume, raster);
 				puffs?.births(volume, raster);
-				bounds = smokeBounds(fields.older && fields.older !== volume ? [fields.older, volume] : [volume]);
-				smoke.setBounds(bounds, box, finest);
+				smoke.setBounds(smokeBounds(fields.older && fields.older !== volume ? [fields.older, volume] : [volume]), box, finest);
 			}
 			const blend = fields.tick(now);
 			pending = Math.min(0.1, pending + Math.max(0, dt));
@@ -245,7 +238,7 @@ export function createAir(options: AirOptions): Air {
 			readLights(scene, lighting, lights);
 			smoke.setLighting(lighting);
 			puffs?.setLighting(lighting);
-			if (kind !== 'off' && options.clay) clay.apply(options.clay());
+			if (kind !== 'off' && options.muted) mute.apply(options.muted());
 			// Puffs drawn at low quality stand in for the volume.
 			if (puffs) smoke.mesh.visible = false;
 			return blend < 1;
@@ -254,17 +247,9 @@ export function createAir(options: AirOptions): Air {
 			kind = next;
 			if (settings.sensitivity !== undefined) sensitivity = settings.sensitivity;
 			overlay.setKind(next, sensitivity);
-			// Under the Smoke overlay the PM2.5 is the tint, so the smoke itself is not drawn; under the others it is drawn thinner.
-			smoke.setStrength(next === 'off' ? 1 : next === 'smoke' ? 0 : SMOKE_UNDER_OVERLAY);
-			smoke.setBounds(bounds, box, finest);
-			if (puffs) {
-				puffs.mesh.visible = next !== 'smoke';
-				smoke.mesh.visible = false;
-			}
-			streaks.setScale(sensitivity);
-			streaks.setPlain(next !== 'off');
-			if (next === 'off') clay.restore();
-			else if (options.clay) clay.apply(options.clay());
+			streaks.setOverlay(next, sensitivity);
+			if (next === 'off') mute.restore();
+			else if (options.muted) mute.apply(options.muted());
 		},
 		setQuality(next) {
 			if (next === tier) return;
@@ -278,7 +263,7 @@ export function createAir(options: AirOptions): Air {
 		},
 		dispose() {
 			scene.onBeforeRender = previous;
-			clay.restore();
+			mute.restore();
 			scene.remove(group);
 			streaks.dispose();
 			smoke.dispose();
