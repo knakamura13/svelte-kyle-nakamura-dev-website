@@ -252,10 +252,10 @@ test.describe('the slice height slider', () => {
 	});
 
 	test('is announced in the unit shown, in words', () => {
-		expect(describeSliceHeight(1.1, 'metric')).toBe('Slice height: 1.10 metres.');
-		expect(describeSliceHeight(1.1, 'imperial')).toBe('Slice height: 3 feet 7 inches.');
-		expect(describeSliceHeight(sliceHeightFromSlider(44, 'imperial'), 'imperial')).toBe('Slice height: 3 feet 8 inches.');
-		expect(describeSliceHeight(2.3, 'metric')).toBe('Slice height: 2.30 metres.');
+		expect(describeSliceHeight(1.1, 'metric')).toBe('Probe and smoke height: 1.10 metres.');
+		expect(describeSliceHeight(1.1, 'imperial')).toBe('Probe and smoke height: 3 feet 7 inches.');
+		expect(describeSliceHeight(sliceHeightFromSlider(44, 'imperial'), 'imperial')).toBe('Probe and smoke height: 3 feet 8 inches.');
+		expect(describeSliceHeight(2.3, 'metric')).toBe('Probe and smoke height: 2.30 metres.');
 	});
 });
 

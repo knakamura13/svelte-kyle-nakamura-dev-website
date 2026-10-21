@@ -340,7 +340,9 @@ export class AirflowStage implements StageHost {
 		canvas.style.touchAction = 'none';
 
 		on(canvas, 'pointerdown', (event) => {
-			view.focus({ preventScroll: true });
+			// The press itself focuses the world (its mousedown focuses the nearest focusable thing, the view), so the keys reach the camera
+			// after a click. Focusing it from here instead would count as a script's focus, which Chrome rings as if it came from the keyboard:
+			// a blue frame round the whole window after every first click.
 			const ndc = this.ndc(event, canvas);
 			const mouse = event.pointerType === 'mouse';
 			// A right or middle press, or Alt with the left, is the camera's: turn and tilt, or pan.

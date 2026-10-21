@@ -21,7 +21,7 @@ export interface Target {
 	id: string;
 }
 
-/** What the HUD's overlay switcher tints the rooms with: nothing, or one field. */
+/** What the HUD's overlay switcher colours the streaks by: nothing, or one field. */
 export type OverlayId = 'off' | 'speed' | 'temperature' | 'smoke';
 
 /** How the walls stand (the HUD's bottom bar): full height, cut away between the camera and the room it looks into, or down. */
@@ -87,20 +87,13 @@ export interface View {
 	layer: LayerId;
 	/** Multiplies the layer's color scale range: below 1 shows weaker flow brighter. */
 	sensitivity: number;
-	/** Height of the slice plane above the floor, m. */
+	/** Height above the floor, m, at which the pointer reads the air, pins a probe and releases smoke: the slice the solver reads there. No plane is drawn. */
 	sliceHeight: number;
-	/**
-	 * Whether the slice plane is drawn. Off by default: the plane is mostly opaque and hid everything below it, so the air and the
-	 * smoke now show through the whole room from every angle, and the slice is an overlay the visitor turns on (the Dock's View group).
-	 * Readings and Probes still come from the slice height either way.
-	 */
-	slice: boolean;
-	topDown: boolean;
 	/** Whether the little dots that follow the air are drawn. */
 	tracers: boolean;
 	mode: PointerMode;
 	units: UnitSystem;
-	/** The HUD's overlay. Until the overlays are drawn, Air speed, Temperature and Smoke pick the slice's layer, and Off hides the slice. */
+	/** The HUD's overlay: Off, or the quantity the streaks are coloured by, with a faint haze of it through the rooms (scene/air). */
 	overlay: OverlayId;
 	/** The HUD's wall mode, for the cutaway walls to follow. */
 	walls: WallMode;
@@ -129,10 +122,9 @@ export const DEFAULT_CONDITIONS: Conditions = { windFrom: 270, windSpeed: 0, out
  * room air nearly the same pale blue as still air, and that 0.5 (0 to 1.5 m/s) shows it better. Below 1 the scale covers less, so
  * weaker flow shows in stronger color.
  *
- * The overlay starts on Air speed, which is today's slice, so the page looks as it did before the HUD. The redesign wants it Off
- * (the streaks show the air on their own); that is the default to set once the streaks are drawn.
+ * The overlay starts Off: the streaks show the air on their own (scene/air), and an overlay colours them by its quantity.
  */
-export const DEFAULT_VIEW: Omit<View, 'units'> = { layer: 'speed', sensitivity: 0.5, sliceHeight: 1.1, slice: false, topDown: false, tracers: true, mode: 'look', overlay: 'speed', walls: 'cutaway', quality: 'auto' };
+export const DEFAULT_VIEW: Omit<View, 'units'> = { layer: 'speed', sensitivity: 0.5, sliceHeight: 1.1, tracers: true, mode: 'look', overlay: 'off', walls: 'cutaway', quality: 'auto' };
 
 export const DEFAULT_CLOCK: Clock = { paused: false, speed: 1 };
 

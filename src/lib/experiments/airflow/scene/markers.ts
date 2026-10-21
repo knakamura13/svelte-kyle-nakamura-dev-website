@@ -23,71 +23,94 @@ function ring(inner: number, outer: number, material: MeshBasicMaterial) {
 	return mesh;
 }
 
+/**
+ * A marker that stands at a height over a spot of the floor, as a Probe will: a head at the height (`head`, which the caller fills), a
+ * thin stem down to the floor and a soft spot where it meets it, so it reads as a point in the room at that height, not a ring adrift.
+ */
+class Standing {
+	readonly group = new Group();
+	readonly head = new Group();
+	private readonly stem: Mesh;
+
+	constructor(color: number) {
+		this.stem = new Mesh(new CylinderGeometry(0.005, 0.005, 1, 6), flat(color, 0.6));
+		this.stem.renderOrder = RENDER_ORDER.markers;
+		const foot = new Mesh(new CircleGeometry(0.06, 24), flat(color, 0.28));
+		foot.rotation.x = -Math.PI / 2;
+		foot.position.y = 0.004;
+		foot.renderOrder = RENDER_ORDER.markers;
+		this.group.add(this.stem, foot, this.head);
+		this.group.visible = false;
+	}
+
+	/** Stands it over (x, z) with its head at y, or hides it for null. */
+	set(point: Point3 | null) {
+		this.group.visible = point !== null;
+		if (!point) return;
+		this.group.position.set(point.x, 0, point.z);
+		this.head.position.y = point.y + LIFT;
+		this.stem.scale.y = Math.max(0.01, point.y);
+		this.stem.position.y = point.y / 2;
+	}
+}
+
 interface PinView {
 	group: Group;
 	label: Label;
 }
 
 /**
- * The little things the visitor places or points at, drawn over the slice: a ring where the pointer or the keyboard
- * cursor is reading the air, a pulsing orange ring where smoke is being released, and a pin with its label for each
- * probe. Pins stand from the floor up to the slice, so the height they were pinned at reads. Everything is flat color, so
- * it looks the same in both themes.
+ * The little things the visitor places or points at: a marker where the pointer or the keyboard cursor is reading the air, a pulsing
+ * orange one where smoke is being released, and a pin with its label for each probe. Each stands on a stem from the floor up to the
+ * probe and smoke height, so the height reads. Everything is flat colour, so it looks the same in both themes.
  */
 export class Markers {
 	readonly group = new Group();
-	private readonly hoverMark: Group;
-	private readonly smokeMark: Group;
+	private readonly hoverMark: Standing;
+	private readonly smokeMark: Standing;
 	private readonly pins = new Map<string, PinView>();
 	private pinSignature = '';
 	private pulse = 0;
 
 	constructor(private readonly labels: LabelLayer) {
+		// Where the pointer reads the air: a pin's head (a dot in a ring with a white halo) at the height a Probe would be pinned at.
 		const ink = flat(INK);
 		const halo = flat(0xffffff, 0.75);
-		this.hoverMark = new Group();
-		const outer = ring(0.1, 0.125, ink);
-		const glow = ring(0.125, 0.15, halo);
-		const dot = new Mesh(new CircleGeometry(0.022, 16), ink);
-		dot.rotation.x = -Math.PI / 2;
+		this.hoverMark = new Standing(INK);
+		const dot = new Mesh(new SphereGeometry(0.03, 14, 8), ink);
 		dot.renderOrder = RENDER_ORDER.markers;
-		this.hoverMark.add(glow, outer, dot);
-		this.hoverMark.visible = false;
+		this.hoverMark.head.add(ring(0.125, 0.15, halo), ring(0.1, 0.125, ink), dot);
 
+		// Where smoke is released: an orange ring that pulses round a core, at the same height.
 		const orange = flat(SMOKE, 0.9);
-		this.smokeMark = new Group();
-		this.smokeMark.add(ring(0.1, 0.13, orange));
-		const core = new Mesh(new CircleGeometry(0.05, 20), orange);
-		core.rotation.x = -Math.PI / 2;
+		this.smokeMark = new Standing(SMOKE);
+		const core = new Mesh(new SphereGeometry(0.045, 16, 10), orange);
 		core.renderOrder = RENDER_ORDER.markers;
-		this.smokeMark.add(core);
-		this.smokeMark.visible = false;
-		this.group.add(this.hoverMark, this.smokeMark);
+		this.smokeMark.head.add(ring(0.1, 0.13, orange), core);
+		this.group.add(this.hoverMark.group, this.smokeMark.group);
 	}
 
-	/** Where the pointer or cursor is reading, or null to hide the ring. The point is on the slice plane. */
+	/** Where the pointer or cursor is reading, or null to hide the marker. The point is at the probe and smoke height. */
 	setHover(point: Point3 | null) {
-		this.hoverMark.visible = point !== null;
-		if (point) this.hoverMark.position.set(point.x, point.y + LIFT, point.z);
+		this.hoverMark.set(point);
 	}
 
 	/** Where smoke is being released, or null. */
 	setSmoke(point: Point3 | null) {
-		this.smokeMark.visible = point !== null;
-		if (point) this.smokeMark.position.set(point.x, point.y + LIFT, point.z);
+		this.smokeMark.set(point);
 	}
 
 	/** Whether anything here is moving by itself, so the Stage keeps drawing: smoke pulses while it is released. */
 	get animating() {
-		return this.smokeMark.visible;
+		return this.smokeMark.group.visible;
 	}
 
 	/** Once a frame. */
 	update(dt: number, reducedMotion: boolean) {
-		if (!this.smokeMark.visible) return;
+		if (!this.smokeMark.group.visible) return;
 		this.pulse += dt;
 		const scale = reducedMotion ? 1.1 : 1 + 0.35 * (0.5 + 0.5 * Math.sin(this.pulse * 5));
-		this.smokeMark.scale.set(scale, 1, scale);
+		this.smokeMark.head.scale.set(scale, 1, scale);
 	}
 
 	/**

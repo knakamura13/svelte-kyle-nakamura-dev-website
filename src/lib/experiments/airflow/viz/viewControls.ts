@@ -82,8 +82,8 @@ export function sliceHeightFromSlider(position: number, units: UnitSystem): numb
 	return clampHeight(sliderRange('sliceHeight', units).fromDisplay(position));
 }
 
-/** "Slice height: 3 feet 8 inches." */
-export const describeSliceHeight = (metres: number, units: UnitSystem) => `Slice height: ${formatLength(metres, units).spoken}.`;
+/** The height a Probe is pinned and smoke is released at (the solver's slice is read there; nothing is drawn): "Probe and smoke height: 3 feet 8 inches." */
+export const describeSliceHeight = (metres: number, units: UnitSystem) => `Probe and smoke height: ${formatLength(metres, units).spoken}.`;
 
 /** "Layer: Air speed, 0 to 1.5 metres per second, from pale to dark blue." */
 export const describeLayer = (scale: string) => `Layer: ${scale}`;

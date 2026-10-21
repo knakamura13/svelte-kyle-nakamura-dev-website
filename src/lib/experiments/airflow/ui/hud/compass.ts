@@ -16,6 +16,13 @@ export const STEP_PAGE = 45;
 /** Into [0, 360). */
 export const wrapBearing = (degrees: number) => ((degrees % 360) + 360) % 360;
 
+/**
+ * How far the dial turns to match the 3D view: north drawn this many degrees clockwise from the top. The world reports the bearing its
+ * camera looks toward as `data-yaw` (`SimsCamera.yawDegrees`), degrees clockwise from north: 0 looking north, so north is up the screen,
+ * and 270 looking west, so north is to the right. North on screen is that bearing turned back.
+ */
+export const dialRotation = (cameraYaw: number) => (Number.isFinite(cameraYaw) ? wrapBearing(-cameraYaw) : 0);
+
 /** The nearest multiple of `step` degrees, wrapped, so 358 snaps to 0 and not to 360. */
 export const snapBearing = (degrees: number, step = SNAP) => wrapBearing(Math.round(degrees / step) * step);
 
