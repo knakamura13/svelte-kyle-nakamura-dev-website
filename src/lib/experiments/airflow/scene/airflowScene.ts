@@ -26,8 +26,8 @@ import { pointOnPlane, pointOnSurface } from './pick';
 import { Selection, ToolInput, type DragPreview, type SelectionParams } from './selection';
 import { nextWallMode } from './walls/cutaway';
 
-/** How far outside the footprint the compass letters sit, m: past the outside walls, which are 0.2 m thick. */
-const COMPASS_OFFSET = 0.9;
+/** How far outside the footprint the compass letters sit, m: past the outside walls and the planting along them, clear of the rooms' names. */
+const COMPASS_OFFSET = 1.8;
 
 /** Room names and compass letters show only this far out (zoom 0 is eye level, 1 bird's-eye): close in they would be in the way. */
 const LABEL_ZOOM = 0.7;

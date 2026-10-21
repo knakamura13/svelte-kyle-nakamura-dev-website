@@ -142,6 +142,9 @@ void main() {
 	float pixels = uWidth * mix(1.0, 0.45, position.x) * projectionMatrix[1][1] * halfSize.y / clip.w;
 	float drawn = clamp(pixels, uPixels.x * uPixelRatio, uPixels.y * uPixelRatio);
 	alpha *= clamp(pixels / drawn, 0.3, 1.0);
+	// Above the widest drawn it is drawn that wide and fainter too, and it fades out within a metre of the eye: close to the camera
+	// (a visitor standing in a room) the air is a light veil rather than a curtain of lines across the view.
+	alpha *= clamp(drawn / pixels, 0.35, 1.0) * smoothstep(0.35, 1.2, clip.w);
 	// The head and the tail reach out by half the width, so a short streak is a round dot rather than nothing.
 	float cap = position.x < 0.001 ? 1.0 : (position.x > 0.999 ? -1.0 : 0.0);
 	clip.xy += (side * position.y + along * cap) * 0.5 * drawn / halfSize * clip.w;
