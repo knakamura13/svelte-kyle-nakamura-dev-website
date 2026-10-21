@@ -18,7 +18,7 @@ The lesson from the misalignment: show the look early and often. Every milestone
 | 8 | Accuracy | The solver drives everything that moves: particles ride the simulated air, smoke is the simulated PM2.5. Decorative touches only if the simulation drives them. |
 | 9 | Audience | A portfolio showpiece for engineers and hiring managers. The first frame is cinematic and already alive (a Scenario playing), with one obvious invitation ("Drop a fan") instead of a wall of controls. The science stays one click away. |
 | 10 | Performance | Measured, not guessed: load time to the first frame, frame rate, how blocky the air looks, the restarts while the grid tunes, control latency. The worst today: the restarts while the grid tunes and the coarse look without WebGPU. |
-| 11 | Options | Keep: Homes, Scenarios, time controls, weather, Openings (adjusted by clicking the window or door itself), fans and purifiers (dragged from the catalog), smoke and Probes. Advanced panel: sensitivity, slice height, units, the Physics panel and the smoke books. Cut: the top-down toggle (the camera does it), the Look/Probe/Emit toggle (tools in a toolbar instead), the furniture toggle. |
+| 11 | Options | Keep: Homes, Scenarios, time controls, weather, Openings (adjusted by clicking the window or door itself), fans and purifiers (dragged from the catalog), smoke and Probes. Advanced panel: sensitivity, units, the Physics panel and the smoke books. Cut: the top-down toggle (the camera does it), the Look/Probe/Emit toggle (tools in a toolbar instead), the furniture toggle. |
 | 12 | References | The Sims 4 for the camera, the build/buy catalog and the time bar; Cities: Skylines for the data overlays ("info views"); Two Point Hospital for friendly context menus. |
 
 Decided by the agent from those answers (Kyle asked for no more questions, and to be checked in with): the HUD layout, the camera's input scheme, the wall modes, the overlay set, the loading screen and the fate of the existing work, all below. Each is shown at a check-in and can be changed there.
@@ -43,7 +43,8 @@ Decided by the agent from those answers (Kyle asked for no more questions, and t
 **The air.** All of it is driven by the solver.
 - **Streaks.** Thousands of velocity-aligned streaks (about 15,000 on a desktop, 3,000 on a phone) are carried through the whole 3D field. They are stretched by speed and fade in and out. They are born where the air moves and at the openings.
 - **Smoke.** Smoke is a ray-marched volume of the PM2.5 field, lit by the sun, visible from every side. Phones draw it as puffs instead.
-- **Overlays.** The overlays are Off, Air speed, Temperature and Smoke. With one on, the world turns to a neutral clay and the field is drawn as a translucent tint through the rooms, with a legend at the bottom. The slice height is in the Advanced panel.
+- **Overlays.** The overlays are Off, Air speed, Temperature and Smoke. With one on, the streaks take that quantity's colour and a faint see-through haze shows it through the rooms, with a legend at the bottom. The world keeps its own colours, at most lightly desaturated.
+- **No plane anywhere.** There is no slice plane, by default or under an overlay. Decided 2026-10-20, when Kyle asked why a nearly opaque horizontal plane was needed. What it showed (one quantity across the whole home at one height) is carried by the coloured streaks, the haze and the Probes. The hover reading and the Probes still read the solver's slice and probe data; only the drawn plane is gone.
 - **Probes.** A Probe is a glowing pin with a floating card (speed and direction, temperature, PM2.5).
 
 **HUD.** Dark glass panels with rounded corners, icon buttons of at least 44 px, tooltips on everything, one accent colour, and the site's type.
@@ -71,7 +72,7 @@ Decided by the agent from those answers (Kyle asked for no more questions, and t
   - Probe: its reading, remove.
 - **Inspector (right).** The selected object's details and every setting, for the keyboard.
 - **Weather widget (top right).** A compass dial (drag the arrow to set the wind's direction, a speed chip beside it), outdoor and indoor temperature steppers, and outdoor air presets (Clean, Hazy, Smoky, Wildfire, with µg/m³ in the tooltip).
-- **Bottom bar.** Pause, 1×, 5× and 20×, the simulated clock, the overlay switcher, walls up/cutaway/down, About (the explainer in a panel) and Advanced (Physics panel, sensitivity, slice height, units, graphics quality, copy link, restart and reset).
+- **Bottom bar.** Pause, 1×, 5× and 20×, the simulated clock, the overlay switcher, walls up/cutaway/down, About (the explainer in a panel) and Advanced (Physics panel, sensitivity, units, graphics quality, copy link, restart and reset).
 - **Phones.** The rail becomes a bottom toolbar, panels become bottom sheets, and quality drops (fewer streaks, puff smoke, no ambient occlusion).
 
 **Accessibility, kept at a sensible floor.** Every HUD control works by keyboard with a visible focus ring and a name; readings exist as text (probe cards, the inspector); reduced motion turns off camera inertia and the intro move; HUD text meets contrast. The 3D world itself is described by the status line and the probe cards, not navigated by a screen reader.
