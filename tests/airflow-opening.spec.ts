@@ -31,6 +31,8 @@ test.use({ viewport: { width: 1280, height: 800 } });
 
 test.describe('the loading screen', () => {
 	test('is in the page from its first paint, fills one bar as the world fetches, compiles and warms up, then fades into the world and leaves', async ({ page }) => {
+		// A browser that draws WebGL in software (the headless shells) compiles the world's shaders for many seconds.
+		test.setTimeout(90_000);
 		const errors: string[] = [];
 		page.on('pageerror', (error) => errors.push(error.message));
 		page.on('console', (message) => {
@@ -51,11 +53,14 @@ test.describe('the loading screen', () => {
 		// The HUD waits under it.
 		expect(await page.locator('.hud').evaluate((el) => getComputedStyle(el).opacity)).toBe('0');
 
-		// The bar only goes forward, and is full when the world is shown.
+		// The bar only goes forward, and is full when the world is shown. (Read by its markup: once the world is shown it is hidden from the accessibility tree.)
 		const values: number[] = [];
 		const deadline = Date.now() + 60_000;
 		while ((await view(page).getAttribute('data-state')) !== 'live' && Date.now() < deadline) {
-			const value = await bar.getAttribute('aria-valuenow').catch(() => null);
+			const value = await page
+				.locator('.loading [role="progressbar"]')
+				.getAttribute('aria-valuenow', { timeout: 1000 })
+				.catch(() => null);
 			if (value !== null) values.push(Number(value));
 			await page.waitForTimeout(50);
 		}
@@ -100,8 +105,10 @@ test.describe('the opening', () => {
 		const began = Date.now();
 		await expect.poll(async () => (await camera(page)).zoom, { message: 'it moves', timeout: 5_000 }).toBeLessThan(start.zoom - 0.05);
 		await expect.poll(() => camera(page), { message: 'and arrives', timeout: 15_000 }).toEqual(END);
-		// Seconds after it was first seen, so it is a drift and not a cut.
-		expect((Date.now() - began) / 1000).toBeGreaterThan(3.5);
+		// Seconds after it was first seen, so it is a drift and not a cut, and on time however fast the browser draws.
+		const took = (Date.now() - began) / 1000;
+		expect(took).toBeGreaterThan(3.5);
+		expect(took).toBeLessThan(10);
 		await page.waitForTimeout(1500);
 		expect(await camera(page), 'and stays there').toEqual(END);
 		await expect(page.locator('.sim-status')).toHaveAttribute('data-status', 'running');
@@ -127,6 +134,8 @@ test.describe('the opening', () => {
 		const box = (await view(page).boundingBox())!;
 		await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.5);
 		await page.mouse.wheel(0, -120);
+		// Firefox and WebKit hand the wheel to the page a moment after the call returns.
+		await page.waitForTimeout(400);
 		const zoomed = await camera(page);
 		await page.waitForTimeout(1500);
 		const after = await camera(page);

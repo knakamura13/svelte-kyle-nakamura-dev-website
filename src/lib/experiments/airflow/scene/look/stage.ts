@@ -120,8 +120,8 @@ interface Slot {
 	/** When the warm-up began, and when the simulation was first ready during it, ms. */
 	warmStart: number;
 	warmed: number | null;
-	/** The opening that plays once the world is on show, and the one playing. */
-	pendingOpening: Opening | null;
+	/** Whether the opening plays once the world is on show, and the one playing. */
+	playOpening: boolean;
 	opening: CameraOpening | null;
 	undo: (() => void)[];
 }
@@ -238,7 +238,7 @@ export class AirflowStage implements StageHost {
 			phase: 'compile',
 			warmStart: 0,
 			warmed: null,
-			pendingOpening: null,
+			playOpening: false,
 			opening: null,
 			undo: []
 		};
@@ -290,9 +290,12 @@ export class AirflowStage implements StageHost {
 		const mode = this.hooks?.opening() ?? 'none';
 		const { controls } = slot.world;
 		// A camera the address asked for (`?camera=`) is the view: no opening moves it.
-		const opening = mode !== 'none' && !controls.touched ? (slot.world.opening?.(slot.width / Math.max(1, slot.height)) ?? null) : null;
-		if (opening && (mode === 'end' || this.reduced.matches)) controls.jumpTo(opening.to);
-		else slot.pendingOpening = opening;
+		if (mode !== 'none' && !controls.touched) {
+			if (mode === 'end' || this.reduced.matches) {
+				const opening = slot.world.opening?.(slot.width / Math.max(1, slot.height));
+				if (opening) controls.jumpTo(opening.to);
+			} else slot.playOpening = true;
+		}
 		this.hooks?.report('warm-up', 0);
 		this.invalidate();
 	}
@@ -313,12 +316,13 @@ export class AirflowStage implements StageHost {
 		return { quiet: state.measuring };
 	}
 
-	/** Shows the world: the loading screen goes, and the opening's drift starts. */
+	/** Shows the world: the loading screen goes, and the opening's drift starts, from the default view of the window's shape now. */
 	private reveal(slot: Slot) {
 		if (slot.phase === 'live') return;
 		slot.phase = 'live';
-		if (slot.pendingOpening) slot.opening = new CameraOpening(slot.world.controls, slot.pendingOpening);
-		slot.pendingOpening = null;
+		const opening = slot.playOpening && !slot.world.controls.touched ? slot.world.opening?.(slot.width / Math.max(1, slot.height)) : null;
+		if (opening) slot.opening = new CameraOpening(slot.world.controls, opening);
+		slot.playOpening = false;
 		performance.mark('airflow:first-frame');
 		const { dataset } = slot.view;
 		dataset.state = 'live';
@@ -431,12 +435,15 @@ export class AirflowStage implements StageHost {
 			this.schedule();
 			return;
 		}
-		const dt = this.last ? Math.min(0.05, Math.max(0, (now - this.last) / 1000)) : 1 / 60;
+		const real = this.last ? Math.max(0, (now - this.last) / 1000) : 1 / 60;
+		const dt = Math.min(0.05, real);
 		this.last = now;
 		const tier = this.tierFor(slot.options);
 		if (tier !== slot.tier) this.applyQuality(slot, tier);
-		// The opening moves the camera before the world updates, so the walls are cut for where the camera is this frame.
-		if (slot.opening && !slot.opening.update(dt)) slot.opening = null;
+		// The opening moves the camera before the world updates, so the walls are cut for where the camera is this frame. It keeps to the
+		// clock, so it takes as long on a device that draws a few frames a second as on one that draws sixty (a quarter of a second at
+		// most each frame, so a tab that was hidden picks up where it was).
+		if (slot.opening && !slot.opening.update(Math.min(0.25, real))) slot.opening = null;
 		let moving = slot.world.update(dt) || slot.opening !== null;
 		let quiet = false;
 		if (slot.phase === 'warm-up') {

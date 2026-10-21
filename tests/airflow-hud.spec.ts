@@ -9,8 +9,12 @@ import { plans } from '../src/lib/experiments/airflow/homes/plans';
  * that window's menu, a fan dragged out of the Build catalog lands in a room, and axe finds nothing at desktop and phone widths.
  */
 
-/** The grid is pinned at the coarsest cell, so the auto-tuner's warm-up does not load a busy machine: these specs are about the HUD, not the air. */
-const HUD = '/experiments/airflow?cell=0.3';
+/**
+ * The grid is pinned at the coarsest cell, so the auto-tuner's warm-up does not load a busy machine: these specs are about the HUD, not the
+ * air. And the camera is put on the Home's default view (`?camera=`): reduced motion opens the world where the opening's drift ends, close
+ * over the living room (tests/airflow-opening.spec.ts), and the points these specs drop a fan at and look for a window from are of the whole home.
+ */
+const HUD = '/experiments/airflow?cell=0.3&camera=6,3.9,32,0.9,-10';
 const twoBedroom = plans.find((plan) => plan.id === 'two-bedroom')!;
 const boxFan = DEVICE_MODELS.find((model) => model.kind === 'box-fan')!;
 

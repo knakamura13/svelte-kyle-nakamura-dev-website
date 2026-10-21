@@ -69,6 +69,17 @@
 	// A backend that cannot keep up runs the simulation slower than the clock asks. The rate changes as it goes, so it is kept out of the live region: a screen reader hears the status once, not every few seconds. The bottom bar's clock says it in the same words.
 	const behind = $derived(shortfall(readout.status, readout.physics.rate, experience.clock.speed));
 	const key = (target: { kind: string; id: string } | null) => (target ? `${target.kind}:${target.id}` : undefined);
+
+	// A device that falls behind moves to a coarser grid at most once a minute, and says so once: to a screen reader through the session's
+	// announcement, and on screen for a few seconds here, because the status line keeps out of sight while the air runs.
+	let notice = $state('');
+	$effect(() => {
+		const words = tuning;
+		if (loading.phase !== 'revealed' || !words.startsWith('Switched')) return;
+		notice = words;
+		const timer = setTimeout(() => (notice = ''), 6000);
+		return () => clearTimeout(timer);
+	});
 </script>
 
 <svelte:head>
@@ -122,10 +133,49 @@
 			Everything in the home can also be chosen and changed from the Inspector.
 		</p>
 	</article>
+	{#if notice}<p class="grid-notice" aria-hidden="true">{notice}</p>{/if}
 	<LoadingScreen {loading} line={shared ? 'Opening the setup you were sent, as it was when the link was made.' : 'A two-bedroom at golden hour, its windows open to a westerly breeze. Watch the air come in, then drop a fan.'} />
 </div>
 
 <style>
+	.grid-notice {
+		position: absolute;
+		left: 50%;
+		bottom: 92px;
+		z-index: 3;
+		max-width: min(560px, calc(100% - 32px));
+		margin: 0;
+		padding: 7px 16px;
+		border-radius: 100px;
+		background: rgb(14 19 17 / 0.9);
+		box-shadow:
+			0 12px 30px rgb(4 9 7 / 0.3),
+			inset 0 0 0 1px rgb(255 255 255 / 0.1);
+		color: #f3f7f4;
+		font-family: 'Manrope Variable', system-ui, sans-serif;
+		font-size: 12px;
+		font-weight: 600;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		pointer-events: none;
+		transform: translateX(-50%);
+		animation: grid-notice 6s cubic-bezier(0.22, 1, 0.36, 1) both;
+	}
+	@keyframes grid-notice {
+		0% {
+			opacity: 0;
+			translate: 0 8px;
+		}
+		8%,
+		88% {
+			opacity: 1;
+			translate: 0 0;
+		}
+		100% {
+			opacity: 0;
+		}
+	}
 	/* The HUD comes up a moment after the world, so the first thing seen is the home with the air moving through it. */
 	.airflow-immersive :global(.hud) {
 		transition: opacity 900ms cubic-bezier(0.22, 1, 0.36, 1) 600ms;
@@ -138,6 +188,9 @@
 		.airflow-immersive :global(.hud) {
 			transition-duration: 1ms;
 			transition-delay: 0s;
+		}
+		.grid-notice {
+			animation: none;
 		}
 	}
 </style>

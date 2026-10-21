@@ -121,9 +121,13 @@
 		padding: 4px 4px 4px 14px;
 		border-radius: 16px;
 		transform: translateY(-50%);
+		/* It nudges toward the Build tool three times as it comes up, then rests, so it asks once and is then easy to read and to dismiss. */
 		animation:
 			hint-in 520ms var(--hud-ease) backwards,
-			hint-bob 2.8s 1.2s ease-in-out infinite;
+			hint-bob 1.3s 0.7s ease-in-out 3;
+	}
+	.opening-hint:hover {
+		animation-play-state: paused;
 	}
 	/* A small pointer from the bubble to the Build tool. */
 	.opening-hint::before {
@@ -179,7 +183,7 @@
 		transform: translateY(-100%);
 		animation:
 			hint-rise 520ms var(--hud-ease) backwards,
-			hint-float 2.8s 1.2s ease-in-out infinite;
+			hint-float 1.3s 0.7s ease-in-out 3;
 	}
 	.opening-hint.phone::before {
 		left: calc(var(--arrow) - 6px);
