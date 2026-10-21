@@ -32,12 +32,15 @@ export interface Quality {
  * one drawn wider than it is is drawn fainter, so each was at 30% of its opacity. So a phone's streak is 5 cm wide (opaque from a
  * bird's-eye distance, and still a veil at eye level), fully opaque, at least 3 CSS pixels wide, fades in from slower air, and shows
  * 1.2 s of travel rather than 0.5 s, so from far out it reads as a line along the air rather than a dot. A third more of them than
- * before, still a quarter of the desktop's. The smoke's puffs are twice as many and more opaque, so a plume reads as smoke rather than
- * a few grey dots. `tests/airflow-phone.spec.ts` measures both on the page, and the frame rate they cost under a phone's processor.
+ * before, still a quarter of the desktop's. The smoke's puffs are 3,200 rather than 1,200, a fifth wider and nearly opaque, so a plume
+ * reads as dense smoke out to its edges: at the same camera, the share of the world's pixels a cooking burst turns clearly lighter and
+ * greyer went from 0.4 to 0.6% to 0.5 to 0.8% (measured 2026-10-21; the plume varies from run to run), and the streaks' clear blue from
+ * 0.02% to 1.6%. Wider puffs cost a phone's GPU most at eye level inside smoke, which emulation cannot measure (#64).
+ * `tests/airflow-phone.spec.ts` measures both on the page, and the frame rate they cost under a phone's processor.
  */
 export const LOW_AIR: AirLook = {
 	streaks: { count: 4_000, pixels: [3, 6.5], opacity: 1, tail: 1.2, maxLength: 1.5, width: 0.05, speedFade: [0.015, 0.25] },
-	puffs: { count: 2_400, size: 0.55, opacity: 0.65 }
+	puffs: { count: 3_200, size: 0.6, opacity: 0.9 }
 };
 
 export const QUALITY: Record<QualityTier, Quality> = {
