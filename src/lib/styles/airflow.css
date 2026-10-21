@@ -34,8 +34,9 @@ html:has(.airflow-immersive),body:has(.airflow-immersive) { height:100%; overflo
    in the rest, so the air can be watched while a control moves and nothing in the world hides under it. On a phone it is a sheet over
    the bottom half. */
 .airflow-world { --drawer:min(430px,calc(100% - 32px)); }
-.airflow-drawer { position:absolute; top:76px; right:16px; bottom:16px; z-index:5; width:var(--drawer); overflow:auto; overscroll-behavior:contain; border-radius:20px; background:#fbfaf6f5; box-shadow:0 24px 60px #00000040,inset 0 0 0 1px #ffffff80; -webkit-backdrop-filter:blur(18px); backdrop-filter:blur(18px); transform:translateX(calc(100% + 24px)); opacity:0; visibility:hidden; transition:transform 320ms var(--ease),opacity 220ms,visibility 0s 320ms; }
-.airflow-drawer[data-open="true"] { transform:none; opacity:1; visibility:visible; transition:transform 320ms var(--ease),opacity 220ms,visibility 0s; }
+/* It fades rather than slides: the world beside it takes its new size at once, and the controls are where they will stay from the start. */
+.airflow-drawer { position:absolute; top:76px; right:16px; bottom:16px; z-index:5; width:var(--drawer); overflow:auto; overscroll-behavior:contain; border-radius:20px; background:#fbfaf6f5; box-shadow:0 24px 60px #00000040,inset 0 0 0 1px #ffffff80; -webkit-backdrop-filter:blur(18px); backdrop-filter:blur(18px); opacity:0; visibility:hidden; transition:opacity 180ms,visibility 0s 180ms; }
+.airflow-drawer[data-open="true"] { opacity:1; visibility:visible; transition:opacity 180ms,visibility 0s; }
 .airflow-world[data-drawer="open"] .airflow-figure { right:calc(var(--drawer) + 32px); }
 .airflow-world[data-drawer="open"] .sim-status.airflow-status { max-width:min(560px,calc(100% - var(--drawer) - 64px)); }
 .airflow-drawer > :not(.airflow-dock) { padding-inline:20px; }
@@ -43,7 +44,7 @@ html:has(.airflow-immersive),body:has(.airflow-immersive) { height:100%; overflo
 @media(max-width:600px) {
  .airflow-bar { top:10px; left:10px; right:10px; gap:8px; }
  .airflow-bar .airflow-title { display:none; }
- .airflow-drawer { top:auto; height:52%; right:8px; left:8px; bottom:8px; width:auto; transform:translateY(calc(100% + 24px)); }
+ .airflow-drawer { top:auto; height:52%; right:8px; left:8px; bottom:8px; width:auto; }
  .airflow-world[data-drawer="open"] .airflow-figure { right:0; bottom:calc(52% + 8px); }
  .airflow-world .sim-status.airflow-status { left:10px; bottom:10px; max-width:calc(100% - 20px); }
  .airflow-world[data-drawer="open"] .sim-status.airflow-status { bottom:calc(52% + 18px); max-width:calc(100% - 20px); }

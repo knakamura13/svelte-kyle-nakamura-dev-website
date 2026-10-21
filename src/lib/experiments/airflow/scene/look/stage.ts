@@ -21,6 +21,9 @@ import { QUALITY, SOFTWARE, chooseQuality, isSoftwareRenderer, isTier, type Qual
 /** How bright the picture is before AgX maps it to the screen. */
 const EXPOSURE = 1.0;
 
+/** The least time between two frames where WebGL is drawn in software, ms. */
+const SOFTWARE_FRAME_MS = 66;
+
 /** What the world needs from its host beyond what any scene gets: the CC0 assets (or null when they could not be had) and the quality tier. */
 export interface WorldHost extends SceneHost {
 	assets: LookAssets | null;
@@ -271,6 +274,12 @@ export class AirflowStage implements StageHost {
 		this.frame = 0;
 		const slot = this.slot;
 		if (!slot || document.hidden) return;
+		// Drawn in software, a frame takes the processor for a long time; at most about 15 a second leaves the page time between them for
+		// its timers and the visitor's input.
+		if (this.software && this.last && now - this.last < SOFTWARE_FRAME_MS) {
+			this.schedule();
+			return;
+		}
 		const dt = this.last ? Math.min(0.05, Math.max(0, (now - this.last) / 1000)) : 1 / 60;
 		this.last = now;
 		const tier = this.tierFor(slot.options);
