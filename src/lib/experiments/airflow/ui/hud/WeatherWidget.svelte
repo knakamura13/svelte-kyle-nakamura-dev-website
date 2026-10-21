@@ -65,6 +65,8 @@
 	}
 
 	let card: HTMLElement | undefined = $state();
+	let toggle: HTMLButtonElement | undefined = $state();
+	// A press outside the card closes it.
 	$effect(() => {
 		if (!open) return;
 		const outside = (event: PointerEvent) => {
@@ -73,6 +75,14 @@
 		addEventListener('pointerdown', outside, true);
 		return () => removeEventListener('pointerdown', outside, true);
 	});
+
+	/** Escape inside the open card closes it, and the focus goes back to the button that opened it. */
+	function keydown(event: KeyboardEvent) {
+		if (event.key !== 'Escape' || !open) return;
+		ui.popover = null;
+		toggle?.focus();
+		event.preventDefault();
+	}
 </script>
 
 {#snippet stepper(key: StepKey, name: string, field: { display: string; spoken: string }, note: string)}
@@ -85,7 +95,8 @@
 	</div>
 {/snippet}
 
-<div class="weather glass" class:open bind:this={card}>
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div class="weather glass" class:open bind:this={card} onkeydown={keydown}>
 	<div class="summary">
 		{#if !open}
 			<CompassDial bearing={conditions.windFrom} speed={conditions.windSpeed} {rotation} size={ui.phone ? 44 : 58} compact onchange={setBearing} oncommit={sayBearing} />
@@ -114,6 +125,7 @@
 		<button
 			type="button"
 			class="ibtn more"
+			bind:this={toggle}
 			aria-expanded={open}
 			aria-controls="hud-weather-details"
 			aria-label="Weather details"

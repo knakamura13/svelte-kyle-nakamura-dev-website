@@ -48,22 +48,26 @@
 		close(true);
 	}
 
-	// A press outside the bar and its panel closes the panel; Escape (the HUD's) closes it too, and the focus goes back to its button.
+	// A press outside the bar and its panel closes the panel.
 	$effect(() => {
 		if (!open) return;
-		const which = open;
 		const outside = (event: PointerEvent) => {
 			if (!bar?.contains(event.target as Node) && !panel?.contains(event.target as Node)) ui.popover = null;
 		};
 		addEventListener('pointerdown', outside, true);
-		return () => {
-			removeEventListener('pointerdown', outside, true);
-			if (ui.popover === null && panel?.contains(document.activeElement)) (which === 'home' ? homeButton : scenarioButton)?.focus();
-		};
+		return () => removeEventListener('pointerdown', outside, true);
 	});
+
+	/** Escape in an open panel closes it, and the focus goes back to its button. */
+	function keydown(event: KeyboardEvent) {
+		if (event.key !== 'Escape' || !open) return;
+		close(true);
+		event.preventDefault();
+	}
 </script>
 
-<div class="top">
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div class="top" onkeydown={keydown}>
 	<div class="topbar glass" bind:this={bar}>
 		<a class="btn quiet exit" href="/experiments" aria-label="Exit to all experiments" use:tooltip={{ label: 'Exit', hint: 'Back to all experiments.', side: 'bottom' }}>
 			<Icon name="exit" size={20} />

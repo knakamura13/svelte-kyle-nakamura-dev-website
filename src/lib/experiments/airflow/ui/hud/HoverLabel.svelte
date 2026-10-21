@@ -13,11 +13,13 @@
 	const hovered = $derived(experience.hovered);
 	const showing = $derived(!!hovered && ui.pointer.over && !experience.carry && !(experience.menu && experience.selection?.kind === hovered.kind && experience.selection.id === hovered.id));
 	const words = $derived(showing && hovered ? targetWords(hovered, homeContext(experience)) : null);
+	const left = $derived(Math.min(ui.pointer.x + 16, (typeof innerWidth === 'number' ? innerWidth : 1280) - 270));
+	const top = $derived(Math.min(ui.pointer.y + 18, (typeof innerHeight === 'number' ? innerHeight : 800) - 80));
 	const action = $derived(hovered?.kind === 'probe' ? 'Click to read it' : hovered?.kind === 'device' ? 'Click for its menu · drag to move' : 'Click to open or close it');
 </script>
 
 {#if words}
-	<div class="label" style:left="{ui.pointer.x + 16}px" style:top="{ui.pointer.y + 18}px" aria-hidden="true">
+	<div class="label" style:left="{left}px" style:top="{top}px" aria-hidden="true">
 		<span class="title">{words.title}</span>
 		<span class="detail">{words.detail}</span>
 		<span class="action">{action}</span>
