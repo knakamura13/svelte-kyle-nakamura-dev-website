@@ -343,7 +343,8 @@ class Ghost {
 			let material = mesh.material as MeshBasicMaterial;
 			if (!this.tinted.has(material)) {
 				(mesh.material as Material).dispose();
-				material = new MeshBasicMaterial({ color, transparent: true, opacity: 0.5, depthWrite: false });
+				// Drawn over everything, as a hologram: the slice plane and the walls would hide most of a device standing below them.
+				material = new MeshBasicMaterial({ color, transparent: true, opacity: 0.55, depthWrite: false, depthTest: false });
 				mesh.material = material;
 				mesh.renderOrder = ON_TOP - 1;
 				this.tinted.add(material);
@@ -479,6 +480,8 @@ export interface ToolHost {
 	grab(at: { x: number; y: number }): { device: string; body: boolean } | null;
 	select(target: Target | null, menu: boolean): void;
 	hover(target: Target | null): void;
+	/** Whether a device is being carried from the catalog or moved from its menu. The HUD puts it down on a click; a press here only turns the camera. */
+	carrying?(): boolean;
 }
 
 interface Press {
@@ -545,8 +548,9 @@ export class ToolInput implements SceneInput {
 			}
 			if (event.pointerType !== 'mouse') return false;
 			const tool = this.host.tool();
-			// What a click would take: anything with Select and Build, a Probe with the Probe tool (whose clicks otherwise pin).
-			this.setHover(tool === 'select' || tool === 'build' ? this.host.pickAt(ndc) : tool === 'probe' ? this.host.pickAt(ndc, ['probe']) : null);
+			// What a click would take: anything with Select and Build, a Probe with the Probe tool (whose clicks otherwise pin), nothing while carrying.
+			if (this.host.carrying?.()) this.setHover(null);
+			else this.setHover(tool === 'select' || tool === 'build' ? this.host.pickAt(ndc) : tool === 'probe' ? this.host.pickAt(ndc, ['probe']) : null);
 			// The Probe tool reads the air under the pointer, as the mouse always did.
 			return tool === 'probe' ? this.inner.pointer('move', event, ndc) : false;
 		}
@@ -563,10 +567,16 @@ export class ToolInput implements SceneInput {
 		const start = (forwarded: boolean, asTouch: boolean, click: Press['click']) => {
 			this.press = { id: event.pointerId, x: event.clientX, y: event.clientY, moved: false, forwarded, asTouch, click };
 		};
-		// A device or a handle of the chosen one is taken hold of in every tool, as before; a click on the device itself opens its menu.
+		// While a device is carried, a click is the HUD's to put it down, and a drag still turns the camera.
+		if (this.host.carrying?.()) {
+			start(false, false, undefined);
+			return false;
+		}
+		// A device or a handle of the chosen one is taken hold of in every tool, as before.
 		const grab = this.host.grab(ndc);
 		if (grab) {
-			start(true, false, grab.body ? { kind: 'device', id: grab.device } : undefined);
+			// A click (no drag) on the device or on one of its handles opens its menu; a drag moves, turns or aims it.
+			start(true, false, { kind: 'device', id: grab.device });
 			return this.inner.pointer('down', event, ndc);
 		}
 		if (tool === 'probe' || tool === 'smoke') {
