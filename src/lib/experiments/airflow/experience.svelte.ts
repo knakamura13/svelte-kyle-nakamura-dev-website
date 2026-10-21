@@ -44,7 +44,7 @@ const wrapDegrees = (degrees: number) => ((Math.round(degrees) % 360) + 360) % 3
 const clone = <T>(value: T): T => structuredClone($state.snapshot(value)) as T;
 
 /**
- * Everything the airflow page reads and changes. The Dock's controls call the methods here; the scene reads `setup`,
+ * Everything the airflow page reads and changes. The HUD's controls call the methods here; the scene reads `setup`,
  * `view`, `clock` and the rest each frame and writes `readout`. Nothing here touches three.js or the solver.
  */
 export class AirflowExperience extends Experience {
@@ -69,7 +69,7 @@ export class AirflowExperience extends Experience {
 	copied = $state(false);
 	/** Restart or Reset has just been pressed: the button says so for a moment, as Copy link does, because the air may be paused and show nothing. */
 	acknowledged: 'restart' | 'reset' | null = $state(null);
-	/** Whether the Dock shows the share link to be copied by hand, because the browser would not copy it. The link shown is always the setup's current one. */
+	/** Whether the Advanced panel shows the share link to be copied by hand, because the browser would not copy it. The link shown is always the setup's current one. */
 	linkShown = $state(false);
 	readout: AirflowReadout = $state(emptyReadout());
 	bridge: StageBridge = {};
@@ -600,7 +600,7 @@ export class AirflowExperience extends Experience {
 
 	/**
 	 * Copies the link to this setup. Resolves to whether the browser let it. When it would not (a page without permission to
-	 * write to the clipboard), `linkShown` turns on, for the Dock to show the link to be copied by hand.
+	 * write to the clipboard), `linkShown` turns on, for the Advanced panel to show the link to be copied by hand.
 	 */
 	async copyLink() {
 		let ok = false;

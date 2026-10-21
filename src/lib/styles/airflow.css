@@ -24,37 +24,10 @@ html:has(.airflow-immersive),body:has(.airflow-immersive) { height:100%; overflo
 .airflow .stage-label[data-tone="compass"] { padding:1px 7px; color:var(--muted); font-size:10px; letter-spacing:.06em; }
 .airflow .stage-label[data-tone="probe"] { --tone:var(--ink); }
 
-/* The Dock: groups of controls, each a disclosure that holds a grid of controls. `.dock.airflow-dock` is written with both classes because the shared `.dock` rule has the same weight and would win whenever its stylesheet came second. */
-.dock.airflow-dock { gap:0; padding:0 20px 6px; }
-@media(max-width:700px) { .dock.airflow-dock { padding-inline:16px; } }
-.dock-group { border-bottom:1px solid var(--rule); }
-.dock-group:last-child { border-bottom:0; }
-.dock-group>summary { display:flex; align-items:center; gap:12px; min-height:52px; margin-inline:-8px; padding:10px 8px; list-style:none; cursor:pointer; font-size:14px; font-weight:700; border-radius:10px; transition:background 160ms; }
-.dock-group>summary:hover { background:var(--dock); }
-.dock-group>summary::-webkit-details-marker { display:none; }
-.dock-group>summary::after { content:''; flex:none; margin-left:auto; width:8px; height:8px; border:solid currentColor; border-width:0 2px 2px 0; transform:rotate(45deg) translateY(-2px); transition:transform 160ms var(--ease); }
-.dock-group[open]>summary::after { transform:rotate(-135deg) translateY(-1px); }
-.dock-group>summary:focus-visible { outline:3px solid var(--focus); outline-offset:3px; }
-.dock-group-hint { font-size:11px; font-weight:500; color:var(--muted); }
-.dock-group-body { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr)); gap:18px 32px; align-items:start; padding:8px 0 22px; }
-.dock-field { display:grid; gap:8px; min-width:0; align-content:start; }
+/* Labels and notes inside the HUD's panels (the Physics panel). */
 .dock-label { margin:0; font-size:12px; font-weight:650; }
 .dock-notice { margin:0; font-size:12px; line-height:1.7; color:var(--muted); }
 .dock-notice strong { font-weight:650; color:var(--ink); }
-.dock-link { display:grid; gap:6px; }
-.dock-link input { width:100%; min-height:44px; padding:0 14px; border:0; border-radius:12px; background:var(--dock); box-shadow:inset 0 0 0 1px var(--muted); font:inherit; font-size:12px; color:var(--ink); text-overflow:ellipsis; }
-.dock-link input:focus-visible { outline:3px solid var(--focus); outline-offset:3px; }
-/* The Dock's controls are at least 44px tall (the shared ones are 40), and the chosen Home reads as chosen in more than a faint shadow: the same ink fill a pressed Scenario has. */
-.dock.airflow-dock .chip,.dock.airflow-dock .segment span { min-height:44px; }
-.airflow-dock .segments { display:grid; grid-template-columns:repeat(auto-fit,minmax(7.5rem,1fr)); width:100%; border-radius:26px; }
-.airflow-dock .segment span { justify-content:center; }
-.airflow-dock .segment input:checked + span { background:var(--ink); color:#fff; box-shadow:none; }
-.airflow-dock .segment:hover input:not(:checked) + span { background:var(--dock-hover); }
-.airflow-dock .segment input:focus-visible + span { outline-offset:3px; }
-.concept .airflow-dock button:focus-visible { outline-offset:3px; }
-/* The three buttons that act on the whole setup are one width each, so a label that changes ("Link copied") never moves the others. */
-.airflow-dock .dock-actions { display:grid; grid-template-columns:repeat(auto-fit,minmax(8.5rem,1fr)); justify-content:stretch; gap:8px; }
-.airflow-dock .dock-actions .pill { justify-content:center; padding-inline:14px; }
 
 /* Where the simulation is: the status line's words. */
 .sim-status { margin:0; font-size:12px; line-height:1.6; color:var(--muted); font-variant-numeric:tabular-nums; }

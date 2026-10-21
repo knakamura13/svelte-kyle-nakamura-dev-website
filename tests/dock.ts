@@ -1,14 +1,11 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 
-/** What every spec of the airflow Dock needs: the polite live region, the figure's caption, and finding a group and a focus ring. A helper module, not a spec, so the specs can share it. */
+/** What the airflow page's specs share: the polite live region, the status line, opening the page, a picture of the world and a focus ring. A helper module, not a spec. */
 
 /** The page's polite live region: what a screen reader is told after a control is used. */
 export const live = (page: Page) => page.locator('article.airflow p[aria-live="polite"]');
 
-/** The line under the Stage that names the Home. */
-export const caption = (page: Page) => page.locator('.airflow-figure figcaption');
-
-/** The page's status line under the Stage. */
+/** The page's status line, in the HUD. */
 export const status = (page: Page) => page.locator('.sim-status');
 
 /**
@@ -21,38 +18,10 @@ export async function openAirflow(page: Page, path = '/experiments/airflow') {
 }
 
 /**
- * Opens the drawer that holds the Dock, if it is shut, the way a keyboard does: a click would make the browser take the next focus for a
- * pointer's, which shows no ring, and the specs check the rings. The drawer fades in where it stands, so its controls can be used at once.
- */
-export async function openDrawer(page: Page) {
-	const toggle = page.locator('.airflow-drawer-toggle');
-	if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
-		await toggle.focus();
-		await page.keyboard.press('Enter');
-	}
-	await expect(toggle).toHaveAttribute('aria-expanded', 'true');
-	await expect(page.locator('.airflow-dock')).toBeVisible();
-}
-
-/**
  * A picture of the world, with the HUD's panels that float over it painted over: the clock and the status line change as the simulation
  * runs ("Running at 0.9× real time"), and a comparison of two pictures is about the world.
  */
 export const worldShot = (page: Page, view: Locator) => view.screenshot({ mask: [page.locator('.hud .glass'), page.locator('.hud .sim-status')], maskColor: '#000000' });
-
-/** A Dock group by its title. Opens the drawer and the group when they are closed, so its controls can be used. */
-export async function dockGroup(page: Page, title: string): Promise<Locator> {
-	await openDrawer(page);
-	const group = page.locator('.dock-group', { has: page.locator('summary', { hasText: title }) });
-	await expect(group, `a group called ${title}`).toHaveCount(1);
-	if ((await group.getAttribute('open')) === null) {
-		// Opened the way a keyboard opens it. A click would make the browser take the next focus for a pointer's, which shows no ring (Chromium takes a lone Shift as the keyboard being back, but Firefox and WebKit do not), and the specs that follow check the ring.
-		await group.locator('summary').focus();
-		await page.keyboard.press('Enter');
-	}
-	await expect(group).toHaveAttribute('open', '');
-	return group;
-}
 
 /** Whether the focused element, or the control drawn beside a visually hidden one (a segment's input), shows a focus ring. */
 export async function focusRing(page: Page) {
@@ -66,13 +35,3 @@ export async function focusRing(page: Page) {
 		return rings.some(Boolean);
 	});
 }
-
-/** What the focused element is called to a screen reader: its label, or its text. */
-export const focusedName = (page: Page) =>
-	page.evaluate(() => {
-		const active = document.activeElement as HTMLElement | null;
-		if (!active) return '';
-		const labelled = active.getAttribute('aria-labelledby');
-		if (labelled) return labelled.split(' ').map((id) => document.getElementById(id)?.textContent?.trim() ?? '').join(' ');
-		return active.getAttribute('aria-label') ?? (active.closest('label')?.textContent ?? active.textContent ?? '').trim();
-	});
