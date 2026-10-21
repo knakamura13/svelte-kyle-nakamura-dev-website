@@ -42,7 +42,7 @@ html:has(.airflow-immersive),body:has(.airflow-immersive) { height:100%; overflo
 @media(prefers-reduced-motion:reduce) { .airflow-drawer,.airflow-drawer[data-open="true"] { transition:none; } }
 @media(max-width:600px) {
  .airflow-bar { top:10px; left:10px; right:10px; gap:8px; }
- .airflow-title { display:none; }
+ .airflow-bar .airflow-title { display:none; }
  .airflow-drawer { top:auto; height:52%; right:8px; left:8px; bottom:8px; width:auto; transform:translateY(calc(100% + 24px)); }
  .airflow-world[data-drawer="open"] .airflow-figure { right:0; bottom:calc(52% + 8px); }
  .airflow-world .sim-status.airflow-status { left:10px; bottom:10px; max-width:calc(100% - 20px); }

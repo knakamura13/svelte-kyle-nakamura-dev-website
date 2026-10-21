@@ -331,6 +331,22 @@ test.describe('the controls', () => {
 		expect(home.controls.pitchDegrees).toBeGreaterThan(40);
 	});
 
+	test('on a screen taller than wide, start from bird’s-eye looking along the Home’s long side, until the visitor moves the camera', () => {
+		const { controls } = rig();
+		controls.setAspect(390 / 844);
+		expect(controls.goal).toEqual(homeView(HOME, 390 / 844));
+		expect(controls.goal.zoom).toBe(1);
+		// The two-bedroom is wider than deep, so the camera looks east-north-east, along its 12 m.
+		expect(controls.yawDegrees).toBe(70);
+		// Turned the other way up, it goes back to the landscape view; once moved, a new shape leaves the camera where it is.
+		controls.setAspect(1.6);
+		expect(controls.goal).toEqual(homeView(HOME));
+		controls.wheel({ deltaY: -100, deltaMode: 0, ctrlKey: false, metaKey: false });
+		const moved = { ...controls.goal };
+		controls.setAspect(0.5);
+		expect(controls.goal).toEqual(moved);
+	});
+
 	test('start anywhere a link asks for, at once and within the limits: ?camera=x,z,heading,zoom,tilt', () => {
 		expect(cameraFromSearch('')).toBeNull();
 		expect(cameraFromSearch('?camera=')).toBeNull();

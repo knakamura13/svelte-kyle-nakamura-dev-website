@@ -110,7 +110,7 @@ export class SimsCamera {
 	setBounds(bounds: CameraBounds) {
 		this.bounds = { ...bounds };
 		this.measure();
-		Object.assign(this.goal, homeView(bounds));
+		Object.assign(this.goal, homeView(bounds, this.aspect));
 		Object.assign(this.state, this.goal);
 		Object.assign(this.motion, still());
 		this.drags.clear();
@@ -118,10 +118,16 @@ export class SimsCamera {
 		this.apply();
 	}
 
+	/** The view's shape. Until the visitor has moved the camera, the default view is the one for this shape (a phone upright has its own). */
 	setAspect(aspect: number) {
 		this.aspect = aspect;
 		this.camera.aspect = aspect;
 		this.measure();
+		if (!this.touched) {
+			Object.assign(this.goal, homeView(this.bounds, aspect));
+			Object.assign(this.state, this.goal);
+			Object.assign(this.motion, still());
+		}
 		this.apply();
 	}
 
@@ -156,12 +162,13 @@ export class SimsCamera {
 
 	/** Back to the Home's default view. */
 	reset() {
-		Object.assign(this.goal, homeView(this.bounds));
+		Object.assign(this.goal, homeView(this.bounds, this.aspect));
 		this.touched = true;
 	}
 
 	/** Puts the camera at a state at once, goal and all, within the usual limits: a link's `?camera=` (`cameraFromSearch`). */
 	jumpTo(state: Partial<CameraState>) {
+		this.touched = true;
 		Object.assign(this.goal, state);
 		this.goal.zoom = clampZoom(this.goal.zoom);
 		this.goal.tilt = clampTilt(this.goal.tilt, this.goal.zoom);
