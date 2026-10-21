@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { useAirflow } from '../../experience.svelte';
 	import type { Clock, OverlayId, WallMode } from '../../state';
+	import { overlayLegend } from '../../scene/air/legend';
 	import { formatDuration } from '../../units';
-	import { dockLegend } from '../../viz/dockLegend';
 	import { shortfall } from '../clock';
 	import Icon from './Icon.svelte';
 	import { OVERLAYS, WALL_MODES } from './tools';
@@ -27,11 +27,8 @@
 	const time = $derived(formatDuration(experience.readout.physics.time));
 	const behind = $derived(shortfall(experience.readout.status, experience.readout.physics.rate, experience.clock.speed));
 	const overlay = $derived(experience.view.overlay);
-	const legend = $derived(
-		overlay === 'off'
-			? null
-			: dockLegend({ layer: experience.view.layer, sensitivity: experience.view.sensitivity, units: experience.view.units, reference: experience.setup.conditions.indoorTemp, maxTicks: 4 })
-	);
+	// The legend is the air's own (`scene/air/legend.ts`), so its colours are the ones the streaks and the haze are drawn in.
+	const legend = $derived(overlayLegend(overlay, { sensitivity: experience.view.sensitivity, units: experience.view.units, reference: experience.setup.conditions.indoorTemp, maxTicks: 4 }));
 	const sheet = $derived(ui.phone);
 	const open = $derived(!ui.phone || ui.popover === 'view');
 
@@ -89,7 +86,7 @@
 						<button
 							type="button"
 							aria-pressed={overlay === info.id}
-							use:tooltip={{ label: info.id === 'off' ? 'Overlay off' : info.label, hint: info.id === 'off' ? 'Show the home as it is.' : `Tint the rooms by ${info.label.toLowerCase()}.`, side: 'top' }}
+							use:tooltip={{ label: info.id === 'off' ? 'Overlay off' : info.label, hint: info.id === 'off' ? 'The air in its own blue, and the home as it is.' : `Colour the air by ${info.label.toLowerCase()}, with a faint haze of it through the rooms.`, side: 'top' }}
 							onclick={() => setOverlay(info.id)}
 						>
 							<Icon name={OVERLAY_ICONS[info.id]} size={18} />
@@ -117,7 +114,7 @@
 			<button type="button" class="ibtn" aria-label="About this simulation" aria-haspopup="dialog" use:tooltip={{ label: 'About this simulation', hint: 'How it works, and what it is not.', side: 'top' }} onclick={() => ui.open('about')}>
 				<Icon name="info" size={22} />
 			</button>
-			<button type="button" class="ibtn" aria-label="Advanced" aria-haspopup="dialog" aria-expanded={ui.panel === 'advanced'} use:tooltip={{ label: 'Advanced', hint: 'Physics, scale, slice height, units, quality and the share link.', side: 'top' }} onclick={() => (ui.panel === 'advanced' ? (ui.panel = null) : ui.open('advanced'))}>
+			<button type="button" class="ibtn" aria-label="Advanced" aria-haspopup="dialog" aria-expanded={ui.panel === 'advanced'} use:tooltip={{ label: 'Advanced', hint: 'Physics, colour scale, probe and smoke height, units, graphics and the share link.', side: 'top' }} onclick={() => (ui.panel === 'advanced' ? (ui.panel = null) : ui.open('advanced'))}>
 				<Icon name="settings" size={22} />
 			</button>
 		</div>

@@ -503,7 +503,7 @@ export class AirflowExperience extends Experience {
 		this.drag = null;
 	}
 
-	/** Tints the rooms with a field, or nothing. Until the overlays are drawn, each one shows on the slice as its Layer, and Off hides the slice. */
+	/** Colours the air by a field (the streaks, and a faint haze through the rooms), or Off. The view's Layer follows, for the words that name its scale. */
 	setOverlay(overlay: OverlayId) {
 		const info = OVERLAYS.find((o) => o.id === overlay) ?? OVERLAYS[0];
 		this.view.overlay = info.id;

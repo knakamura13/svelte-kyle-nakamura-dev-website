@@ -53,7 +53,7 @@ export const toolInfo = (id: Tool) => TOOLS.find((tool) => tool.id === id) ?? TO
 export interface OverlayInfo {
 	id: OverlayId;
 	label: string;
-	/** The slice layer that shows it until the overlays are drawn; null for Off. */
+	/** The palette layer whose scale and words it uses (the slice's old layers); null for Off. */
 	layer: LayerId | null;
 }
 

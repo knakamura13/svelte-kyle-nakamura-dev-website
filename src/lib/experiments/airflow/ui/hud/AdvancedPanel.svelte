@@ -2,8 +2,8 @@
 	import { onMount, tick } from 'svelte';
 	import { useAirflow } from '../../experience.svelte';
 	import type { Quality, UnitSystem } from '../../state';
+	import { OVERLAY_LAYER, overlayLegend, type OverlayKind } from '../../scene/air/legend';
 	import { formatLength, sliderRange } from '../../units';
-	import { dockLegend } from '../../viz/dockLegend';
 	import {
 		SENSITIVITY_SLIDER,
 		UNIT_OPTIONS,
@@ -12,6 +12,7 @@
 		describeUnits,
 		formatSensitivity,
 		sensitivityFromSlider,
+		sensitivityHint,
 		sliceHeightFromSlider,
 		sliderFromSensitivity,
 		sliderFromSliceHeight,
@@ -25,16 +26,19 @@
 
 	/**
 	 * Advanced: what most visitors never need, one click from the bottom bar. The share link, Restart and Reset; the overlay's colour
-	 * sensitivity and the slice height; units; graphics quality; and the Physics panel (the solver's numbers and the smoke's books). A
-	 * panel beside the world rather than over it, so a change shows while it is open. Escape closes it and gives the focus back.
+	 * sensitivity and the height a Probe is pinned and smoke is released at; units; graphics quality; and the Physics panel (the solver's
+	 * numbers and the smoke's books). A panel beside the world rather than over it, so a change shows while it is open. Escape closes it
+	 * and gives the focus back.
 	 */
 	const experience = useAirflow();
 	const ui = useHudUi();
 	const view = $derived(experience.view);
 	const height = $derived(sliderRange('sliceHeight', view.units));
 	const heightText = $derived(formatLength(view.sliceHeight, view.units));
-	const scaleOf = (sensitivity: number) => dockLegend({ layer: view.layer, sensitivity, units: view.units, reference: experience.setup.conditions.indoorTemp }).description;
-	const scale = $derived(dockLegend({ layer: view.layer, sensitivity: view.sensitivity, units: view.units, reference: experience.setup.conditions.indoorTemp }).range);
+	/** The overlay the sensitivity scales: the one on, or Air speed while the overlays are off (the next one turned on takes it). */
+	const shown: OverlayKind = $derived(view.overlay === 'off' ? 'speed' : view.overlay);
+	const legendAt = (sensitivity: number) => overlayLegend(shown, { sensitivity, units: view.units, reference: experience.setup.conditions.indoorTemp })!;
+	const scale = $derived(legendAt(view.sensitivity));
 
 	let panel: HTMLElement | undefined = $state();
 	let opener: HTMLElement | null = null;
@@ -55,7 +59,7 @@
 	function setSensitivity(position: number) {
 		const sensitivity = sensitivityFromSlider(position);
 		experience.setView({ sensitivity });
-		experience.announce(describeSensitivity(view.layer, sensitivity, scaleOf(sensitivity)));
+		experience.announce(describeSensitivity(OVERLAY_LAYER[shown], sensitivity, legendAt(sensitivity).description));
 	}
 
 	function setSlice(position: number) {
@@ -109,7 +113,7 @@
 		</section>
 
 		<section class="block" aria-labelledby="hud-view-title">
-			<h3 class="eyebrow" id="hud-view-title">Overlay and slice</h3>
+			<h3 class="eyebrow" id="hud-view-title">Overlay and probes</h3>
 			<HudRange
 				label="Colour sensitivity"
 				value={sliderFromSensitivity(view.sensitivity)}
@@ -118,18 +122,18 @@
 				step={SENSITIVITY_SLIDER.step}
 				display={formatSensitivity(view.sensitivity)}
 				spoken={spokenSensitivity(view.sensitivity)}
-				note="Scale: {scale}. Lower shows weaker flow in stronger colour."
+				note="{scale.title}: {scale.range}. {sensitivityHint(OVERLAY_LAYER[shown])}"
 				oninput={setSensitivity}
 			/>
 			<HudRange
-				label="Slice height"
+				label="Probe and smoke height"
 				value={sliderFromSliceHeight(view.sliceHeight, view.units)}
 				min={height.min}
 				max={height.max}
 				step={height.step}
 				display={heightText.text}
 				spoken={heightText.spoken}
-				note="Where the overlay is drawn, probes are pinned and smoke is released."
+				note="The height above the floor where a Probe is pinned and smoke is released. The marker under the pointer floats there."
 				oninput={setSlice}
 			/>
 		</section>

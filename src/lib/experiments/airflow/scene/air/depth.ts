@@ -31,8 +31,15 @@ export interface DepthUniforms {
 	uCameraForward: { value: Vector3 };
 }
 
-/** Whether a material moves its vertices in a shader of its own, so the plain depth material would put them somewhere else. */
-const ownShader = (material: Material) => Object.prototype.hasOwnProperty.call(material, 'onBeforeCompile') || (material as Material & { isShaderMaterial?: boolean }).isShaderMaterial === true;
+/** Set on a material whose only shader of its own is the overlay's mute (`overlay.ts`), so this pass may still draw it with its plain material. */
+export const COLOUR_ONLY = 'airMuteOnly';
+
+/**
+ * Whether a material may move its vertices in a shader of its own, so the plain depth material would put them somewhere else. The
+ * overlay's mute (`overlay.ts`) only changes a colour, so a material with no other shader of its own still draws plain.
+ */
+const ownShader = (material: Material) =>
+	(Object.prototype.hasOwnProperty.call(material, 'onBeforeCompile') && !material.userData[COLOUR_ONLY]) || (material as Material & { isShaderMaterial?: boolean }).isShaderMaterial === true;
 
 export class DepthPrepass {
 	readonly uniforms: DepthUniforms = {

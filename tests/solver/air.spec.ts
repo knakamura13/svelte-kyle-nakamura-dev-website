@@ -6,6 +6,7 @@ import { STREAK_BIRTHS, drawBirths, inAir, inflowFaces, puffWeights, seeded, smo
 import { lookOf } from '../../src/lib/experiments/airflow/scene/air/fields';
 import { HAZE, STREAK_AIR, overlayLegend, overlayMapping, overlayStrength, streakColor } from '../../src/lib/experiments/airflow/scene/air/legend';
 import { MASK_STRIDE, faceByte, passes, solidMask } from '../../src/lib/experiments/airflow/scene/air/mask';
+import { COLOUR_ONLY } from '../../src/lib/experiments/airflow/scene/air/depth';
 import { MUTE, Mute, muted } from '../../src/lib/experiments/airflow/scene/air/overlay';
 import { SMOKE_LOOK, smokeBounds } from '../../src/lib/experiments/airflow/scene/air/smokeVolume';
 import { World } from '../../src/lib/experiments/airflow/sim/world';
@@ -280,18 +281,45 @@ test.describe('the overlays’ scales and legends', () => {
 		const grey = new Color(0.4, 0.4, 0.4);
 		expect(muted(grey).toArray()).toEqual(grey.toArray().map((v) => expect.closeTo(v, 12)));
 
-		const wall = new MeshStandardMaterial({ color: 0x88aa66 });
+		// The world's materials get one shared uniform in their shader, before they are drawn: a map or a wall's vertex colours are muted as
+		// much as a plain colour, and turning an overlay on and off changes only the uniform.
+		const wall = new MeshStandardMaterial({ color: 0xffffff, vertexColors: true });
+		const lawn = new MeshStandardMaterial({ color: 0x88aa66 });
+		const lawnPatch = (shader: { fragmentShader: string }) => void (shader.fragmentShader += '\n// lawn noise');
+		lawn.onBeforeCompile = lawnPatch;
+		lawn.customProgramCacheKey = () => 'airflow-lawn';
 		const mark = new MeshBasicMaterial({ color: 0xff3300 });
-		const world = new Group().add(new Mesh(new BoxGeometry(), wall), new Mesh(new BoxGeometry(), mark));
-		const [wallColor, markColor] = [wall.color.clone(), mark.color.clone()];
+		const world = new Group().add(new Mesh(new BoxGeometry(), wall), new Mesh(new BoxGeometry(), lawn), new Mesh(new BoxGeometry(), mark));
+		const colours = [wall, lawn, mark].map((m) => m.color.clone());
 		const mute = new Mute();
-		mute.apply([world]);
-		mute.apply([world]);
-		expect(wall.color.toArray()).toEqual(muted(wallColor).toArray().map((v) => expect.closeTo(v, 12)));
-		expect(mark.color.equals(markColor), 'an unlit mark keeps its colour').toBe(true);
+		mute.prepare([world]);
+		mute.prepare([world]);
+		expect(mute.active, 'prepared, not yet muted').toBe(false);
+		const compiled = (material: MeshStandardMaterial) => {
+			const shader = { uniforms: {} as Record<string, { value: number }>, vertexShader: '', fragmentShader: '#include <common>\n#include <color_fragment>\n' };
+			material.onBeforeCompile(shader as never, null as never);
+			return shader;
+		};
+		const wallShader = compiled(wall);
+		expect(wallShader.fragmentShader).toContain('uniform float uAirMute;');
+		expect(wallShader.fragmentShader.split('uAirMute').length - 1, 'declared once and used once: prepared once').toBe(2);
+		expect(wallShader.uniforms.uAirMute).toBe(mute.amount);
+		expect(wall.customProgramCacheKey()).toBe('|air-mute');
+		expect(wall.userData[COLOUR_ONLY], 'the depth pre-pass may draw it plain').toBe(true);
+		const lawnShader = compiled(lawn);
+		expect(lawnShader.fragmentShader, 'the lawn keeps its own patch').toContain('// lawn noise');
+		expect(lawnShader.fragmentShader).toContain('uAirMute');
+		expect(lawn.customProgramCacheKey()).toBe('airflow-lawn|air-mute');
+		expect(lawn.userData[COLOUR_ONLY], 'a shader of its own is still drawn as itself').toBeUndefined();
+		expect(Object.prototype.hasOwnProperty.call(mark, 'onBeforeCompile'), 'an unlit mark is left alone').toBe(false);
+
+		mute.apply();
+		expect(mute.amount.value).toBe(MUTE);
+		expect(mute.active).toBe(true);
 		mute.restore();
-		expect(wall.color.equals(wallColor)).toBe(true);
+		expect(mute.amount.value).toBe(0);
 		expect(mute.active).toBe(false);
+		expect([wall, lawn, mark].every((m, i) => m.color.equals(colours[i])), 'no colour is changed in place').toBe(true);
 	});
 
 	test('the legend is the slice’s, in the page’s units, and Off has none', () => {

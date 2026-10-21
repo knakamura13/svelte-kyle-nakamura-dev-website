@@ -108,7 +108,9 @@ export function createAir(options: AirOptions): Air {
 	const smoke = new SmokeVolume(fields, depth.uniforms, march.size);
 	const overlay = new Overlay(fields, depth.uniforms, march.size);
 	let puffs: SmokePuffs | null = null;
+	// Every lit material of the world gets the mute's line before it is first drawn, so an overlay never waits for a shader.
 	const mute = new Mute();
+	if (options.muted) mute.prepare(options.muted());
 	// The overlay's haze, then the smoke over it, are marched into their own target; that is laid over the world, and the streaks over all.
 	overlay.mesh.renderOrder = 0;
 	smoke.mesh.renderOrder = 1;
@@ -210,6 +212,7 @@ export function createAir(options: AirOptions): Air {
 		group,
 		update(volume, dt) {
 			prepared = false;
+			if (options.muted) mute.prepare(options.muted());
 			const running = options.world();
 			if (running !== world) adoptWorld(running);
 			if (!world) return false;
@@ -241,7 +244,6 @@ export function createAir(options: AirOptions): Air {
 			readLights(scene, lighting, lights);
 			smoke.setLighting(lighting);
 			puffs?.setLighting(lighting);
-			if (kind !== 'off' && options.muted) mute.apply(options.muted());
 			// Puffs drawn at low quality stand in for the volume.
 			if (puffs) smoke.mesh.visible = false;
 			return blend < 1;
@@ -252,7 +254,7 @@ export function createAir(options: AirOptions): Air {
 			overlay.setKind(next, sensitivity);
 			streaks.setOverlay(next, sensitivity);
 			if (next === 'off') mute.restore();
-			else if (options.muted) mute.apply(options.muted());
+			else if (options.muted) mute.apply();
 		},
 		setQuality(next) {
 			if (next === tier) return;

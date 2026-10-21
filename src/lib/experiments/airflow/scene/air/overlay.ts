@@ -2,7 +2,7 @@ import { BackSide, BoxGeometry, Color, Mesh, ShaderMaterial, Vector2, Vector3, t
 import type { OverlayId } from '../../state';
 import { PALETTE_GLSL } from '../../viz/palettes';
 import { paletteTexture } from '../sliceLayer';
-import type { DepthUniforms } from './depth';
+import { COLOUR_ONLY, type DepthUniforms } from './depth';
 import type { AirFields } from './fields';
 import { BOX_GLSL, DEPTH_GLSL, HASH_GLSL, VOLUME_GLSL } from './glsl';
 import { HAZE, overlayMapping, type OverlayKind } from './legend';
@@ -169,38 +169,63 @@ export function muted(color: Color, share = MUTE, out = new Color()) {
 	return out.setRGB(color.r + (grey - color.r) * share, color.g + (grey - color.g) * share, color.b + (grey - color.b) * share);
 }
 
-type Colored = Material & { color: Color };
+/** The GLSL that moves a surface's own colour (its paint, its map and its vertex colours together) toward grey by `uAirMute`. */
+export const MUTE_GLSL = /* glsl */ `
+	diffuseColor.rgb = mix( diffuseColor.rgb, vec3( dot( diffuseColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) ) ), uAirMute );`;
+
+const lit = (material: Material) => 'isMeshStandardMaterial' in material || 'isMeshLambertMaterial' in material || 'isMeshPhongMaterial' in material;
 
 /**
- * Mutes the world's colours a little while an overlay is on, and gives them back, by changing each lit material's colour in place:
- * nothing else about a material changes, so its textures, its own shader (a wall cut down on the GPU) and its transparency (a faded
- * wall, glass) carry on, and no shader is compiled. Called each frame while an overlay is on, so what is added meanwhile (a fan dropped
- * in, another Home) is muted too; a material already muted is left alone.
+ * Mutes the world's colours a little while an overlay is on (`MUTE` of the way to grey, as `muted` does to one colour), and gives them
+ * back. Each lit material of the world is given, once and before it is first drawn (`prepare`), a line in its shader that moves its
+ * surface colour toward grey by one uniform that every prepared material shares, so its map, its vertex colours (the walls' paint) and
+ * its own colour are muted alike, and turning an overlay on or off changes that one number: no shader is compiled then. A material's own
+ * shader patch (the lawn's noise) runs first and is kept. What is added later (a fan dropped in, another Home) is prepared on the next
+ * frame, before it is drawn.
  */
 export class Mute {
-	private readonly saved = new Map<Colored, Color>();
+	/** 0, or `MUTE` while an overlay is on: the uniform every prepared material reads. */
+	readonly amount = { value: 0 };
+	private readonly prepared = new WeakSet<Material>();
 
 	get active() {
-		return this.saved.size > 0;
+		return this.amount.value > 0;
 	}
 
-	apply(roots: Iterable<Object3D>) {
+	/** Gives every lit material under `roots` the mute's line, if it has not had it yet. Cheap for one already prepared. */
+	prepare(roots: Iterable<Object3D>) {
 		for (const root of roots)
 			root.traverse((object) => {
 				const material = (object as Object3D & { material?: Material | Material[] }).material;
 				if (!material) return;
-				for (const m of Array.isArray(material) ? material : [material]) this.mute(m as Colored);
+				for (const m of Array.isArray(material) ? material : [material]) if (!this.prepared.has(m) && lit(m)) this.patch(m);
 			});
 	}
 
-	private mute(material: Colored) {
-		if (this.saved.has(material) || !material.color || !('isMeshStandardMaterial' in material || 'isMeshLambertMaterial' in material || 'isMeshPhongMaterial' in material)) return;
-		this.saved.set(material, material.color.clone());
-		muted(material.color, MUTE, material.color);
+	private patch(material: Material) {
+		this.prepared.add(material);
+		const own = Object.prototype.hasOwnProperty.call(material, 'onBeforeCompile') ? material.onBeforeCompile : null;
+		const ownKey = own ? material.customProgramCacheKey() : '';
+		const amount = this.amount;
+		material.onBeforeCompile = function (this: Material, shader, renderer) {
+			own?.call(this, shader, renderer);
+			shader.uniforms.uAirMute = amount;
+			shader.fragmentShader = shader.fragmentShader
+				.replace('#include <common>', '#include <common>\nuniform float uAirMute;')
+				.replace('#include <color_fragment>', `#include <color_fragment>${MUTE_GLSL}`);
+		};
+		material.customProgramCacheKey = () => `${ownKey}|air-mute`;
+		if (!own) material.userData[COLOUR_ONLY] = true;
+		material.needsUpdate = true;
+	}
+
+	/** Mutes everything prepared, after preparing what under `roots` has not been. */
+	apply(roots: Iterable<Object3D> = []) {
+		this.prepare(roots);
+		this.amount.value = MUTE;
 	}
 
 	restore() {
-		for (const [material, color] of this.saved) material.color.copy(color);
-		this.saved.clear();
+		this.amount.value = 0;
 	}
 }
