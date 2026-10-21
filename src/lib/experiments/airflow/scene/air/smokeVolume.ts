@@ -221,7 +221,7 @@ export class SmokeVolume {
 
 	/** Marches through `bounds` (clipped to the home's box), or nothing when there is no smoke. `step` is the volume's finest cell edge, m. */
 	setBounds(bounds: ReturnType<typeof smokeBounds>, box: Vector3, step: number) {
-		if (!bounds) {
+		if (!bounds || this.strength <= 0) {
 			this.mesh.visible = false;
 			return;
 		}
@@ -233,6 +233,14 @@ export class SmokeVolume {
 		this.mesh.scale.set(Math.max(1e-3, max.x - min.x), Math.max(1e-3, max.y - min.y), Math.max(1e-3, max.z - min.z));
 		uniforms.uStep.value = Math.max(0.03, 0.5 * step);
 	}
+
+	/** How thick the smoke is drawn against its full look, 0 to 1: thinner under an overlay, so the overlay's tint reads through it. */
+	setStrength(strength: number) {
+		this.mesh.material.uniforms.uExtinction.value = SMOKE_LOOK.extinction * strength;
+		this.strength = strength;
+	}
+
+	strength = 1;
 
 	setMaxSteps(steps: number) {
 		this.mesh.material.uniforms.uMaxSteps.value = steps;

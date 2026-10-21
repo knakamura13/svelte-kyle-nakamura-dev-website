@@ -48,6 +48,9 @@ export interface Air {
 	dispose(): void;
 }
 
+/** How thick the smoke is drawn under the Air speed and Temperature overlays, against its full look. */
+const SMOKE_UNDER_OVERLAY = 0.35;
+
 /** How often the lights are looked for again, in updates: a light added or replaced is picked up within a second. */
 const LIGHT_REFRESH = 60;
 
@@ -128,6 +131,8 @@ export function createAir(options: AirOptions): Air {
 	const lighting: SmokeLighting = { sunDirection: new Vector3(0, 1, 0), sun: new Color(), sky: new Color() };
 	const box = new Vector3(1, 1, 1);
 	let finest = 0.15;
+	/** The box of visible smoke in the two volumes being blended, kept so the smoke can be shown again without waiting for a read. */
+	let bounds: ReturnType<typeof smokeBounds> = null;
 
 	const setSmokeMode = () => {
 		const low = tier === 'low';
@@ -135,6 +140,7 @@ export function createAir(options: AirOptions): Air {
 			puffs = new SmokePuffs(fields, precise);
 			puffs.mesh.renderOrder = 16;
 			group.add(puffs.mesh);
+			puffs.mesh.visible = kind !== 'smoke';
 			if (fields.newest && world) puffs.births(fields.newest, world.raster);
 		} else if (!low && puffs) {
 			group.remove(puffs.mesh);
@@ -199,6 +205,7 @@ export function createAir(options: AirOptions): Air {
 		fields.clear();
 		streaks.reset();
 		puffs?.reset();
+		bounds = null;
 		smoke.mesh.visible = false;
 	}
 
@@ -226,7 +233,8 @@ export function createAir(options: AirOptions): Air {
 				fields.push(volume, now);
 				streaks.births(volume, raster);
 				puffs?.births(volume, raster);
-				smoke.setBounds(smokeBounds(fields.older && fields.older !== volume ? [fields.older, volume] : [volume]), box, finest);
+				bounds = smokeBounds(fields.older && fields.older !== volume ? [fields.older, volume] : [volume]);
+				smoke.setBounds(bounds, box, finest);
 			}
 			const blend = fields.tick(now);
 			pending = Math.min(0.1, pending + Math.max(0, dt));
@@ -246,6 +254,13 @@ export function createAir(options: AirOptions): Air {
 			kind = next;
 			if (settings.sensitivity !== undefined) sensitivity = settings.sensitivity;
 			overlay.setKind(next, sensitivity);
+			// Under the Smoke overlay the PM2.5 is the tint, so the smoke itself is not drawn; under the others it is drawn thinner.
+			smoke.setStrength(next === 'off' ? 1 : next === 'smoke' ? 0 : SMOKE_UNDER_OVERLAY);
+			smoke.setBounds(bounds, box, finest);
+			if (puffs) {
+				puffs.mesh.visible = next !== 'smoke';
+				smoke.mesh.visible = false;
+			}
 			streaks.setScale(sensitivity);
 			streaks.setPlain(next !== 'off');
 			if (next === 'off') clay.restore();
