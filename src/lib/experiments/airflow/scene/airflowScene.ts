@@ -9,7 +9,7 @@ import { chooseBackend } from '../sim/backends';
 import { cellFromSearch, detectSmallDevice } from '../sim/device';
 import { SimulationSession, type SessionParams } from '../sim/session';
 import { effectiveOpenings } from '../sim/world';
-import type { OverlayId, View } from '../state';
+import { MAX_PINS, type OverlayId, type View } from '../state';
 import { createAir } from './air';
 import { FOV, SimsCamera } from './camera/controls';
 import { cameraFromSearch } from './camera/sims';
@@ -232,6 +232,7 @@ export function createAirflowScene(host: WorldHost, params: AirflowSceneParams, 
 			readout.hover = reading;
 		},
 		pin: (point) => params.pin(point),
+		full: () => params.probes.length >= MAX_PINS,
 		unpin: (id) => params.unpin(id, true),
 		emit: (point) => {
 			session.setEmitPoint(point);

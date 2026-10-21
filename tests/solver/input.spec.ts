@@ -15,7 +15,7 @@ const AIR: HoverReading = { x: 0, y: 1.1, z: 0, u: 0, v: 0, w: 0, speed: 0, aver
 
 /** A host over a 6 × 4 m home whose slice is air everywhere except a piece of furniture at x 4 to 5. */
 function harness(mode: PointerMode = 'look') {
-	const log = { pins: [] as Point3[], unpins: [] as string[], emits: [] as (Point3 | null)[], hovers: [] as (Point3 | null)[] };
+	const log = { pins: [] as Point3[], unpins: [] as string[], emits: [] as (Point3 | null)[], hovers: [] as (Point3 | null)[], refusals: 0 };
 	let clock = 0;
 	let full = false;
 	let picked: Point3 | null = { x: 1, y: 1.1, z: 1 };
@@ -26,13 +26,17 @@ function harness(mode: PointerMode = 'look') {
 		read: (point) => ({ ...AIR, x: point.x, y: point.y, z: point.z, inAir: !(point.x >= 4 && point.x <= 5) }),
 		hover: (point) => log.hovers.push(point),
 		pin: (point) => {
-			if (full) return null;
+			if (full) {
+				log.refusals++;
+				return null;
+			}
 			log.pins.push(point);
 			return `p${log.pins.length}`;
 		},
 		unpin: (id) => log.unpins.push(id),
 		emit: (point) => log.emits.push(point),
-		now: () => clock
+		now: () => clock,
+		full: () => full
 	};
 	const input = new AirflowInput(host);
 	const ndc = { x: 0, y: 0 };
@@ -213,6 +217,26 @@ test.describe('a double click', () => {
 		h.advance(100);
 		click(h, event);
 		expect(h.log.unpins).toEqual([]);
+	});
+
+	test('in a full home says nothing about a refused probe, since it asked for none; one click alone is told, once it cannot be a double click', () => {
+		const h = harness();
+		h.fill();
+		const event = h.pointer('mouse');
+		click(h, event);
+		h.advance(120);
+		click(h, event);
+		h.advance(600);
+		h.input.tick();
+		expect(h.log.refusals, 'a double click').toBe(0);
+		click(h, event);
+		h.input.tick();
+		expect(h.log.refusals, 'not yet: a second click may follow').toBe(0);
+		expect(h.input.busy, 'the Stage keeps drawing until it knows').toBe(true);
+		h.advance(500);
+		h.input.tick();
+		expect(h.log.refusals, 'a single click').toBe(1);
+		expect(h.input.busy).toBe(false);
 	});
 
 	test('a finger in probe mode that taps twice in one place pins once', () => {

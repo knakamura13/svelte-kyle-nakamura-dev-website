@@ -30,8 +30,13 @@ export interface InputHost {
 	read(point: Point3): HoverReading | null;
 	/** Shows where the visitor is looking (the marker and the Dock's readout), or clears it. */
 	hover(point: Point3 | null, reading: HoverReading | null): void;
-	/** Pins a probe. Returns its id, or null when the home already holds the most it allows. */
+	/** Pins a probe. Returns its id, or null when the home already holds the most it allows (and says so). */
 	pin(point: Point3): string | null;
+	/**
+	 * Whether the home already holds the most probes it allows. A click then is not pinned at once: it is refused, and told so, only once
+	 * it is clearly not the first click of a double click, which moves the camera and asked for no probe. Absent: every click pins at once.
+	 */
+	full?(): boolean;
 	/** Takes a probe back, as when a pin turns out to have been the first click of a double click. */
 	unpin(id: string): void;
 	/** Starts releasing smoke at a point, moves the source, or stops it (null). */
@@ -79,15 +84,17 @@ export class AirflowInput implements SceneInput {
 	private cursorEmitting = false;
 	/** A device or handle the pointer has hold of, by the pointer's id, until it lifts. */
 	private held: { id: number; grab: unknown } | null = null;
-	/** The probe the last tap pinned, and where and when. */
-	private lastPin: { id: string; at: number; x: number; y: number } | null = null;
+	/** The probe the last tap pinned (or null, for a tap a full home refused), and where and when. */
+	private lastPin: { id: string | null; at: number; x: number; y: number } | null = null;
+	/** A tap a full home refused, to be told so in `tick` once it is too late to be the first click of a double click. */
+	private refused: { point: Point3; at: number } | null = null;
 
 	constructor(private readonly host: InputHost) {}
 
 	/** True while the Stage must keep drawing for the input: a press that may still become a hold, smoke being released, or a device being dragged. */
 	get busy() {
 		const press = this.press;
-		return this.cursorEmitting || !!this.held || (!!press && (press.emitting || (!press.owned && !press.dragged)));
+		return this.cursorEmitting || !!this.held || !!this.refused || (!!press && (press.emitting || (!press.owned && !press.dragged)));
 	}
 
 	touchAction(): 'pan-y' | 'none' {
@@ -176,8 +183,15 @@ export class AirflowInput implements SceneInput {
 		const now = this.host.now();
 		const last = this.lastPin;
 		if (last && now - last.at < DOUBLE_MS && Math.hypot(x - last.x, y - last.y) < (touch ? DOUBLE_TOUCH_PX : DOUBLE_PX)) {
-			this.host.unpin(last.id);
+			if (last.id) this.host.unpin(last.id);
 			this.lastPin = null;
+			this.refused = null;
+			return;
+		}
+		if (this.host.full?.()) {
+			// A full home refuses it, but says so only once this is clearly a click of its own and not the first of a double click.
+			this.lastPin = { id: null, at: now, x, y };
+			this.refused = { point, at: now };
 			return;
 		}
 		const id = this.host.pin(point);
@@ -197,6 +211,13 @@ export class AirflowInput implements SceneInput {
 
 	/** Once a frame: a still press that has lasted long enough becomes a hold, which releases smoke. Returns `busy`. */
 	tick() {
+		// A refused click that no second click followed: now the visitor is told the home is full (or, if a probe went meanwhile, it pins).
+		if (this.refused && this.host.now() - this.refused.at >= DOUBLE_MS) {
+			const { point } = this.refused;
+			this.refused = null;
+			this.lastPin = null;
+			this.host.pin(point);
+		}
 		const press = this.press;
 		if (press && !press.owned && !press.dragged && !press.emitting && this.host.now() - press.at >= HOLD_MS) {
 			// Nothing to release smoke into on furniture or outside the home: let the press be a plain press.
@@ -274,6 +295,7 @@ export class AirflowInput implements SceneInput {
 	/** Forgets everything in progress: the mode changed, the home changed, or the Stage is going away. */
 	reset() {
 		this.letGo();
+		this.refused = null;
 		if (this.press?.emitting) this.host.emit(null);
 		this.press = null;
 		if (this.cursorEmitting) this.stopCursorSmoke();

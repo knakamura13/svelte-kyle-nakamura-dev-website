@@ -38,6 +38,11 @@ const TILT_PER_PX = 0.0042;
 /** Zoom per pixel of wheel, for a mouse wheel and for a trackpad pinch (which arrives as a wheel with Ctrl held, in small steps). */
 const ZOOM_PER_PX = 0.0011;
 const PINCH_ZOOM_PER_PX = 0.009;
+/**
+ * The most one wheel event with Ctrl held moves the zoom: a pinch sends many small steps, but a mouse wheel turned with Ctrl held sends
+ * one of 100 px or more, which at the pinch's rate would take the zoom from one end to the other in one notch.
+ */
+const PINCH_STEP = 0.15;
 /** Zoom per press of + or -, and how fast Q and E turn, radians a second. */
 const ZOOM_STEP = 0.1;
 const TURN_SPEED = 1.7;
@@ -254,7 +259,8 @@ export class SimsCamera {
 		const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? 400 : 1;
 		const pixels = event.deltaY * unit;
 		if (!pixels) return false;
-		this.setZoom(this.goal.zoom + pixels * (event.ctrlKey || event.metaKey ? PINCH_ZOOM_PER_PX : ZOOM_PER_PX));
+		const step = event.ctrlKey || event.metaKey ? Math.max(-PINCH_STEP, Math.min(PINCH_STEP, pixels * PINCH_ZOOM_PER_PX)) : pixels * ZOOM_PER_PX;
+		this.setZoom(this.goal.zoom + step);
 		this.touched = true;
 		return true;
 	}
