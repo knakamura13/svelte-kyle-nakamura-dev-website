@@ -6,10 +6,10 @@ import type { HomePlan } from '../homes/types';
 import type { AirflowReadout } from '../readouts';
 import { chooseBackend } from '../sim/backends';
 import { cellFromSearch, detectSmallDevice } from '../sim/device';
-import { SMOKE, SMOKE_DENSE, SimulationSession, TRACERS, type SessionParams } from '../sim/session';
+import { SimulationSession, type SessionParams } from '../sim/session';
 import { effectiveOpenings } from '../sim/world';
-import type { View } from '../state';
-import { ARROW_SPACING, DirectionArrows } from './arrows';
+import type { OverlayId, View } from '../state';
+import { createAir } from './air';
 import { FOV, SimsCamera } from './camera/controls';
 import { PITCH_MAX, cameraFromSearch, clampTilt, pitchAt } from './camera/sims';
 import { DeviceEditor, type Grab } from './deviceEditor';
@@ -21,13 +21,8 @@ import { Lighting } from './look/lighting';
 import { Materials } from './look/materials';
 import type { World, WorldHost } from './look/stage';
 import { Markers } from './markers';
-import { SmokePoints, TracerPoints } from './particles';
 import { pointOnPlane, pointOnSurface } from './pick';
-import { SliceLayer } from './sliceLayer';
 import { nextWallMode } from './walls/cutaway';
-
-/** On a compact Stage the arrows sit twice as far apart, so each stays a readable size. */
-const COMPACT_SPACING = ARROW_SPACING * 2;
 
 /** How far outside the footprint the compass letters sit, m: past the outside walls, which are 0.2 m thick. */
 const COMPASS_OFFSET = 0.9;
@@ -35,7 +30,7 @@ const COMPASS_OFFSET = 0.9;
 /** Room names and compass letters show only this far out (zoom 0 is eye level, 1 bird's-eye): close in they would be in the way. */
 const LABEL_ZOOM = 0.7;
 
-/** Where a device's symbol is drawn while the slice is off: just over the floor, round its feet. */
+/** Where a device's ring and arrow are drawn: just over the floor, round its feet. */
 const FLOOR_SYMBOLS = 0.02;
 
 /**
@@ -71,22 +66,19 @@ export interface AirflowSceneParams extends SessionParams {
 interface House {
 	plan: HomePlan;
 	home: Home;
-	slice: SliceLayer;
-	arrows: DirectionArrows;
-	spacing: number;
 	labels: Label[];
 }
 
 /**
  * The airflow world: the Home (`look/home.ts`: painted walls that cut away, floors, furniture, the lawn and the planting) in late
- * afternoon light (`look/lighting.ts`), with the live simulation in it: tracers that drift with the air and smoke, through the whole
- * volume of the rooms, the fans and purifiers, the rings and pins the visitor places, and, when the visitor turns it on, the slice
- * plane coloured by the layer they picked. The Sims camera (`camera/controls.ts`) frames it; the host (`look/stage.ts`) draws it and
- * hands it the input. Everything is in the solver's metres, so nothing is converted between the two.
+ * afternoon light (`look/lighting.ts`), with the live simulation in it: the air (`air/`: streaks that ride it through the whole
+ * volume of the rooms, the smoke lit by the sun, and the overlays, which colour the streaks), the fans and purifiers, and the rings
+ * and pins the visitor places. No plane is drawn anywhere. The Sims camera (`camera/controls.ts`) frames it; the host
+ * (`look/stage.ts`) draws it and hands it the input. Everything is in the solver's metres, so nothing is converted between the two.
  *
  * It owns the `SimulationSession`: that builds the world and steps it each frame this runs, and this draws the newest
- * snapshot it has. A home or a restart that needs a new world keeps the old picture out of the way (`live`) until the new
- * world has its first slice, so the air never shows over a different home.
+ * snapshot it has. A home or a restart that needs a new world keeps the old air out of the way until the new world's first
+ * volume, so the air of one home never shows over another.
  */
 export function createAirflowScene(host: WorldHost, params: AirflowSceneParams, readout: AirflowReadout): World {
 	const scene = new Scene();
@@ -108,20 +100,18 @@ export function createAirflowScene(host: WorldHost, params: AirflowSceneParams, 
 		readout,
 		invalidate: host.invalidate,
 		reducedMotion: host.reducedMotion,
-		announce: (message) => params.announce(message)
+		announce: (message) => params.announce(message),
+		// The air is drawn from a volume of the whole box (`air/`), so the backend keeps no tracers or smoke particles of its own.
+		particles: false,
+		volume: true
 	});
-	const tracers = new TracerPoints(TRACERS);
-	const smoke = new SmokePoints(SMOKE);
 	const devices = new DeviceMeshes(models);
 	const markers = new Markers(host.labels);
-	scene.add(tracers.points, smoke.points, devices.group, markers.group);
+	scene.add(devices.group, markers.group);
 
 	function buildHouse(plan: HomePlan): House {
 		const home = new Home(plan, materials, host.assets, { furniture: params.setup.furniture });
-		const slice = new SliceLayer(plan.width, plan.depth);
-		const spacing = host.compact() ? COMPACT_SPACING : ARROW_SPACING;
-		const arrows = new DirectionArrows(plan.width, plan.depth, spacing);
-		scene.add(home.group, slice.mesh, arrows.mesh);
+		scene.add(home.group);
 		lighting.fit(home.bounds);
 		const labels: Label[] = home.roomAnchors.map((anchor) => {
 			const label = host.labels.add({ name: anchor.name, tone: 'room', side: 'above' });
@@ -139,18 +129,26 @@ export function createAirflowScene(host: WorldHost, params: AirflowSceneParams, 
 			label.position.set(x, 0, z);
 			labels.push(label);
 		}
-		return { plan, home, slice, arrows, spacing, labels };
+		return { plan, home, labels };
 	}
 
 	function disposeHouse(old: House) {
 		for (const label of old.labels) host.labels.remove(label);
-		scene.remove(old.slice.mesh, old.arrows.mesh);
 		old.home.dispose();
-		old.slice.dispose();
-		old.arrows.dispose();
 	}
 
 	let house = buildHouse(planOf(params.setup.plan));
+	// The air: streaks that ride the solver's air, the smoke lit by the world's sun, and the overlays. Under an overlay the Home and
+	// the devices are muted a little, so its colours stand out of the world.
+	const air = createAir({
+		scene,
+		camera,
+		world: () => (session.world?.raster.plan.id === house.plan.id ? session.world : null),
+		muted: () => [house.home.group, devices.group],
+		sun: lighting.sun,
+		quality: host.quality().tier
+	});
+	let overlay: { kind: OverlayId; sensitivity: number } | null = null;
 	const controls = new SimsCamera(
 		camera,
 		{
@@ -196,13 +194,11 @@ export function createAirflowScene(host: WorldHost, params: AirflowSceneParams, 
 	};
 	params.bridge.pick = (clientX, clientY) => pointOnSurface(camera, ndcOf(clientX, clientY), house.plan, house.home.pickables);
 	let openings = '';
-	let version = -1;
-	let sensitivity = NaN;
 	let mode = params.view.mode;
 	let topDown = params.view.topDown;
 	let lastUpdate = 0;
 
-	/** Height of the slice plane as drawn: the cell layer the solver snapped to, or the requested height before the first slice. */
+	/** The height the pointer reads the air at, pins a probe and releases smoke: the cell layer the slice snapped to, or the height asked for before the first slice. Nothing is drawn there. */
 	const planeY = () => session.latest.slice?.y ?? params.view.sliceHeight;
 
 	const input = new AirflowInput({
@@ -248,8 +244,8 @@ export function createAirflowScene(host: WorldHost, params: AirflowSceneParams, 
 		},
 		setQuality(quality) {
 			lighting.setQuality(quality);
-			// A phone draws a third of the tracers: on a small screen the full count is a speckle over the rooms, and each costs a draw.
-			tracers.setCount(quality.tier === 'low' ? Math.round(TRACERS / 3) : TRACERS);
+			// The air follows the tier: fewer streaks on medium and low, and puffs for the smoke on low.
+			air.setQuality(quality.tier);
 		},
 		takeShadowChange: () => house.home.takeShadowChange(),
 		aoBox: () => house.home.aoBox(),
@@ -269,16 +265,6 @@ export function createAirflowScene(host: WorldHost, params: AirflowSceneParams, 
 				controls.setBounds(house.home.bounds);
 				house.home.update(look(), view.walls, 0, true);
 				openings = '';
-				version = -1;
-			}
-			const spacing = host.compact() ? COMPACT_SPACING : ARROW_SPACING;
-			if (spacing !== house.spacing) {
-				scene.remove(house.arrows.mesh);
-				house.arrows.dispose();
-				house.arrows = new DirectionArrows(house.plan.width, house.plan.depth, spacing);
-				house.spacing = spacing;
-				scene.add(house.arrows.mesh);
-				version = -1;
 			}
 			if (view.mode !== mode) {
 				mode = view.mode;
@@ -310,33 +296,20 @@ export function createAirflowScene(host: WorldHost, params: AirflowSceneParams, 
 			const named = controls.state.zoom > LABEL_ZOOM;
 			for (const label of house.labels) label.enabled = named;
 
-			// The newest snapshot, but only once it is of this home.
+			// The newest volume, but only once it is of this home. No plane is drawn: the air fills the rooms instead (`air/`). The slice
+			// is still read, for the hover readout and the height a probe or a puff of smoke is placed at.
 			const { latest, world } = session;
-			const live = !!latest.slice && !!world && world.raster.plan.id === house.plan.id;
-			house.slice.mesh.visible = live && view.slice;
-			house.arrows.mesh.visible = live && view.slice && view.layer === 'direction';
-			tracers.setVisible(live && view.tracers);
-			smoke.setVisible(live);
-			if (live) {
-				const slice = latest.slice!;
-				const scale = { sensitivity: view.sensitivity, baseline: 0 };
-				if (view.slice) {
-					house.slice.setHeight(slice.y);
-					house.slice.update(slice, view.layer, scale);
-					house.arrows.setHeight(slice.y);
-					if (view.layer === 'direction') house.arrows.update(slice, scale);
-				}
-				// The particles only need uploading when there are new positions, or the speed scale moved under the tracers.
-				if (latest.version !== version || scale.sensitivity !== sensitivity) {
-					version = latest.version;
-					sensitivity = scale.sensitivity;
-					if (latest.tracers) tracers.update(latest.tracers, scale);
-					if (latest.smoke) smoke.update(latest.smoke, { dense: SMOKE_DENSE });
-				}
+			const live = !!world && world.raster.plan.id === house.plan.id;
+			if (!overlay || overlay.kind !== view.overlay || overlay.sensitivity !== view.sensitivity) {
+				overlay = { kind: view.overlay, sensitivity: view.sensitivity };
+				air.setOverlay(view.overlay, { sensitivity: view.sensitivity });
 			}
+			air.setStreaks(view.tracers);
+			// The streaks move with the air in real time, as the air would carry them; a paused clock holds them where they are.
+			if (air.update(live ? latest.volume : null, params.clock.paused ? 0 : Math.min(real, 0.05))) moving = true;
 
-			// A device's ring and arrow lie on the slice while it shows (it hides what stands below it), and round its feet while it does not.
-			devices.update(setup.devices, session.simTime, view.slice ? planeY() : FLOOR_SYMBOLS, params.selected);
+			// A device's ring and arrow lie round its feet.
+			devices.update(setup.devices, session.simTime, FLOOR_SYMBOLS, params.selected);
 			editor.update(setup.devices.find((d) => d.id === params.selected));
 			editor.setGhost(params.drag);
 			markers.syncProbes(params.probes, readout.probes, view.units);
@@ -348,14 +321,13 @@ export function createAirflowScene(host: WorldHost, params: AirflowSceneParams, 
 		dispose() {
 			input.reset();
 			readout.hover = null;
+			air.dispose();
 			session.dispose();
 			backend.dispose();
 			disposeHouse(house);
 			markers.dispose();
 			editor.dispose();
 			devices.dispose();
-			tracers.dispose();
-			smoke.dispose();
 			lighting.dispose();
 			materials.dispose();
 			disposeTree(scene);
