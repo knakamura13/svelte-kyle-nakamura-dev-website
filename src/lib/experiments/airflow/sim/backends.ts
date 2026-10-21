@@ -4,6 +4,7 @@ import { WorkerBackend, portOfWorker, type WorkerPort } from '../solver/cpu/prox
 import { GpuBackend } from '../solver/gpu/backend';
 import { GpuContext } from '../solver/gpu/context';
 import { isGpuSolverError } from '../solver/gpu/errors';
+import type { StepCost } from './calibrate';
 import { Tuner, type BackendKind, type Tuning } from './tuner';
 import type { BackendFactory } from './world';
 
@@ -16,8 +17,14 @@ export interface BackendChoice extends Tuning {
 	 * is built: the tuner counts frames from the world it last sized.
 	 */
 	cellSize(plan: HomePlan): Promise<number>;
+	/** The size to warm `plan`'s first world up at, on the backend the next world runs on, or null when nothing needs measuring (tuner.ts). */
+	probe(plan: HomePlan): Promise<number | null>;
+	/** What the warm-up on `kind` measured, for that kind's tuner. */
+	calibrate(kind: BackendKind, cost: StepCost | null): void;
 	/** The tuner of each kind of backend. The choice owns them, so what a device was found to hold is learned once for the page. For the Physics panel and for tests. */
 	readonly tuners: Readonly<Record<BackendKind, Tuner>>;
+	/** Starts opening the WebGPU device now, so that its kernels compile while the page does other work (the loading screen compiles the world's shaders). */
+	warm(): void;
 	/** Releases what the choice holds from one world to the next (the shared WebGPU device). */
 	dispose(): void;
 }
@@ -53,8 +60,9 @@ function spawnSolverWorker(): WorkerPort {
  * and a world that was running on it starts over (the session does that when the backend reports the loss).
  *
  * How fine the grid is, is the auto-tuner's to say (tuner.ts), and the choice owns one tuner for each kind of backend, so what
- * the device is found to hold is settled once for the page too: the next Home, a restart and a rebuilt world all start from it.
- * A phone or small tablet (`small`) is given the coarsest grid and a note, and `fixedCell` bypasses the tuners altogether.
+ * the device is found to hold is measured once for the page, by the warm-up of the first world on it (`probe` and `calibrate`): the
+ * next Home, a restart and a rebuilt world all start from it. A phone or small tablet (`small`) is given the coarsest grid and a
+ * note, and `fixedCell` bypasses the tuners altogether.
  */
 export function chooseBackend({ openGpu = () => GpuContext.create(), spawn = spawnSolverWorker, small = false, fixedCell }: ChoiceOptions = {}): BackendChoice {
 	let opened: GpuContext | null = null;
@@ -70,6 +78,8 @@ export function chooseBackend({ openGpu = () => GpuContext.create(), spawn = spa
 				context.dispose();
 				return null;
 			}
+			// The device is open and the solver's kernels are compiled: a mark of the page's load (engine.ts).
+			performance.mark('airflow:gpu');
 			opened = context;
 			context.onLost(({ message }) => {
 				console.warn(`The graphics device was lost, so the simulation moves to the processor at reduced detail. ${message}`);
@@ -104,9 +114,16 @@ export function chooseBackend({ openGpu = () => GpuContext.create(), spawn = spa
 			return WorkerBackend.create(spawn(), config, initial);
 		},
 		cellSize: async (plan) => (fixedCell !== undefined ? fixedCell : tuners[(await device()) ? 'webgpu' : 'cpu'].pick(plan)),
+		probe: async (plan) => (fixedCell !== undefined ? null : tuners[(await device()) ? 'webgpu' : 'cpu'].probe(plan)),
+		calibrate: (kind, cost) => {
+			if (fixedCell === undefined) tuners[kind].calibrate(cost);
+		},
 		observe: (kind, sample) => (fixedCell !== undefined ? null : tuners[kind].observe(sample)),
 		note: (kind) => (fixedCell !== undefined ? '' : (tuners[kind].note ?? '')),
 		tuners,
+		warm() {
+			void device();
+		},
 		dispose() {
 			disposed = true;
 			opened?.dispose();

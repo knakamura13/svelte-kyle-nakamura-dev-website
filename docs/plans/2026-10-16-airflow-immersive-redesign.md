@@ -172,3 +172,34 @@ Kyle approved check-in 2 on 2026-10-20 and paused the project. Milestones 1 to 3
 - A worktree may start from `main`, where merging this branch conflicts (`playwright.config.ts`, `RangeField.svelte`). Point the empty branch at this branch's tip with `git reset --hard` instead.
 - Vite's dev server refuses a `node_modules` that is a symlink into another worktree. Use `yarn build && yarn preview`, allow it in a scratch config (`server.fs.allow`), or install `node_modules` in the worktree.
 - The machine is often loaded by other sessions. Run end-to-end specs at `--workers=2`, check `uptime` before blaming the code, and re-measure frame rates on mains power.
+
+### Milestone 4: the loading screen and the opening (#81, #82), 2026-10-21
+
+**Built:**
+- **The loading screen** (`ui/LoadingScreen.svelte`, `load.ts`, `loading.svelte.ts`). It is in the server's HTML, so it is the first paint. It has the title, one line on what is coming, and one bar for the fetch, the shader compile and the warm-up, in the HUD's glass and the site's type. The world and the HUD are `inert` under it, and it fades into the world.
+- **The shaders compile before the first frame** (`look/stage.ts`):
+  - `renderer.compile` runs with the post-processing buffer bound, which is the variant `RenderPass` draws, and waits on `KHR_parallel_shader_compile`.
+  - Two frames are then drawn out of sight. Metal builds its pipelines at a program's first draw, and the shadow map's, ambient occlusion's and the passes' shaders compile there. These two draws hold the page for about 2.2 s cold; the bar's sheen keeps moving.
+- **The grid is picked during loading** (`sim/calibrate.ts`, `tuner.ts`, `backends.ts`, `session.ts`):
+  - The first world is built at the finest grid its backend allows and stepped as fast as it goes for half a second, with three steps queued. A deeper queue made the GPU size its scalar substeps from a stale speed and measured the house at 2.5 times its cost.
+  - A step costs what it did in the fastest stretch. The budget is the cells that fit 40% of the GPU at 5 times real time, or 80% of the worker's thread at real time.
+  - The world shown is the finest grid that fits, with the warmed-up air resampled onto it (`sim/resample.ts`, which keeps the smoke's mass).
+  - The tuner never climbs. A device that falls behind steps down by the shortfall, never in the first minute and at most once a minute. The air, the simulated time and the smoke's books carry over, and it says so once, announced and shown for 6 s.
+- **The opening** (`scene/camera/opening.ts`). The camera drifts from the default view to the living room's west windows in 6 s, eased at both ends, and any click, key, wheel or touch stops it at once. Reduced motion, and a reload in the same visit, open at the drift's end. A share link opens on its default view, and `?camera=` keeps its own.
+- **The hint** (`ui/hud/OpeningHint.svelte`). It points at Build wherever the layout puts it and nudges three times. It goes for the visit when dismissed or when a device is placed, in session storage that may refuse.
+
+**Measured** on the M3 Max, on mains power, in Chromium with WebGPU, 1440x900 at 2x, from a local preview build:
+- **First interactive frame, cold:** 4.3 to 4.4 s (3 runs, load 7 to 9), with every shader made new to the GPU's caches. Fetching the 7 MB over broadband adds about a second, which is still inside the 8 s budget.
+- **Cached:** 1.70 to 1.73 s (6 runs), inside the 4 s budget.
+- **What the warm-up picks** (`tests/gpu/tune.gpu.ts`, load 10 to 25):
+  - On the GPU, 7.5 cm for the studio, one-bedroom and two-bedroom, and 10 cm for the house, in 0.6 to 0.9 s. Its step costs match the per-step table to within 10%.
+  - On the worker, 15 cm for the studio and 20 cm for the rest, at 0.98 to 1.00 of real time.
+  - Both five-minute soaks passed: the studio at 7.5 cm and the house at 10 cm, one grid each for 300 s, at 59.9 fps and 5.00 times real time.
+- **The first minute** in the page, at 2x:
+  - On WebGPU: one grid (7.5 cm), a median of 60 fps (slowest second 55), and nothing said.
+  - On the worker: one grid (20 cm), and nothing said.
+
+**Weak spots:**
+- A later step down resamples the air, but the air's renderers (`scene/air/index.ts`) clear the streaks for any new world, so the streaks re-pour for a moment.
+- The warm-up's half second can be noisy on a busy machine. Before the fastest stretch was used, one run measured the house at 10 ms a step and gave it 15 cm. A GPU that another program holds for the whole half second still gets a grid too coarse, and it keeps it for the visit, since nothing climbs.
+- The hint also goes if a reset raises the device count without a placement.

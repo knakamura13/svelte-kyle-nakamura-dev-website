@@ -12,6 +12,7 @@ import { effectiveOpenings } from '../sim/world';
 import type { OverlayId, View } from '../state';
 import { createAir } from './air';
 import { FOV, SimsCamera } from './camera/controls';
+import { openingFor } from './camera/opening';
 import { cameraFromSearch } from './camera/sims';
 import { DeviceEditor, type Grab } from './deviceEditor';
 import type { Point3 } from './deviceMath';
@@ -97,6 +98,8 @@ export function createAirflowScene(host: WorldHost, params: AirflowSceneParams, 
 
 	// The grid is the device's to say: measured by the tuner, the coarsest on a phone or a small tablet, or exactly what `?cell=0.15` asks for.
 	const backend = chooseBackend({ small: detectSmallDevice(), fixedCell: cellFromSearch(location.search) });
+	// The WebGPU device and its kernels start now, while the host compiles the world's shaders, rather than after.
+	backend.warm();
 	const session = new SimulationSession({
 		params,
 		plans: params.plans,
@@ -273,6 +276,8 @@ export function createAirflowScene(host: WorldHost, params: AirflowSceneParams, 
 		},
 		takeShadowChange: () => house.home.takeShadowChange(),
 		aoBox: () => house.home.aoBox(),
+		warmUp: () => session.warmUp(),
+		opening: (aspect) => openingFor(house.plan, aspect),
 		key(event) {
 			// C steps the walls through cutaway, up and down, as the bottom bar's wall modes do.
 			if (event.key !== 'c' && event.key !== 'C') return false;

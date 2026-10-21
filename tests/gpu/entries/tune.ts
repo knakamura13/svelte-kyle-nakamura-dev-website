@@ -115,7 +115,9 @@ function build(planId: string, options: RunOptions) {
 
 /**
  * One Home on the real device, from the first frame until the tuner has settled and the grid has stood still for `quiet` seconds (or `seconds`
- * have gone by): every size it ran, when it changed, how fast the page drew, and how much of real time the solver kept up with.
+ * have gone by): every size it ran, when it changed, how fast the page drew, and how much of real time the solver kept up with. The
+ * first world is the warm-up's: built at the finest size the backend allows and measured before it is on show (`warmUp`), as the page
+ * does it behind its loading screen; the frames are counted from the world on show, as the visitor sees them.
  */
 async function tuneRun(planId: string, options: RunOptions = {}) {
 	const { seconds = 60, quiet = 6 } = options;
@@ -126,23 +128,32 @@ async function tuneRun(planId: string, options: RunOptions = {}) {
 		const frames: { t: number; dt: number; rate: number; inFlight: number }[] = [];
 		let lastChange = 0;
 		let seen = -1;
+		let shownAt = -1;
+		let measuring = 0;
 		const tuner = choice.tuners[kind];
+		const started = performance.now();
 		await animate(
 			(dt, t) => {
 				session.update(dt);
+				const warm = session.warmUp();
+				if (warm.measuring) measuring++;
+				// The frames before the world is on show are the loading screen's, which draws nothing that needs a grid.
+				if (shownAt < 0 && warm.share >= 1) shownAt = t;
+				if (shownAt < 0) return;
 				const size = readout.physics.cellSize;
 				if (size !== null && size !== seen) {
 					seen = size;
-					lastChange = t;
-					changes.push({ at: t, size, cells: session.world!.backend.grid.cells, message: announced.at(-1) ?? '' });
+					lastChange = t - shownAt;
+					changes.push({ at: t - shownAt, size, cells: session.world!.backend.grid.cells, message: announced.at(-1) ?? '' });
 				}
-				frames.push({ t, dt, rate: readout.physics.rate ?? NaN, inFlight: session.world?.backend.stepsInFlight ?? 0 });
+				frames.push({ t: t - shownAt, dt, rate: readout.physics.rate ?? NaN, inFlight: session.world?.backend.stepsInFlight ?? 0 });
 			},
-			(t) => t >= seconds || (t > 8 && changes.length > 0 && tuner.isSettled && t - lastChange >= quiet)
+			(t) => shownAt >= 0 && (t - shownAt >= seconds || (t - shownAt > 8 && changes.length > 0 && tuner.isSettled && t - shownAt - lastChange >= quiet))
 		);
 		const t = frames.at(-1)?.t ?? 0;
 		const drawn = frames.filter((f) => f.t > 1);
 		const last = frames.filter((f) => f.t > t - 3);
+		const measured = performance.getEntriesByName('airflow:measured').at(-1) as PerformanceMark | undefined;
 		const result: Record<string, unknown> = {
 			plan: planId,
 			kind,
@@ -154,6 +165,8 @@ async function tuneRun(planId: string, options: RunOptions = {}) {
 			cellBudget: tuner.cellBudget,
 			lastChangeAt: lastChange,
 			seconds: t,
+			// How long the world took to be ready to show, and what the warm-up measured: a step's cost at the cells it was built with.
+			warmUp: { seconds: shownAt, measured: measured?.detail ?? null, measuringFrames: measuring, startedMs: started },
 			fps: { median: 1 / median(drawn.map((f) => f.dt)), mean: drawn.length / drawn.reduce((a, f) => a + f.dt, 0), slowest: Math.min(...drawn.map((f) => 1 / f.dt)), over50ms: drawn.filter((f) => f.dt > 0.05).length, frames: drawn.length },
 			rate: mean(last.map((f) => f.rate)),
 			maxInFlight: Math.max(0, ...frames.map((f) => f.inFlight)),

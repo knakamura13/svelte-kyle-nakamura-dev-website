@@ -10,11 +10,12 @@ export const status = (page: Page) => page.locator('.sim-status');
 
 /**
  * Opens the page and waits until it can be used. The HUD is in the server's HTML, so it can be seen before the page's script has attached
- * to it, and a click then does nothing: the Stage leaves `pending` once the script has taken the page over.
+ * to it, and a click then does nothing; and the loading screen covers it while the world loads. The Stage is `live` once the world is on
+ * show (or `unsupported` or `error` where it cannot be), and the loading screen goes then.
  */
 export async function openAirflow(page: Page, path = '/experiments/airflow') {
 	await page.goto(path);
-	await expect(page.getByRole('application', { name: /^The air in the/ })).not.toHaveAttribute('data-state', 'pending', { timeout: 15_000 });
+	await expect(page.getByRole('application', { name: /^The air in the/ })).toHaveAttribute('data-state', /^(live|unsupported|error)$/, { timeout: 60_000 });
 }
 
 /**

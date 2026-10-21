@@ -3,7 +3,9 @@ import { planById, plans } from '../../src/lib/experiments/airflow/homes/plans';
 import type { HomePlan } from '../../src/lib/experiments/airflow/homes/types';
 import { emptyReadout } from '../../src/lib/experiments/airflow/readouts';
 import { DEVICE_MODELS } from '../../src/lib/experiments/airflow/devices/catalog';
+import { MASS_BALANCE_TOLERANCE, massBalanceError } from '../../src/lib/experiments/airflow/massBalance';
 import { chooseBackend } from '../../src/lib/experiments/airflow/sim/backends';
+import type { StepCost } from '../../src/lib/experiments/airflow/sim/calibrate';
 import { SimulationSession, type SessionOptions, type SessionParams } from '../../src/lib/experiments/airflow/sim/session';
 import { Tuner, type BackendKind, type FrameSample, type Retune, type Tuning } from '../../src/lib/experiments/airflow/sim/tuner';
 import type { BackendFactory } from '../../src/lib/experiments/airflow/sim/world';
@@ -905,7 +907,7 @@ test.describe('simulation session', () => {
 		};
 		return { tuning, told, ask: (retune: Retune) => (ready = retune) };
 	};
-	const retune = (size: number): Retune => ({ size, direction: 'finer', message: 'Restarted on a finer grid: the device has room to spare.' });
+	const retune = (size: number): Retune => ({ size, direction: 'coarser', message: 'Switched to a coarser grid: it ran at 50% of real time.' });
 	/** Draws frames the way the Stage does until `done`, letting the build and the reads proceed. */
 	const until = async (session: SimulationSession, done: () => boolean, what: string) => {
 		const deadline = Date.now() + 30000;
@@ -930,24 +932,27 @@ test.describe('simulation session', () => {
 			session.dispose();
 		});
 
-		test('a new size restarts the world there, with the Probes and Devices kept, and the screen reader and the status line are told once', async () => {
+		test('a new size moves the air onto a world of that size, with the Probes and Devices kept, and the screen reader and the status line are told once', async () => {
 			const tuner = scripted();
 			let size = 0.3;
 			const { session, params, readout, announced } = makeSession(
 				(p) => {
 					p.probes = [{ id: 'p1', x: 5.1, y: 1.1, z: 2.7 }];
 					p.setup = { ...p.setup, devices: [fan()] };
+					p.clock.speed = 5;
 				},
 				make,
 				() => size,
 				{ models: DEVICE_MODELS, tuning: tuner.tuning }
 			);
 			await start(session);
-			await draw(session, 10);
+			await draw(session, 30, 0.1);
 			const first = session.world!;
 			expect(first.raster.spec.h).toBe(0.3);
 			expect(readout.tuning, 'nothing to say yet').toBe('');
 			expect(announced).toEqual([]);
+			const before = { time: session.simTime, shown: readout.physics.time };
+			expect(before.time, 'the fan has been blowing for a while').toBeGreaterThan(1);
 
 			const message = retune(0.2).message;
 			size = 0.2;
@@ -957,8 +962,14 @@ test.describe('simulation session', () => {
 			expect(readout.physics.cellSize, 'the Physics panel and the status line show the new size').toBe(0.2);
 			expect(readout.tuning, 'and why').toBe(message);
 			expect(announced, 'said once, politely').toEqual([message]);
-			expect(session.simTime, 'the air starts again from rest').toBeLessThan(1);
+			expect(session.simTime, 'the run carries on: the air is where it was, not back at rest').toBeGreaterThanOrEqual(before.time);
+			expect(readout.physics.time, 'and the clock does not go back').toBeGreaterThanOrEqual(before.shown);
 			expect(first.backend === session.world!.backend, 'the old world is let go, and the new one has a solver of its own').toBe(false);
+			// The fan's jet came across: the new world's air is moving from its first step.
+			const moved = await session.world!.backend.readFields();
+			let fastest = 0;
+			for (let n = 0; n < moved.u.length; n++) fastest = Math.max(fastest, Math.abs(moved.u[n]), Math.abs(moved.w[n]));
+			expect(fastest, 'the air the fan set moving is in the new world, which a world built afresh would not have').toBeGreaterThan(0.02);
 
 			// What the visitor set up is in the params, so the new world has it: the Probe reads the new air, and the fan is in the new solver.
 			expect(params.probes).toEqual([{ id: 'p1', x: 5.1, y: 1.1, z: 2.7 }]);
@@ -1140,58 +1151,191 @@ test.describe('simulation session', () => {
 			}
 		});
 
-		test('the real tuner: a world with room to spare is judged on its own five seconds, a finer one is built and said, and the old world’s frames while it is built are not counted toward it', async () => {
-			// A small budget, so the studio starts on coarse cells and the climb is quick.
-			const tuner = new Tuner({ kind: 'cpu', budget: 5000 });
-			let observed = 0;
-			let atVerdict = -1;
-			const tuning: Tuning = {
-				observe: (_kind, sample) => {
-					observed++;
-					const retune = tuner.observe(sample);
-					if (retune) atVerdict = observed;
-					return retune;
+		test('a change of size keeps the smoke’s books: what came in and went out in the old world is carried, and they still balance', async () => {
+			const tuner = scripted();
+			let size = 0.3;
+			const { session, readout } = makeSession(
+				(p) => {
+					p.setup = { ...p.setup, devices: [fan()] };
+					p.startingSmoke = 0.05;
+					p.clock.speed = 5;
 				},
-				note: () => tuner.note ?? ''
-			};
-			// The choice sizes the world when the build starts (that is when the tuner starts counting it), and the world takes a moment to build.
-			// A backend that finishes each step as it is given it, so how fast the test machine is changes nothing the tuner is told.
-			const { made, factory } = queued(Queued);
-			const { session, readout, announced } = makeSession(
-				undefined,
-				factory,
-				(plan) => {
-					const h = tuner.pick(plan);
-					return pause(60).then(() => h);
-				},
-				{ tuning }
+				make,
+				() => size,
+				{ models: DEVICE_MODELS, tuning: tuner.tuning }
 			);
 			await start(session);
-			expect(readout.physics.cellSize).toBe(0.3);
+			await draw(session, 20, 0.1);
+			const before = readout.physics.mass!;
+			expect(before.initial, 'smoke in the air from the start').toBeGreaterThan(0);
+			size = 0.2;
 			const first = session.world!;
-			// Frames of a tenth of a second: two seconds of warm-up and three of a window are about fifty of them.
+			tuner.ask(retune(0.2));
+			await until(session, () => session.world !== first, 'the world at the new size');
+			await draw(session, 20, 0.1);
+			const after = readout.physics.mass!;
+			expect(after.initial, 'the starting smoke is the first world’s').toBe(before.initial);
+			expect(after.deposited, 'what settled in the old world is still counted').toBeGreaterThanOrEqual(before.deposited);
+			expect(massBalanceError(after), 'and the books balance').toBeLessThan(MASS_BALANCE_TOLERANCE);
+			session.dispose();
+		});
+	});
+
+	test.describe('the warm-up', () => {
+		/** A tuner that asks for one warm-up at `probe` and then gives `chosen`, recording what it was told. */
+		const warming = (probe: number, chosen: number) => {
+			const told: { kind: BackendKind; cost: StepCost | null }[] = [];
+			const tuning: Tuning = {
+				observe: () => null,
+				note: () => '',
+				probe: async () => (told.length ? null : probe),
+				calibrate: (kind, cost) => told.push({ kind, cost })
+			};
+			return { tuning, told, cellSize: () => (told.length ? chosen : probe) };
+		};
+		/** A factory that records the size of every world it makes, and the backend it made. */
+		const recording = () => {
+			const sizes: number[] = [];
+			const made: CpuBackend[] = [];
+			const factory: BackendFactory = (config, initial) => {
+				sizes.push(config.grid.h);
+				const backend = new CpuBackend({ ...config, scalarSubsteps: undefined }, initial);
+				made.push(backend);
+				return backend;
+			};
+			return { sizes, made, factory };
+		};
+
+		test('the first world is built at the size to measure, stepped as fast as it goes, and the world on show is the size the measurement gives, with the air the warm-up stepped', async () => {
+			const warm = warming(0.2, 0.3);
+			const built = recording();
+			const { session, readout, announced } = makeSession((p) => (p.setup = { ...p.setup, devices: [fan()] }), built.factory, warm.cellSize, { models: DEVICE_MODELS, tuning: warm.tuning });
+			expect(session.warmUp()).toEqual({ share: 0, measuring: false });
+			const shares: number[] = [];
+			let measuring = false;
 			const deadline = Date.now() + 30000;
-			while (session.world === first) {
-				made.at(-1)!.finish();
-				session.update(0.1);
-				await pause(3);
-				if (Date.now() > deadline) throw new Error('Timed out waiting for the finer world.');
+			while (!session.world && Date.now() < deadline) {
+				session.update(FRAME);
+				const state = session.warmUp();
+				shares.push(state.share);
+				measuring ||= state.measuring;
+				await pause(5);
 			}
-			expect(atVerdict, 'the verdict came after the warm-up and a window of this world, not sooner').toBeGreaterThanOrEqual(48);
-			expect(atVerdict).toBeLessThanOrEqual(52);
-			expect(observed, 'and none of the old world’s frames while the new one was being built (a dozen of them) were told').toBe(atVerdict);
-			expect(readout.physics.cellSize).toBe(0.2);
-			expect(readout.tuning).toBe('Restarted on a finer grid: the device has room to spare.');
-			expect(announced).toHaveLength(1);
-			const second = session.world!;
-			// Another verdict takes another five seconds of the new world's own frames, and they are counted from its first.
-			for (let n = 0; n < 40; n++) {
-				made.at(-1)!.finish();
-				session.update(0.1);
-				await pause(3);
+			expect(session.world, 'the world was built').not.toBeNull();
+			expect(measuring, 'the loading screen was told the device was being measured').toBe(true);
+			expect(shares.every((share, n) => n === 0 || share >= shares[n - 1] - 1e-9), 'and the warm-up only went forward').toBe(true);
+			expect(built.sizes, 'one world to measure, then the one shown').toEqual([0.2, 0.3]);
+			expect(warm.told).toHaveLength(1);
+			const { kind, cost } = warm.told[0];
+			expect(kind).toBe('cpu');
+			expect(cost!.cells, 'what a step of the measured grid cost').toBe(built.made[0].grid.cells);
+			expect(cost!.ms).toBeGreaterThan(0);
+			expect(cost!.steps).toBeGreaterThanOrEqual(12);
+			expect(session.world!.raster.spec.h).toBe(0.3);
+			expect(readout.physics.cellSize).toBe(0.3);
+			expect(session.simTime, 'the air has been going since the warm-up').toBeGreaterThan(0.5);
+			expect(readout.physics.time).toBeGreaterThan(0.5);
+			const fields = await session.world!.backend.readFields();
+			expect(
+				fields.u.reduce((most, value) => Math.max(most, Math.abs(value)), 0),
+				'the fan’s jet came across from the warm-up'
+			).toBeGreaterThan(0.02);
+			expect(readout.tuning, 'a grid picked before anything was shown is not news').toBe('');
+			expect(announced).toEqual([]);
+			await until(session, () => session.warmUp().share >= 1, 'the first picture');
+			session.dispose();
+		});
+
+		test('when the measurement gives the size it was taken at, the world it measured is the one shown: nothing is built twice', async () => {
+			const warm = warming(0.2, 0.2);
+			const built = recording();
+			const { session } = makeSession(undefined, built.factory, warm.cellSize, { tuning: warm.tuning });
+			await start(session);
+			expect(built.sizes).toEqual([0.2]);
+			expect(session.world!.backend).toBe(built.made[0]);
+			expect(session.simTime).toBeGreaterThan(0.5);
+			session.dispose();
+		});
+
+		test('the next Home is not measured again, and a page that leaves in the middle of a warm-up lets its world go without a word', async () => {
+			// The real tuner of the worker, told what the warm-up measured as the choice of backend tells it.
+			const tuner = new Tuner({ kind: 'cpu' });
+			let measurements = 0;
+			const tuning: Tuning = {
+				observe: (_kind, sample) => tuner.observe(sample),
+				note: () => tuner.note ?? '',
+				probe: async (plan) => tuner.probe(plan),
+				calibrate: (_kind, cost) => {
+					measurements++;
+					tuner.calibrate(cost);
+				}
+			};
+			const built = recording();
+			const { session, params } = makeSession(undefined, built.factory, (plan) => tuner.pick(plan), { tuning });
+			await start(session);
+			expect(built.sizes[0], 'the studio is measured at the finest the worker may have').toBe(0.15);
+			params.setup = blankSetup('one-bedroom');
+			await until(session, () => session.world!.raster.plan.id === 'one-bedroom', 'the next Home');
+			expect(measurements, 'measured once for the page').toBe(1);
+			expect(built.sizes.slice(-1)[0], 'the next Home is built once, at the size the measurement allows').toBe(tuner.pick(planById('one-bedroom')!));
+			expect(built.sizes.length, 'and only once').toBeLessThanOrEqual(3);
+			session.dispose();
+
+			const again = warming(0.2, 0.3);
+			const second = recording();
+			const log = listen();
+			try {
+				const leaving = makeSession(undefined, second.factory, again.cellSize, { tuning: again.tuning });
+				for (let n = 0; n < 30 && !leaving.session.warmUp().measuring; n++) {
+					leaving.session.update(FRAME);
+					await pause(5);
+				}
+				expect(leaving.session.warmUp().measuring, 'the warm-up is under way').toBe(true);
+				leaving.session.dispose();
+				await pause(100);
+				expect(again.told, 'nothing is told of a measurement the page left in the middle of').toEqual([]);
+				expect(log.said.errors).toEqual([]);
+				expect(log.said.warnings).toEqual([]);
+			} finally {
+				log.restore();
 			}
-			expect(observed, 'the new world is told its frames').toBeGreaterThan(atVerdict + 30);
-			expect(session.world === second, 'no second change before its own warm-up and window are over').toBe(true);
+		});
+
+		test('the real tuner, on a device that falls behind: held for its first minute, then one step down that carries the run on, with its probe and fan', async () => {
+			const tuner = new Tuner({ kind: 'cpu' });
+			// Whatever this machine does, every frame is reported as the solver keeping up with a third of real time.
+			const tuning: Tuning = {
+				observe: (_kind, sample) => tuner.observe({ ...sample, rate: 0.3 }),
+				note: () => tuner.note ?? '',
+				probe: async (plan) => tuner.probe(plan),
+				calibrate: (_kind, cost) => tuner.calibrate(cost)
+			};
+			const built = recording();
+			const { session, params, readout, announced } = makeSession(
+				(p) => {
+					p.probes = [{ id: 'p1', x: 3.9, y: 1.1, z: 2.7 }];
+					p.setup = { ...p.setup, devices: [fan()] };
+				},
+				built.factory,
+				(plan) => tuner.pick(plan),
+				{ models: DEVICE_MODELS, tuning }
+			);
+			await start(session);
+			const shown = session.world!;
+			// Frames of a tenth of a second: no change at all in the first minute, however badly they go.
+			for (let t = 0; t < 59; t += 0.1) session.update(0.1);
+			expect(session.world, 'held for a minute').toBe(shown);
+			// The next window that ends after the minute steps down. Frames of a tenth of a second, so it takes few of them on a busy machine.
+			for (let n = 0; n < 400 && session.world === shown; n++) {
+				session.update(0.1);
+				await pause(5);
+			}
+			expect(session.world!.raster.spec.h, 'to a coarser grid').toBeGreaterThan(shown.raster.spec.h);
+			expect(session.simTime, 'the run carried on').toBeGreaterThan(5);
+			expect(params.probes.map((p) => p.id)).toEqual(['p1']);
+			expect(session.world!.fanIndexOf('f1'), 'the fan is in the new solver').toBeDefined();
+			expect(readout.tuning).toMatch(/^Switched to a coarser grid: it ran at 30% of real time\./);
+			expect(announced.filter((m) => m.startsWith('Switched')), 'said once').toHaveLength(1);
 			session.dispose();
 		});
 	});

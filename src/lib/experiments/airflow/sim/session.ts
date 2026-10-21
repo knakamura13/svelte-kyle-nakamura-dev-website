@@ -3,10 +3,12 @@ import type { HomePlan } from '../homes/types';
 import { emissionRate } from '../emission';
 import type { AirflowReadout, HoverReading, ProbeReading, RoomReading } from '../readouts';
 import { BackendUnavailable, type BackendFailure, type Snapshot } from '../solver/backend';
-import { POINT_FIELDS, type Slice } from '../solver/types';
+import { POINT_FIELDS, type MassBalance, type Slice } from '../solver/types';
 import type { Volume } from '../solver/volume';
 import type { Clock, Pin, Setup, View } from '../state';
+import { WARMUP_STEP, measureSteps, type Measured } from './calibrate';
 import { RollingMean, SliceHistory } from './history';
+import { resampleFields, type GridAir } from './resample';
 import type { Tuning } from './tuner';
 import { World, type BackendFactory } from './world';
 
@@ -35,9 +37,12 @@ export interface SessionOptions {
 	/** Says something to a screen reader, politely: what the session does on its own (a simulation that starts again after the graphics device was lost, or on another grid). */
 	announce?: (message: string) => void;
 	/**
-	 * The auto-tuner. The session tells it how each drawn frame of the running world went; when it asks for another cell size the world
-	 * is built again at that size, from the same setup (so the Probes and Devices stay), `readout.tuning` says so and the screen reader is told.
-	 * `cellSize` is how that size is asked for, so it must be the choice that this tuner belongs to. Absent, the grid stays as `cellSize` gave it.
+	 * The auto-tuner. When it has a size to measure the device at (`probe`), the first world is built there and stepped as fast as it goes
+	 * before it is shown (the warm-up), and the tuner is told what a step cost (`calibrate`); the world is then the size `cellSize` gives,
+	 * with the air the warm-up stepped moved onto it. After that the session tells it how each drawn frame of the running world went; when
+	 * it asks for another cell size the world is built again at that size, from the same setup (so the Probes and Devices stay), with the
+	 * running world's air moved onto it, and `readout.tuning` says so and the screen reader is told. `cellSize` is how a size is asked
+	 * for, so it must be the choice that this tuner belongs to. Absent, the grid stays as `cellSize` gave it.
 	 */
 	tuning?: Tuning;
 	/**
@@ -75,6 +80,37 @@ export const SMOKE = 6_000;
  * scale begins, so a cloud thinning out in a draught stays visible for as long as the layer would show it.
  */
 export const SMOKE_DENSE = 0.3;
+
+/** How far the first world is from being ready to show, for the loading screen. */
+export interface WarmUp {
+	/** 0 to 1: the device measured, the world built at its size, and the air's first picture read back. */
+	share: number;
+	/** True while the warm-up measures the device: anything else that runs on the GPU now (drawing the world) would be measured with it. */
+	measuring: boolean;
+}
+
+/** What a world carries from the worlds before it that handed it their air: their simulated seconds, and their smoke's books. */
+interface Carried {
+	time: number;
+	books: MassBalance | null;
+}
+
+const FRESH: Carried = { time: 0, books: null };
+
+/** The books of a run that went on in another world: what came in and went out is added up, the starting smoke is the first world's, and the smoke in the air is the newest world's. */
+function combineBooks(before: MassBalance, now: MassBalance): MassBalance {
+	return {
+		initial: before.initial,
+		emitted: before.emitted + now.emitted,
+		inflow: before.inflow + now.inflow,
+		outflow: before.outflow + now.outflow,
+		removed: before.removed + now.removed,
+		deposited: before.deposited + now.deposited,
+		inAir: now.inAir
+	};
+}
+
+const airOf = (world: World): GridAir => ({ spec: world.raster.spec, ...world.raster.geometry });
 
 /** The newest reads of the running world, for the scene to draw. */
 export interface Latest {
@@ -142,6 +178,11 @@ export class SimulationSession {
 	private retuned = '';
 	/** What the tuner says about the grid on this device apart from a retune, as last shown and told. */
 	private note = '';
+	/** How far the warm-up's measurement of the device has got, 0 to 1, or null when none is running; and the furthest `warmUp` has said. */
+	private measuring: number | null = null;
+	private warmed = 0;
+	/** What the running world carries from the worlds that handed it their air (its own time and books start from zero). */
+	private carried: Carried = FRESH;
 
 	constructor(private readonly options: SessionOptions) {
 		this.options.readout.status = 'loading';
@@ -151,11 +192,38 @@ export class SimulationSession {
 		return this.options.params;
 	}
 
-	private keyFor(params: SessionParams) {
-		return `${params.restarts}|${params.setup.plan}|${params.setup.furniture}|${params.setup.conditions.indoorTemp}|${this.retunes}`;
+	/** What makes a world a new run: a restart, another Home, the furniture, the starting indoor temperature. */
+	private runKey(params: SessionParams) {
+		return `${params.restarts}|${params.setup.plan}|${params.setup.furniture}|${params.setup.conditions.indoorTemp}`;
 	}
 
-	/** Builds a world for the current setup in the background; the old one keeps running until the new one is ready. */
+	/** A world's key: its run, and the tuner's changes of size, which carry the run on on another grid. */
+	private keyFor(params: SessionParams) {
+		return `${this.runKey(params)}|${this.retunes}`;
+	}
+
+	/**
+	 * How far the first world is from ready to show, for the loading screen: the device being measured, the world being built at the
+	 * size the measurement gives, and the air's first picture. A session that cannot run any solver, or failed to start, is as ready as
+	 * it will get.
+	 */
+	warmUp(): WarmUp {
+		const { status } = this.options.readout;
+		const measuring = this.measuring !== null;
+		let share: number;
+		if (status === 'unsupported' || status === 'error') share = 1;
+		else if (measuring) share = 0.1 + 0.7 * this.measuring!;
+		else if (!this.world) share = this.building ? 0.05 : 0;
+		else share = (this.options.volume ? this.latest.volume !== null : this.latest.slice !== null || this.latest.tracers !== null) ? 1 : 0.9;
+		// Between the measurement and the world it picks, the warm-up is where the measurement left it, not back at the start.
+		this.warmed = Math.max(this.warmed, share);
+		return { share: this.warmed, measuring };
+	}
+
+	/**
+	 * Builds a world for the current setup in the background; the old one keeps running until the new one is ready. The first world on
+	 * a device the tuner has not measured is warmed up first (`warm`); a world that a retune asked for takes the running world's air.
+	 */
 	private build() {
 		const key = this.keyFor(this.params);
 		const generation = ++this.generation;
@@ -163,54 +231,55 @@ export class SimulationSession {
 		const smoke = this.params.startingSmoke;
 		const plan = this.options.plans.find((p) => p.id === setup.plan);
 		if (!plan) return;
+		// The same run on another grid: the tuner changed the size, so the air carries on where it was.
+		const from = this.world && this.worldKey.startsWith(`${this.runKey(this.params)}|`) ? this.world : null;
+		const before = this.carried;
 		this.options.readout.status = this.world ? this.options.readout.status : 'loading';
-		this.building = Promise.resolve(this.options.cellSize(plan))
-			.then((h) =>
-				// Choosing the backend takes a moment, and the page may have left, or the world it was for failed, before it is done.
-				this.disposed || generation !== this.generation
-					? null
-					: World.create(setup, {
-							plans: this.options.plans,
-							models: new Map(this.options.models.map((m) => [m.id, m])),
-							make: (config, initial) => this.options.make(config, { ...initial, particulates: smoke }),
-							h
-						})
-			)
-			.then((world) => {
-				if (!world) return;
-				if (this.disposed || generation !== this.generation) {
-					world.dispose();
-					return;
+		// Choosing the backend takes a moment, and the page may have left, or the world it was for failed, before it is done.
+		const stale = () => this.disposed || generation !== this.generation;
+		const create = (h: number) =>
+			World.create(setup, {
+				plans: this.options.plans,
+				models: new Map(this.options.models.map((m) => [m.id, m])),
+				make: (config, initial) => this.options.make(config, { ...initial, particulates: smoke }),
+				h
+			});
+		this.building = (async () => {
+			const { tuning } = this.options;
+			const probe = tuning?.probe ? await tuning.probe(plan) : null;
+			if (stale()) return;
+			let shown: { world: World; carried: Carried; simTime: number } | null;
+			if (probe !== null) {
+				let trial = await create(probe);
+				// A GPU that failed while the world was built on it leaves it on the worker, which is measured at its own finest size, not the GPU's.
+				const again = stale() ? probe : await tuning!.probe!(plan);
+				if (again !== null && Math.abs(again - probe) > 1e-9 && !stale()) {
+					trial.dispose();
+					trial = await create(again);
 				}
-				const old = this.world;
-				this.unwatch?.();
-				this.world = world;
-				this.worldKey = key;
-				this.failedKey = '';
-				// A new world has no picture yet: ask for one at once, paused or not.
-				this.requestKey = '';
-				this.volumeKey = '';
-				this.appliedSignature = JSON.stringify(setup);
-				this.simTime = 0;
-				this.owed = 0;
-				this.rate = this.params.clock.speed;
-				this.history.clear();
-				this.probeHistory.clear();
-				this.lastEmission = '';
-				this.latest = { slice: null, tracers: null, smoke: null, volume: null, volumeAt: 0, version: this.latest.version + 1 };
-				const { readout } = this.options;
-				readout.physics = { ...readout.physics, backend: world.backend.kind, cellSize: world.raster.spec.h, cells: world.backend.fluidCells, time: 0, mass: null, reducedDetail: world.backend.kind === 'cpu' };
-				readout.status = this.params.clock.paused ? 'paused' : 'running';
-				// A world that a retune asked for says so for as long as it runs; any other (a restart, another Home) says only what the tuner notes about the device.
-				this.retuned = this.retuning;
-				this.retuning = '';
-				this.sayTuning(this.options.tuning?.note(world.backend.kind) ?? '');
-				if (this.options.particles !== false) world.backend.configureParticles({ tracers: TRACERS, smoke: SMOKE, scale: SMOKE_DENSE, seed: 1 });
-				this.unwatch = world.backend.onFailure?.((failure) => this.lose(world, failure)) ?? null;
-				old?.dispose();
-				this.pending = false;
-				this.options.invalidate();
-			})
+				shown = await this.warm(trial, stale);
+			} else {
+				const h = await this.options.cellSize(plan);
+				if (stale()) return;
+				const world = await create(h);
+				shown = { world, carried: FRESH, simTime: 0 };
+				if (from && !stale()) {
+					try {
+						const carried = await this.carry(from, world, before);
+						shown = { world, carried, simTime: carried.time };
+					} catch (error) {
+						world.dispose();
+						throw error;
+					}
+				}
+			}
+			if (!shown) return;
+			if (stale()) {
+				shown.world.dispose();
+				return;
+			}
+			this.adopt(shown.world, key, setup, shown.carried, shown.simTime);
+		})()
 			.catch((error) => {
 				// A start that fails because the page is already leaving (the device goes with it) is not news, and nor is one that
 				// was overtaken: the world it was for failed or was replaced while it ran, and the next frame builds again.
@@ -235,6 +304,129 @@ export class SimulationSession {
 	}
 
 	/**
+	 * The warm-up: `trial` is the first world of a device the tuner has not measured, at the finest size the backend allows. It is
+	 * stepped as fast as the backend goes for about half a second, and the tuner is told what a step cost. If the size the tuner then
+	 * gives is the trial's, the trial is the world, with the air it stepped; otherwise a world is built at that size and the trial's
+	 * air is moved onto it. Resolves to the world to show, or null when the page has left or another world was asked for meanwhile.
+	 */
+	private async warm(trial: World, stale: () => boolean): Promise<{ world: World; carried: Carried; simTime: number } | null> {
+		let measured: Measured | null = null;
+		let time = 0;
+		this.measuring = 0;
+		this.options.invalidate();
+		// The load is timed in performance marks (`airflow:*`, engine.ts): the warm-up's world is built, then the device is measured.
+		performance.mark('airflow:warm-up');
+		try {
+			measured = await measureSteps(trial.backend, {
+				dt: WARMUP_STEP,
+				before: () => {
+					trial.updateOscillation(time);
+					time += WARMUP_STEP;
+				},
+				progress: (share) => (this.measuring = share),
+				alive: () => !stale()
+			});
+		} catch (error) {
+			if (!stale()) console.warn('The warm-up could not measure this device, so the grid is the starting guess.', error);
+		} finally {
+			this.measuring = null;
+		}
+		performance.mark('airflow:measured', { detail: { kind: trial.backend.kind, cells: trial.backend.grid.cells, ...measured } });
+		if (stale()) {
+			trial.dispose();
+			return null;
+		}
+		this.options.tuning?.calibrate?.(trial.backend.kind, measured && { cells: trial.backend.grid.cells, ms: measured.ms, steps: measured.steps });
+		let keep = false;
+		try {
+			const h = await this.options.cellSize(trial.raster.plan);
+			if (stale()) return null;
+			if (Math.abs(h - trial.raster.spec.h) < 1e-9) {
+				keep = true;
+				return { world: trial, carried: FRESH, simTime: time };
+			}
+			const world = await World.create(trial.current, { ...trial.options, h });
+			if (stale()) {
+				world.dispose();
+				return null;
+			}
+			try {
+				const carried = await this.carry(trial, world, FRESH);
+				return { world, carried, simTime: carried.time };
+			} catch (error) {
+				// The warm-up's world cannot be read (its GPU device was lost while it was measured): the new world starts from still air.
+				if (stale()) {
+					world.dispose();
+					return null;
+				}
+				console.warn('The warm-up’s air could not be moved to the grid it picked, so the air starts from rest.', error);
+				return { world, carried: FRESH, simTime: 0 };
+			}
+		} finally {
+			if (!keep) trial.dispose();
+		}
+	}
+
+	/**
+	 * Moves the air of `from` onto `to`, a world of the same Home on another grid: the fields are read back, resampled and written in
+	 * (resample.ts), with the simulated time and the smoke's books `from` had, so the run carries on where it was. The fields and the
+	 * books are asked for together, so nothing is stepped between the two reads.
+	 */
+	private async carry(from: World, to: World, before: Carried): Promise<Carried> {
+		const [shot, fields] = await Promise.all([from.backend.snapshot({}), from.backend.readFields()]);
+		to.backend.writeFields(resampleFields(airOf(from), fields, airOf(to)));
+		const { time, mass } = shot.diagnostics;
+		return { time: before.time + time, books: before.books ? combineBooks(before.books, mass) : mass };
+	}
+
+	/** Puts a built world on show in place of the running one. `carried` is what it took from the world whose air was moved onto it, if any. */
+	private adopt(world: World, key: string, setup: Setup, carried: Carried, simTime: number) {
+		const old = this.world;
+		const handed = carried !== FRESH;
+		this.unwatch?.();
+		this.world = world;
+		this.worldKey = key;
+		this.failedKey = '';
+		// A new world has no picture yet: ask for one at once, paused or not.
+		this.requestKey = '';
+		this.volumeKey = '';
+		this.appliedSignature = JSON.stringify(setup);
+		this.simTime = simTime;
+		this.carried = carried;
+		this.owed = 0;
+		this.rate = this.params.clock.speed;
+		this.lastEmission = '';
+		if (handed) {
+			// The run goes on: the probes' means and the last picture stay (the air's renderers wait for a picture of the new grid).
+			this.latest = { ...this.latest, version: this.latest.version + 1 };
+		} else {
+			this.history.clear();
+			this.probeHistory.clear();
+			this.latest = { slice: null, tracers: null, smoke: null, volume: null, volumeAt: 0, version: this.latest.version + 1 };
+		}
+		const { readout } = this.options;
+		readout.physics = {
+			...readout.physics,
+			backend: world.backend.kind,
+			cellSize: world.raster.spec.h,
+			cells: world.backend.fluidCells,
+			time: simTime,
+			mass: carried.books,
+			reducedDetail: world.backend.kind === 'cpu'
+		};
+		readout.status = this.params.clock.paused ? 'paused' : 'running';
+		// A world that a retune asked for says so for as long as it runs; any other (a restart, another Home) says only what the tuner notes about the device.
+		this.retuned = this.retuning;
+		this.retuning = '';
+		this.sayTuning(this.options.tuning?.note(world.backend.kind) ?? '');
+		if (this.options.particles !== false) world.backend.configureParticles({ tracers: TRACERS, smoke: SMOKE, scale: SMOKE_DENSE, seed: 1 });
+		this.unwatch = world.backend.onFailure?.((failure) => this.lose(world, failure)) ?? null;
+		old?.dispose();
+		this.pending = false;
+		this.options.invalidate();
+	}
+
+	/**
 	 * The running world's backend can no longer run: the GPU device was lost, or the worker crashed. The world is dropped at
 	 * once, so a dead backend is never stepped or read again, and what was still on its way back is ignored. A lost device
 	 * is answered by building the world again, now on the worker (the choice of backend has already moved on); the air starts
@@ -252,6 +444,7 @@ export class SimulationSession {
 		// A grid that was asked for on a backend that is gone is not asked of the next one: it is sized afresh, and says nothing of the old retune.
 		this.retuning = '';
 		this.retuned = '';
+		this.carried = FRESH;
 		world.dispose();
 		readout.physics = { ...readout.physics, backend: null, rate: null };
 		if (failure.reason === 'lost') {
@@ -504,12 +697,13 @@ export class SimulationSession {
 		this.sinceReadout = 0;
 		const d = shot.diagnostics;
 		readout.probes = readings;
+		const { carried } = this;
 		readout.physics = {
 			...readout.physics,
-			time: d.time,
+			time: carried.time + d.time,
 			maxSpeed: d.maxSpeed,
 			divergence: d.divergence,
-			mass: d.mass,
+			mass: carried.books ? combineBooks(carried.books, d.mass) : d.mass,
 			rate: this.params.clock.paused ? 0 : this.rate
 		};
 		if (sameFans) {
