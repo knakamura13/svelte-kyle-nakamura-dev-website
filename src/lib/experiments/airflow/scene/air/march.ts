@@ -66,7 +66,7 @@ void main() {
 			total += weight;
 		}
 	vec4 color = sum / max(total, 1e-6);
-	if (color.a < 0.003) discard;
+	if (!(color.a >= 0.003)) discard;
 	gl_FragColor = vec4(color.rgb / color.a, color.a);
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>

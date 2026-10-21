@@ -83,7 +83,7 @@ void main() {
 		transmittance *= 1.0 - alpha;
 	}
 	float opacity = 1.0 - transmittance;
-	if (opacity < 0.003) discard;
+	if (!(opacity >= 0.003)) discard;
 	// Never more than the cap, so the room reads through it: colour and opacity scaled together keep the haze's hue.
 	float keep = min(1.0, uCap / opacity);
 	// Into the march target (march.ts): linear, and already multiplied by its opacity.

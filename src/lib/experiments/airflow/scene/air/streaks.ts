@@ -107,7 +107,8 @@ void main() {
 	vec3 velocity = airVelocity(head);
 	float speed = length(velocity);
 	float alpha = uOpacity * smoothstep(0.0, uFadeIn, age) * smoothstep(0.0, uFadeOut, life - age) * smoothstep(uSpeedFade.x, uSpeedFade.y, speed);
-	if (alpha < 0.004) {
+	// Written so that a NaN (a particle's state gone bad) hides the streak too: a comparison with NaN is false.
+	if (!(alpha >= 0.004)) {
 		hide();
 		return;
 	}
@@ -162,10 +163,12 @@ varying float vAlpha;
 varying vec3 vColor;
 
 void main() {
-	// Soft across, and fading from the head back to the tail.
+	// Soft across, and fading from the head back to the tail. At the tail vQuad.x is 0, and interpolated it can come out a hair
+	// below: pow of a negative number is NaN, and one NaN pixel, blurred by the bloom, blanks the whole picture. So it is clamped,
+	// and anything that is not a number is discarded.
 	float across = 1.0 - smoothstep(0.25, 1.0, abs(vQuad.y));
-	float alpha = vAlpha * across * pow(vQuad.x, 1.6);
-	if (alpha < 0.002) discard;
+	float alpha = vAlpha * across * pow(clamp(vQuad.x, 0.0, 1.0), 1.6);
+	if (!(alpha >= 0.002)) discard;
 	gl_FragColor = vec4(vColor, alpha);
 	#include <colorspace_fragment>
 }
