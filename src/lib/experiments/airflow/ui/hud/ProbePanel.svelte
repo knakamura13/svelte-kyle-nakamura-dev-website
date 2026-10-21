@@ -4,6 +4,8 @@
 	import { MAX_PINS } from '../../state';
 	import { formatLength } from '../../units';
 	import Icon from './Icon.svelte';
+	import SheetGrip from './SheetGrip.svelte';
+	import { useHudUi } from './ui.svelte';
 	import { focusWorld } from './world';
 
 	/**
@@ -11,6 +13,7 @@
 	 * keyboard's cursor, which changes with every move, so it is never a live region.
 	 */
 	const experience = useAirflow();
+	const ui = useHudUi();
 	const units = $derived(experience.view.units);
 	/** The probe and smoke height, which Advanced sets: where a probe is pinned and the marker under the pointer floats. */
 	const height = $derived(formatLength(experience.view.sliceHeight, units).text);
@@ -19,16 +22,21 @@
 	const full = $derived(experience.probes.length >= MAX_PINS);
 </script>
 
-<section class="panel glass" aria-labelledby="hud-probe-title">
+<section class="panel glass" aria-labelledby="hud-probe-title" data-sheet={ui.phone ? '' : undefined}>
+	{#if ui.phone}<SheetGrip label="the Probe tool" onclose={() => experience.setTool('select')} />{/if}
 	<header>
 		<h2 id="hud-probe-title" class="title">Probe</h2>
 		<p class="sub">{experience.probes.length} of {MAX_PINS} pinned</p>
 	</header>
 	<p class="how">
-		{full ? `A home holds ${MAX_PINS} probes. Remove one to pin another.` : `Click the air to pin a probe ${height} above the floor. It keeps reading the air there.`}
+		{full
+			? `A home holds ${MAX_PINS} probes. Remove one to pin another.`
+			: ui.phone
+				? `Touch the air, and lift your finger where a probe should read it, ${height} up.`
+				: `Click the air to pin a probe ${height} above the floor. It keeps reading the air there.`}
 	</p>
-	<div class="under" data-state={spot ? (spot.rows.length ? 'reading' : 'no-air') : 'empty'}>
-		<p class="eyebrow">Under the pointer</p>
+	<div class="under sheet-more" data-state={spot ? (spot.rows.length ? 'reading' : 'no-air') : 'empty'}>
+		<p class="eyebrow">{ui.phone ? 'Under your finger' : 'Under the pointer'}</p>
 		{#if spot}
 			<p class="sr-only">{spot.sentence}</p>
 			{#if spot.rows.length}
@@ -41,7 +49,7 @@
 				<p class="note" aria-hidden="true">{spot.message}</p>
 			{/if}
 		{:else}
-			<p class="note">Point at the air, or move the cursor with the arrow keys in the 3D view.</p>
+			<p class="note">{ui.phone ? 'Touch the air to read it here.' : 'Point at the air, or move the cursor with the arrow keys in the 3D view.'}</p>
 		{/if}
 	</div>
 	<button type="button" class="btn" onclick={focusWorld}><Icon name="target" size={18} />Pin from the keyboard</button>
@@ -114,8 +122,13 @@
 		justify-content: flex-start;
 	}
 	:global(.hud.phone) .panel {
+		gap: 8px;
 		width: auto;
+		padding: 22px 14px 14px;
 		animation-name: hud-rise;
+	}
+	:global(.hud.phone) .title {
+		font-size: 17px;
 	}
 	:global(.hud.phone) .under {
 		min-height: 0;

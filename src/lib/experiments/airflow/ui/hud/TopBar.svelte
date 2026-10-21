@@ -4,12 +4,14 @@
 	import type { PlanId } from '../../homes/types';
 	import { homeCard, planThumbnail } from './homes';
 	import Icon from './Icon.svelte';
+	import SheetGrip from './SheetGrip.svelte';
 	import { tooltip } from './tips.svelte';
 	import { useHudUi } from './ui.svelte';
 
 	/**
 	 * The top bar: Exit, the Home picker (a card for each Home with its floor plan) and the Scenario menu. Each picker is a button that
-	 * opens its panel under it; a click outside or Escape closes it and gives the focus back to the button.
+	 * opens its panel under it; a click outside or Escape closes it and gives the focus back to the button. On a phone the bar is three
+	 * icons, which leaves the weather room to say its readings, and the panels are sheets over the toolbar.
 	 */
 	const experience = useAirflow();
 	const ui = useHudUi();
@@ -105,7 +107,8 @@
 	</div>
 
 	{#if open === 'home'}
-		<div id="hud-homes" class="panel glass deep" role="group" aria-label="Choose a home" bind:this={panel}>
+		<div id="hud-homes" class="panel glass deep" role="group" aria-label="Choose a home" data-sheet bind:this={panel}>
+			{#if ui.phone}<SheetGrip label="the homes" peek={false} onclose={() => close(true)} />{/if}
 			<p class="eyebrow">Choose a home</p>
 			<div class="homes">
 				{#each homes as { plan, card, thumb } (plan.id)}
@@ -132,7 +135,8 @@
 			<p class="panel-note">A new home starts closed up and empty, in the weather you have now.</p>
 		</div>
 	{:else if open === 'scenario'}
-		<div id="hud-scenarios" class="panel glass deep scenarios" role="group" aria-label="Scenarios" bind:this={panel}>
+		<div id="hud-scenarios" class="panel glass deep scenarios" role="group" aria-label="Scenarios" data-sheet bind:this={panel}>
+			{#if ui.phone}<SheetGrip label="the scenarios" peek={false} onclose={() => close(true)} />{/if}
 			<p class="eyebrow">Scenarios</p>
 			<div class="scenario-list">
 				{#each experience.scenarios as scenario, i (scenario.id)}
@@ -389,39 +393,47 @@
 	}
 
 	:global(.hud.phone) .exit-text,
-	:global(.hud.phone) .picker .eyebrow,
-	:global(.hud.phone) .chevron,
-	:global(.hud.phone) .scenario-picker .picker-text {
+	:global(.hud.phone) .picker-text,
+	:global(.hud.phone) .chevron {
 		display: none;
 	}
-	:global(.hud.phone) .scenario-picker {
-		padding: 0 5px;
+	:global(.hud.phone) .topbar {
+		gap: 2px;
+		padding: 4px;
+		border-radius: 24px;
 	}
 	:global(.hud.phone) .exit {
-		min-width: 44px;
+		min-width: 46px;
+		min-height: 46px;
 		padding: 0;
+		border-radius: 18px;
+	}
+	:global(.hud.phone) .divider {
+		margin: 9px 3px;
 	}
 	:global(.hud.phone) .picker {
-		gap: 6px;
-		min-height: 44px;
-		padding: 0 6px 0 4px;
+		justify-content: center;
+		min-width: 46px;
+		min-height: 46px;
+		padding: 0;
+		border-radius: 18px;
 	}
-	:global(.hud.phone) .picker-value {
-		max-width: 92px;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		font-size: 12.5px;
+	:global(.hud.phone) .picker[aria-expanded='true'] .picker-icon {
+		background: var(--hud-accent);
+		color: var(--hud-accent-ink);
 	}
 	:global(.hud.phone) .panel,
 	:global(.hud.phone) .panel.scenarios {
 		position: fixed;
 		top: auto;
-		left: 10px;
-		right: 10px;
+		left: calc(10px + env(safe-area-inset-left));
+		right: calc(10px + env(safe-area-inset-right));
 		bottom: calc(86px + env(safe-area-inset-bottom));
 		width: auto;
 		max-height: 70vh;
+		padding-top: 24px;
 		overflow-y: auto;
+		overscroll-behavior: contain;
 		animation-name: hud-rise;
 	}
 	:global(.hud.phone) .plan-frame {

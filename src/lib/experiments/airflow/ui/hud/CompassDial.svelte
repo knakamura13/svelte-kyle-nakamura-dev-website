@@ -14,6 +14,7 @@
 		size = 120,
 		label = 'Wind direction',
 		compact = false,
+		interactive = true,
 		onchange,
 		oncommit
 	}: {
@@ -27,6 +28,8 @@
 		label?: string;
 		/** A small dial: the four cardinal ticks and N only, so it stays clean at 44 to 60 px. */
 		compact?: boolean;
+		/** False: a picture of the wind only, inside a button that says it in words (the phone's weather pill), not a control of its own. */
+		interactive?: boolean;
 		onchange: (bearing: number) => void;
 		/** Once a drag ends or a key is let go: for the announcement. */
 		oncommit?: (bearing: number) => void;
@@ -89,29 +92,7 @@
 	}
 </script>
 
-<svg
-	class="dial"
-	class:dragging
-	class:calm
-	class:compact
-	bind:this={dial}
-	width={size}
-	height={size}
-	viewBox="-56 -56 112 112"
-	role="slider"
-	tabindex="0"
-	aria-label={label}
-	aria-valuemin={0}
-	aria-valuemax={359}
-	aria-valuenow={Math.round(bearing) % 360}
-	aria-valuetext={words.spoken}
-	onpointerdown={down}
-	onpointermove={move}
-	onpointerup={up}
-	onpointercancel={up}
-	onkeydown={keydown}
-	onkeyup={keyup}
->
+{#snippet face()}
 	<defs>
 		<radialGradient id="{uid}-face" cx="50%" cy="38%" r="70%">
 			<stop offset="0%" stop-color="#2f3e37" />
@@ -138,7 +119,39 @@
 	</g>
 	<circle class="handle-halo" cx={handle.x} cy={handle.y} r="9" />
 	<circle class="handle" cx={handle.x} cy={handle.y} r="5.5" />
-</svg>
+{/snippet}
+
+{#if interactive}
+	<svg
+		class="dial"
+		class:dragging
+		class:calm
+		class:compact
+		bind:this={dial}
+		width={size}
+		height={size}
+		viewBox="-56 -56 112 112"
+		role="slider"
+		tabindex="0"
+		aria-label={label}
+		aria-valuemin={0}
+		aria-valuemax={359}
+		aria-valuenow={Math.round(bearing) % 360}
+		aria-valuetext={words.spoken}
+		onpointerdown={down}
+		onpointermove={move}
+		onpointerup={up}
+		onpointercancel={up}
+		onkeydown={keydown}
+		onkeyup={keyup}
+	>
+		{@render face()}
+	</svg>
+{:else}
+	<svg class="dial still" class:calm class:compact width={size} height={size} viewBox="-56 -56 112 112" aria-hidden="true">
+		{@render face()}
+	</svg>
+{/if}
 
 <style>
 	.dial {
@@ -151,6 +164,11 @@
 	}
 	.dial.dragging {
 		cursor: grabbing;
+	}
+	.dial.still {
+		cursor: inherit;
+		pointer-events: none;
+		touch-action: auto;
 	}
 	.dial:focus-visible {
 		outline: 2px solid var(--hud-accent);
