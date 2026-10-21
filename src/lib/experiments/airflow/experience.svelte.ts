@@ -7,7 +7,10 @@ import type { HomePlan, PlanId } from './homes/types';
 import { describeBearing } from './readout';
 import { emptyReadout, type AirflowReadout } from './readouts';
 import type { Scenario } from './scenarios';
-import { DEFAULT_CLOCK, DEFAULT_VIEW, LIMITS, MAX_DEVICES, MAX_PINS, blankSetup, type Clock, type Conditions, type DeviceState, type Pin, type Setup, type UnitSystem, type View } from './state';
+import type { DragPreview } from './scene/selection';
+import { DEFAULT_CLOCK, DEFAULT_VIEW, LIMITS, MAX_DEVICES, MAX_PINS, blankSetup, type Clock, type Conditions, type DeviceState, type OverlayId, type Pin, type Setup, type Target, type Tool, type UnitSystem, type View } from './state';
+import { towardMiddle } from './ui/hud/catalog';
+import { OVERLAYS, overlayOfLayer, toolInfo } from './ui/hud/tools';
 
 const key = Symbol('airflow');
 
@@ -23,6 +26,8 @@ export interface AirflowOptions {
 	defaultScenario: string;
 	/** The share link for a setup, as a full URL. */
 	link: (setup: Setup) => string;
+	/** The HUD over the world instead of the Dock under it (`?hud`, until the full-screen route replaces the Dock). */
+	hud?: boolean;
 }
 
 /** The scene's side of a few things only it can do, filled in once the scene exists. */
@@ -31,7 +36,12 @@ export interface StageBridge {
 	pick?: (clientX: number, clientY: number) => { x: number; y: number; z: number } | null;
 	/** Whether the pointer is over the Stage, so a tray drag knows when to preview. */
 	over?: (clientX: number, clientY: number) => boolean;
+	/** Where a thing's context menu hangs on the page, CSS pixels from the viewport's corner, or null when it is gone or behind the camera. */
+	anchor?: (target: Target) => { x: number; y: number } | null;
 }
+
+const sameTarget = (a: Target | null, b: Target | null) => a === b || (!!a && !!b && a.kind === b.kind && a.id === b.id);
+const wrapDegrees = (degrees: number) => ((Math.round(degrees) % 360) + 360) % 360;
 
 const clone = <T>(value: T): T => structuredClone($state.snapshot(value)) as T;
 
@@ -65,8 +75,28 @@ export class AirflowExperience extends Experience {
 	linkShown = $state(false);
 	readout: AirflowReadout = $state(emptyReadout());
 	bridge: StageBridge = {};
-	/** A device being dragged from the tray, and where it would land: the Stage draws a ghost there, and a drop takes the spot or says why not. Null when nothing is being dragged. */
-	drag: { model: string; x: number; y: number; z: number; ok: boolean; reason: string | null } | null = $state(null);
+	/**
+	 * A device being carried (dragged from the tray or the HUD's catalog, or picked up from its menu to move), and where it would land:
+	 * the Stage draws a ghost there, facing `yaw`, and a drop takes the spot or says why not. Null when nothing is carried.
+	 */
+	drag: DragPreview | null = $state(null);
+
+	// ---- the HUD (the immersive redesign, milestone 3) ----
+
+	/** Whether the page shows the HUD over the world. The scene reads it once, when it is built. */
+	readonly hud: boolean;
+	/** The tool in the HUD's rail: what a click on the world does. Each tool also sets `view.mode`, which a finger and the keys follow. */
+	tool: Tool = $state('select');
+	/** The thing chosen in the world or in the Inspector, and whether its context menu is open. */
+	selection: Target | null = $state(null);
+	menu = $state(false);
+	/** What is under the pointer, for its outline and the hover label. */
+	hovered: Target | null = $state(null);
+	/**
+	 * A device the HUD is carrying: a model from the catalog, or a placed device being moved (`moving`). `yaw` is the bearing the visitor
+	 * turned it to with R, or null while it faces the middle of the home. `drag` says where it would land; a click puts it there.
+	 */
+	carry: { model: string; moving?: string; yaw: number | null } | null = $state(null);
 	private readonly modelMap: ReadonlyMap<string, DeviceModel>;
 	private starting: Setup;
 	/** The scenario `starting` is, or null when it is a home the visitor picked or a link's setup. */
@@ -77,6 +107,7 @@ export class AirflowExperience extends Experience {
 	constructor(options: AirflowOptions) {
 		super(options.load);
 		this.options = options;
+		this.hud = options.hud ?? false;
 		this.plans = options.plans;
 		this.models = options.models;
 		this.modelMap = new Map(options.models.map((m) => [m.id, m]));
@@ -168,6 +199,7 @@ export class AirflowExperience extends Experience {
 		if (index < 0) return;
 		const [removed] = this.setup.devices.splice(index, 1);
 		if (this.selected === id) this.selected = null;
+		this.forget({ kind: 'device', id });
 		this.scenario = null;
 		this.announce(`${this.modelOf(removed)?.name ?? 'Device'} removed.`);
 		this.wake();
@@ -181,8 +213,13 @@ export class AirflowExperience extends Experience {
 		this.wake();
 	}
 
+	/** Chooses a device (its handles show), or none. The HUD's selection follows: a device chosen on the Stage is the HUD's choice too. */
 	selectDevice(id: string | null) {
 		this.selected = id;
+		if (id) {
+			if (!sameTarget(this.selection, { kind: 'device', id })) this.menu = false;
+			this.selection = { kind: 'device', id };
+		} else if (this.selection?.kind === 'device') this.forget(this.selection);
 		this.wake();
 	}
 
@@ -190,8 +227,11 @@ export class AirflowExperience extends Experience {
 		return this.modelOf(device)?.name ?? 'Device';
 	}
 
-	/** Adds a device where the visitor put it, as a drop from the tray does. Returns the reason in words when it cannot go there, which it also announces. */
-	addDeviceAt(modelId: string, x: number, z: number): string | null {
+	/**
+	 * Adds a device where the visitor put it, as a drop from the tray does, facing `yaw` when the visitor turned it while carrying it (a
+	 * window fan always faces into the home from its window). Returns the reason in words when it cannot go there, which it also announces.
+	 */
+	addDeviceAt(modelId: string, x: number, z: number, yaw?: number): string | null {
 		const model = this.modelMap.get(modelId);
 		if (!model) return 'That device is not in the catalog.';
 		const refuse = (reason: string) => {
@@ -203,29 +243,44 @@ export class AirflowExperience extends Experience {
 		if (!placed.ok) return refuse(placed.reason);
 		const made = deviceAt(this.plan, model, placed.placement, this.setup.devices);
 		if ('reason' in made) return refuse(made.reason);
+		if (yaw !== undefined && placed.placement.yaw === undefined) made.device.yaw = wrapDegrees(yaw);
 		this.setup.devices.push(made.device);
 		this.selected = made.device.id;
+		this.selection = { kind: 'device', id: made.device.id };
+		this.menu = false;
 		this.scenario = null;
 		this.announce(`${model.name} added${placed.placement.surface === 'sill' ? ' in a window' : placed.placement.surface === 'furniture' ? ' on a table' : ''}.`);
 		this.wake();
 		return null;
 	}
 
-	/** Where a device being dragged would land, for the ghost on the Stage. `null` ends the drag. */
-	previewDrag(modelId: string | null, x = 0, z = 0) {
+	/**
+	 * Where a device being carried would land, for the ghost on the Stage, facing `yaw` (or, unturned, the middle of the home, as a dropped
+	 * device does). `moving` is the id of a placed device being moved, so it does not collide with itself. `null` ends the carry.
+	 */
+	previewDrag(modelId: string | null, x = 0, z = 0, yaw?: number, moving?: string) {
 		const model = modelId ? this.modelMap.get(modelId) : undefined;
 		if (!model) {
 			this.drag = null;
 			this.wake();
 			return;
 		}
-		const placed = placeAt(this.plan, model, x, z, this.setup.devices, this.modelMap);
-		this.drag = placed.ok ? { model: model.id, x: placed.placement.x, y: placed.placement.y, z: placed.placement.z, ok: true, reason: null } : { model: model.id, x, y: 0, z, ok: false, reason: placed.reason };
+		const full = !moving && this.setup.devices.length >= MAX_DEVICES;
+		const placed = placeAt(this.plan, model, x, z, this.setup.devices, this.modelMap, moving);
+		const facing = (px: number, pz: number) => wrapDegrees(yaw ?? towardMiddle(this.plan, px, pz));
+		if (full) this.drag = { model: model.id, x, y: 0, z, ok: false, reason: `A home holds at most ${MAX_DEVICES} fans and purifiers. Remove one to add another.`, yaw: facing(x, z), moving };
+		else if (placed.ok) {
+			const { placement } = placed;
+			this.drag = { model: model.id, x: placement.x, y: placement.y, z: placement.z, ok: true, reason: null, yaw: placement.yaw ?? facing(placement.x, placement.z), moving };
+		} else this.drag = { model: model.id, x, y: 0, z, ok: false, reason: placed.reason, yaw: facing(x, z), moving };
 		this.wake();
 	}
 
-	/** Moves a placed device to where the visitor dragged it, or says why it cannot go there (a window fan goes to another window). Returns the reason, or null. */
-	moveDevice(id: string, x: number, z: number): string | null {
+	/**
+	 * Moves a placed device to where the visitor dragged it, or says why it cannot go there (a window fan goes to another window), and
+	 * turns it to `yaw` when the visitor turned it while carrying it. Returns the reason, or null.
+	 */
+	moveDevice(id: string, x: number, z: number, yaw?: number): string | null {
 		const device = this.setup.devices.find((d) => d.id === id);
 		const model = device ? this.modelMap.get(device.model) : undefined;
 		if (!device || !model) return null;
@@ -238,6 +293,7 @@ export class AirflowExperience extends Experience {
 		const patch: Partial<Omit<DeviceState, 'id' | 'model'>> = { x: placement.x, z: placement.z, y: placement.y };
 		if (placement.opening) Object.assign(patch, { opening: placement.opening, yaw: placement.yaw ?? device.yaw });
 		else if (device.opening) Object.assign(patch, { opening: undefined, intake: undefined });
+		if (yaw !== undefined && !placement.opening) patch.yaw = wrapDegrees(yaw);
 		Object.assign(device, patch);
 		this.scenario = null;
 		this.announce(`Moved the ${model.name}.`);
@@ -293,6 +349,7 @@ export class AirflowExperience extends Experience {
 	unpin(id: string, quiet = false) {
 		if (!this.probes.some((p) => p.id === id)) return;
 		this.probes = this.probes.filter((p) => p.id !== id);
+		this.forget({ kind: 'probe', id });
 		this.announce(quiet ? '' : `Probe ${id.slice(1)} removed.`);
 		this.wake();
 	}
@@ -321,6 +378,145 @@ export class AirflowExperience extends Experience {
 		this.wake();
 	}
 
+	// ---- the HUD: tools, the chosen thing, overlays ----
+
+	/** Picks a tool in the rail. A new tool puts back whatever was carried and closes the context menu, and says what the tool does, once. */
+	setTool(tool: Tool) {
+		if (tool === this.tool) return;
+		const info = toolInfo(tool);
+		this.tool = tool;
+		this.view.mode = info.mode;
+		this.menu = false;
+		this.carry = null;
+		this.drag = null;
+		this.announce(info.announce);
+		this.wake();
+	}
+
+	// ---- carrying a device in from the catalog, or moving one ----
+
+	/** Picks up a device to carry: a model from the catalog, or the placed device `moving`. Nothing is added or moved until it is put down. */
+	startCarry(modelId: string, moving?: string) {
+		const model = this.modelMap.get(modelId);
+		if (!model) return;
+		this.carry = { model: model.id, moving, yaw: null };
+		this.drag = null;
+		this.menu = false;
+		this.hovered = null;
+		this.announce(`${moving ? 'Moving' : 'Carrying'} the ${model.name}. Click a spot in a room to put it down. R turns it, and Escape puts it back.`);
+		this.wake();
+	}
+
+	/** The carried device follows the pointer to the floor or furniture point (x, z). */
+	carryTo(x: number, z: number) {
+		if (!this.carry) return;
+		const { model, yaw, moving } = this.carry;
+		this.previewDrag(model, x, z, yaw ?? undefined, moving);
+	}
+
+	/** The pointer left the home (the sky, or a panel of the HUD): the ghost goes, and the device is still carried. */
+	carryAway() {
+		if (!this.carry || !this.drag) return;
+		this.drag = null;
+		this.wake();
+	}
+
+	/** Turns the carried device to face `yaw`, where it would land (`turnCarried` in ui/hud/carry.ts gives the step R takes). */
+	turnCarry(yaw: number) {
+		const carry = this.carry;
+		if (!carry) return;
+		carry.yaw = wrapDegrees(yaw);
+		const drag = this.drag;
+		if (drag) this.previewDrag(carry.model, drag.x, drag.z, carry.yaw, carry.moving);
+		const model = this.modelMap.get(carry.model);
+		this.announce(`${model?.name ?? 'It'} faces ${describeBearing(carry.yaw).spoken}.`);
+		this.wake();
+	}
+
+	/** Puts the carried device down where the ghost is. Returns the reason in words when it cannot go there (it is still carried then), or null. */
+	placeCarry(): string | null {
+		const carry = this.carry;
+		const drag = this.drag;
+		if (!carry) return null;
+		if (!drag) {
+			const reason = 'Bring it over a room first.';
+			this.announce(reason);
+			return reason;
+		}
+		if (!drag.ok) {
+			const reason = drag.reason ?? 'It cannot go there.';
+			this.announce(reason);
+			return reason;
+		}
+		const yaw = carry.yaw ?? undefined;
+		const refused = carry.moving ? this.moveDevice(carry.moving, drag.x, drag.z, yaw) : this.addDeviceAt(carry.model, drag.x, drag.z, yaw);
+		if (refused) return refused;
+		if (carry.moving) this.select({ kind: 'device', id: carry.moving });
+		this.carry = null;
+		this.drag = null;
+		this.wake();
+		return null;
+	}
+
+	/** Puts the carried device back: nothing is added, and a device being moved stays where it was. */
+	cancelCarry() {
+		if (!this.carry) return;
+		const moving = this.carry.moving;
+		this.carry = null;
+		this.drag = null;
+		this.announce(moving ? 'Left where it was.' : 'Put back.');
+		this.wake();
+	}
+
+	/** Chooses a thing in the Home, or nothing; `menu` opens its context menu. A device chosen here shows its handles on the Stage too. */
+	select(target: Target | null, menu = false) {
+		this.selection = target;
+		this.menu = !!target && menu;
+		this.selected = target?.kind === 'device' ? target.id : null;
+		this.wake();
+	}
+
+	/** What is under the pointer now, for the outline and the hover label. */
+	hover(target: Target | null) {
+		if (sameTarget(target, this.hovered)) return;
+		this.hovered = target;
+		this.wake();
+	}
+
+	/** Closes the context menu and keeps the choice, so the Inspector still shows it. */
+	closeMenu() {
+		if (!this.menu) return;
+		this.menu = false;
+		this.wake();
+	}
+
+	/** Forgets a thing that is gone: the chosen thing, the open menu and the hover, if they were it. */
+	private forget(target: Target) {
+		if (sameTarget(this.selection, target)) {
+			this.selection = null;
+			this.menu = false;
+		}
+		if (sameTarget(this.hovered, target)) this.hovered = null;
+	}
+
+	/** Forgets every choice, for a new home or setup in which the old ids may name nothing. */
+	private clearChoice() {
+		this.selection = null;
+		this.menu = false;
+		this.hovered = null;
+		this.carry = null;
+		this.drag = null;
+	}
+
+	/** Tints the rooms with a field, or nothing. Until the overlays are drawn, each one shows on the slice as its Layer, and Off hides the slice. */
+	setOverlay(overlay: OverlayId) {
+		const info = OVERLAYS.find((o) => o.id === overlay) ?? OVERLAYS[0];
+		this.view.overlay = info.id;
+		if (info.layer) this.view.layer = info.layer;
+		this.announce(info.id === 'off' ? 'Overlay off.' : `Overlay: ${info.label}.`);
+		this.wake();
+	}
+
 	// ---- whole-setup actions ----
 
 	/** Starts the simulation over with the same setup: the air is still and the smoke is gone, and the probes stay where they are, reading the new air. */
@@ -338,6 +534,7 @@ export class AirflowExperience extends Experience {
 		this.scenario = this.startingScenario;
 		this.probes = [];
 		this.selected = null;
+		this.clearChoice();
 		this.restarts++;
 		this.announce('Back to the start.');
 		this.wake();
@@ -355,12 +552,15 @@ export class AirflowExperience extends Experience {
 		this.setup = clone(scenario.setup);
 		this.starting = clone(scenario.setup);
 		Object.assign(this.view, scenario.view ?? {});
+		// The HUD's overlay shows the Layer the scenario asks for, unless the visitor turned the overlays off.
+		if (scenario.view?.layer && this.view.overlay !== 'off') this.view.overlay = overlayOfLayer(scenario.view.layer);
 		Object.assign(this.clock, { ...DEFAULT_CLOCK, ...scenario.clock });
 		if (this.reducedMotion) this.clock.paused = true;
 		this.startingSmoke = scenario.smoke ?? 0;
 		this.startingScenario = id;
 		this.probes = [];
 		this.selected = null;
+		this.clearChoice();
 		this.scenario = id;
 		this.restarts++;
 		if (announce) this.announce(`${scenario.name}. ${scenario.notice}`);
@@ -379,6 +579,7 @@ export class AirflowExperience extends Experience {
 		this.startingSmoke = 0;
 		this.probes = [];
 		this.selected = null;
+		this.clearChoice();
 		this.scenario = null;
 		this.restarts++;
 		this.wake();
@@ -388,6 +589,7 @@ export class AirflowExperience extends Experience {
 		if (restart) {
 			this.probes = [];
 			this.selected = null;
+			this.clearChoice();
 			this.restarts++;
 		}
 		this.announce(message);
