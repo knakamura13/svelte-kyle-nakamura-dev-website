@@ -98,16 +98,17 @@ export function farDistance(bounds: CameraBounds, fov: number, aspect: number): 
 }
 
 /**
- * On a screen taller than it is wide (a phone held upright) the default view is from bird's-eye, tilted back a little, and turned to
- * look along the Home's long side, so its length runs up the screen and all of it fits.
+ * On a screen taller than it is wide (a phone held upright) the default view is from nearly bird's-eye, tilted back a little, and
+ * turned to look along the Home's long side, so its length runs up the screen and all of it fits.
  */
 export const PORTRAIT_YAW = -70 * DEG;
 export const PORTRAIT_TILT = -14 * DEG;
+export const PORTRAIT_ZOOM = 0.88;
 
 /** The default view of a Home: its middle, from the south-west, far enough out to see all of it on a screen of this `aspect` (width over height). */
 export function homeView(bounds: CameraBounds, aspect = 1.6): CameraState {
 	const middle = { x: bounds.width / 2, z: bounds.depth / 2 };
-	if (aspect < 1) return { ...middle, yaw: bounds.width >= bounds.depth ? PORTRAIT_YAW : HOME_YAW, zoom: 1, tilt: PORTRAIT_TILT };
+	if (aspect < 1) return { ...middle, yaw: bounds.width >= bounds.depth ? PORTRAIT_YAW : HOME_YAW, zoom: PORTRAIT_ZOOM, tilt: PORTRAIT_TILT };
 	return { ...middle, yaw: HOME_YAW, zoom: HOME_ZOOM, tilt: HOME_TILT };
 }
 

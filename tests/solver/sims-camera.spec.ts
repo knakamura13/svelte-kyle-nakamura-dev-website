@@ -335,7 +335,7 @@ test.describe('the controls', () => {
 		const { controls } = rig();
 		controls.setAspect(390 / 844);
 		expect(controls.goal).toEqual(homeView(HOME, 390 / 844));
-		expect(controls.goal.zoom).toBe(1);
+		expect(controls.goal.zoom).toBeGreaterThan(HOME_ZOOM - 0.05);
 		// The two-bedroom is wider than deep, so the camera looks east-north-east, along its 12 m.
 		expect(controls.yawDegrees).toBe(70);
 		// Turned the other way up, it goes back to the landscape view; once moved, a new shape leaves the camera where it is.

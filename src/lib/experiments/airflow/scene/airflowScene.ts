@@ -248,6 +248,8 @@ export function createAirflowScene(host: WorldHost, params: AirflowSceneParams, 
 		},
 		setQuality(quality) {
 			lighting.setQuality(quality);
+			// A phone draws a third of the tracers: on a small screen the full count is a speckle over the rooms, and each costs a draw.
+			tracers.setCount(quality.tier === 'low' ? Math.round(TRACERS / 3) : TRACERS);
 		},
 		takeShadowChange: () => house.home.takeShadowChange(),
 		aoBox: () => house.home.aoBox(),
