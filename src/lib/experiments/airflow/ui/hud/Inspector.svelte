@@ -259,7 +259,7 @@
 		padding: 2px 8px 10px 0;
 	}
 	.subtitle {
-		margin: -8px 0 0;
+		margin: 0;
 		color: var(--hud-muted);
 		font-size: 12px;
 	}

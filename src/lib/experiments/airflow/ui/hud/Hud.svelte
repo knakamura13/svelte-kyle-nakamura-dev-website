@@ -147,12 +147,12 @@
 		--hud-accent-ink: #05261a;
 		--hud-text: #f3f7f4;
 		--hud-muted: #b9c6bf;
-		--hud-dim: #93a49b;
+		--hud-dim: #aebdb5;
 		--hud-danger: #ff9a9d;
 		--hud-danger-fill: #e5484d;
 		--hud-smoke: #f2a35c;
-		--hud-glass: rgb(16 22 19 / 0.8);
-		--hud-glass-deep: rgb(12 17 15 / 0.9);
+		--hud-glass: rgb(14 19 17 / 0.86);
+		--hud-glass-deep: rgb(14 19 17 / 0.88);
 		--hud-hover: rgb(255 255 255 / 0.08);
 		--hud-press: rgb(255 255 255 / 0.14);
 		--hud-well: rgb(255 255 255 / 0.05);
@@ -421,7 +421,8 @@
 		background: var(--hud-hover);
 		color: var(--hud-text);
 	}
-	.hud :global(.seg > button[aria-pressed='true']) {
+	.hud :global(.seg > button[aria-pressed='true']),
+	.hud :global(.seg > button[aria-selected='true']) {
 		background: var(--hud-accent);
 		color: var(--hud-accent-ink);
 	}
