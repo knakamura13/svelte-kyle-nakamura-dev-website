@@ -119,6 +119,14 @@ Decided by the agent from those answers (Kyle asked for no more questions, and t
 
 Kyle approved check-in 2 on 2026-10-20 and paused the project. Milestones 1 to 3 are merged into the working branch and pushed: e2b5e97 is the merge of check-in 2. `/experiments/airflow` is now the full-screen experience: the new world, the air and the HUD, with no Dock and no slice plane. The history of how each milestone got here is in git.
 
+**The approved look (check-in 2, 2026-10-20):** this is what Kyle approved. Compare new work against it, and change it only with his say-so. The images are 1600 px versions of the originals, which were 1440x900 at device scale 2 (390x844 for the phone), taken in Chromium with real WebGPU, on the Two-bedroom in its cross-ventilation Scenario.
+
+| | |
+| --- | --- |
+| ![The HUD over the world at eye level, with streaks in the living room](airflow-checkins/2026-10-20-check-in-2/hud-eye-level.jpg) | ![A side view with smoke drifting through a room](airflow-checkins/2026-10-20-check-in-2/side-smoke.jpg) |
+| ![Bird's-eye with the Air speed overlay colouring the streaks](airflow-checkins/2026-10-20-check-in-2/birds-eye-speed.jpg) | ![A fan carried from the Build catalog over a room, with its ghost](airflow-checkins/2026-10-20-check-in-2/catalog-drag.jpg) |
+| ![A window's context menu](airflow-checkins/2026-10-20-check-in-2/window-menu.jpg) | ![The phone layout at 390 px](airflow-checkins/2026-10-20-check-in-2/phone.jpg) |
+
 **Built:**
 - **World (milestone 1):**
   - Kenney furniture fitted to each piece's box in the plans, with laminate or tile floors, painted walls, a lawn, trees and the HDR sky. Assets are in `static/airflow/`, licences in `LICENSES.md`.
