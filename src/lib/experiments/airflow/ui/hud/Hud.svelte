@@ -19,8 +19,11 @@
 	import WeatherWidget from './WeatherWidget.svelte';
 	import { provideHudUi } from './ui.svelte';
 
-	/** The status line: where the simulation runs and on what grid, written by the page. */
-	let { status }: { status: string } = $props();
+	/**
+	 * The status line, written by the page: where the simulation runs and on what grid, why the grid is what it is (`tuning`), and how far
+	 * behind the clock it runs (`behind`). The last two change as it runs, so they are kept out of what a screen reader reads.
+	 */
+	let { status, tuning = '', behind = '' }: { status: string; tuning?: string; behind?: string } = $props();
 
 	const experience = useAirflow();
 	const ui = provideHudUi();
@@ -135,7 +138,9 @@
 	{#if ui.panel === 'about'}<AboutPanel />{/if}
 	{#if ui.panel === 'advanced'}<AdvancedPanel />{/if}
 
-	<p class="hud-status" role="status" data-status={experience.readout.status}>{status}</p>
+	<p class="hud-status sim-status" role="status" data-status={experience.readout.status}>
+		{status}{#if tuning}<span aria-hidden="true" data-tuning>{' '}{tuning}</span>{/if}{#if behind}<span aria-hidden="true" data-behind>{' '}{behind}</span>{/if}
+	</p>
 	<p class="sr-only" aria-live="polite">{experience.announcement}</p>
 </div>
 

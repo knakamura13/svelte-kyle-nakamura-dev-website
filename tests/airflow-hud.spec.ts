@@ -5,13 +5,12 @@ import { DEVICE_MODELS } from '../src/lib/experiments/airflow/devices/catalog';
 import { plans } from '../src/lib/experiments/airflow/homes/plans';
 
 /**
- * The HUD over the full-screen world (redesign milestone 3), on `?hud` until the full-screen route replaces the Dock: every control
- * works from the keyboard with a focus ring, a click on a window in the world opens that window's menu, a fan dragged out of the
- * Build catalog lands in a room, and axe finds nothing at desktop and phone widths.
+ * The HUD over the full-screen world: every control works from the keyboard with a focus ring, a click on a window in the world opens
+ * that window's menu, a fan dragged out of the Build catalog lands in a room, and axe finds nothing at desktop and phone widths.
  */
 
 /** The grid is pinned at the coarsest cell, so the auto-tuner's warm-up does not load a busy machine: these specs are about the HUD, not the air. */
-const HUD = '/experiments/airflow?hud&cell=0.3';
+const HUD = '/experiments/airflow?cell=0.3';
 const twoBedroom = plans.find((plan) => plan.id === 'two-bedroom')!;
 const boxFan = DEVICE_MODELS.find((model) => model.kind === 'box-fan')!;
 
@@ -58,7 +57,7 @@ async function pointAt(page: Page, kind: 'opening' | 'device' | 'probe', id: Reg
 	throw new Error(`Nothing of kind ${kind} under the pointer anywhere on the Stage.`);
 }
 
-test.describe('the HUD on ?hud', () => {
+test.describe('the HUD', () => {
 	test.beforeEach(async ({ page }) => {
 		test.setTimeout(120_000);
 		await page.emulateMedia({ reducedMotion: 'reduce' });

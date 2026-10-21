@@ -26,8 +26,6 @@ export interface AirflowOptions {
 	defaultScenario: string;
 	/** The share link for a setup, as a full URL. */
 	link: (setup: Setup) => string;
-	/** The HUD over the world instead of the Dock under it (`?hud`, until the full-screen route replaces the Dock). */
-	hud?: boolean;
 }
 
 /** The scene's side of a few things only it can do, filled in once the scene exists. */
@@ -81,10 +79,8 @@ export class AirflowExperience extends Experience {
 	 */
 	drag: DragPreview | null = $state(null);
 
-	// ---- the HUD (the immersive redesign, milestone 3) ----
+	// ---- the HUD ----
 
-	/** Whether the page shows the HUD over the world. The scene reads it once, when it is built. */
-	readonly hud: boolean;
 	/** The tool in the HUD's rail: what a click on the world does. Each tool also sets `view.mode`, which a finger and the keys follow. */
 	tool: Tool = $state('select');
 	/** The thing chosen in the world or in the Inspector, and whether its context menu is open. */
@@ -107,7 +103,6 @@ export class AirflowExperience extends Experience {
 	constructor(options: AirflowOptions) {
 		super(options.load);
 		this.options = options;
-		this.hud = options.hud ?? false;
 		this.plans = options.plans;
 		this.models = options.models;
 		this.modelMap = new Map(options.models.map((m) => [m.id, m]));

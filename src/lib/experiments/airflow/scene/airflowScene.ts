@@ -40,8 +40,6 @@ const FLOOR_SYMBOLS = 0.02;
  * `clock`, `probes`, `emission` and the rest each frame, and writes `readout`.
  */
 export interface AirflowSceneParams extends SessionParams, SelectionParams {
-	/** The HUD is over the world (`?hud`): clicks follow its tool, and the chosen and hovered things are outlined. Read once. */
-	hud: boolean;
 	/** A device the HUD is carrying, which a click puts down instead of choosing what is under it. */
 	carry: object | null;
 	plans: readonly HomePlan[];
@@ -56,7 +54,7 @@ export interface AirflowSceneParams extends SessionParams, SelectionParams {
 	announce(message: string): void;
 	/** Changes how the visitor is looking (the walls' C key steps `walls`). */
 	setView(patch: Partial<View>): void;
-	/** The device whose handles are showing, and the one being dragged from the Dock's tray with where it would land (null for neither). */
+	/** The device whose handles are showing, and the one the HUD is carrying with where it would land (null for neither). */
 	selected: string | null;
 	drag: DragPreview | null;
 	selectDevice(id: string | null): void;
@@ -64,7 +62,7 @@ export interface AirflowSceneParams extends SessionParams, SelectionParams {
 	moveDevice(id: string, x: number, z: number): string | null;
 	turnDevice(id: string, yaw: number): void;
 	aimDevice(id: string, tilt: number): void;
-	/** What the Dock needs from the Stage to drag a device in from its tray: whether a screen point is over the Stage, and the floor or furniture it is over; and where the HUD hangs a thing's menu. */
+	/** What the HUD needs from the world: the floor or furniture under a screen point (for a device it carries), whether a point is over the world, and where a thing's menu hangs. */
 	bridge: {
 		pick?: (clientX: number, clientY: number) => Point3 | null;
 		over?: (clientX: number, clientY: number) => boolean;
@@ -235,23 +233,21 @@ export function createAirflowScene(host: WorldHost, params: AirflowSceneParams, 
 		}
 	});
 
-	// The HUD (redesign milestone 3): what a click chooses, the outlines of the chosen and hovered things, the carried ghost, where a menu hangs, and clicks that follow the tool.
-	const selection = params.hud ? new Selection({ camera, rect: host.rect, plan: () => house.plan, models, params }) : null;
-	if (selection) scene.add(selection.group);
-	params.bridge.anchor = (target) => selection?.anchor(target) ?? null;
-	const tools =
-		selection &&
-		new ToolInput(input, {
-			tool: () => params.tool,
-			pickAt: (at, kinds) => selection.pickAt(at, kinds),
-			grab: (at) => {
-				const grab = editor.grabAt(at, params.selected);
-				return grab && { device: grab.id, body: grab.part === 'body' };
-			},
-			select: (target, menu) => params.select(target, menu),
-			hover: (target) => params.hover(target),
-			carrying: () => !!params.carry
-		});
+	// The HUD: what a click chooses, the outlines of the chosen and hovered things, the carried ghost, where a menu hangs, and clicks that follow the tool.
+	const selection = new Selection({ camera, rect: host.rect, plan: () => house.plan, models, params });
+	scene.add(selection.group);
+	params.bridge.anchor = (target) => selection.anchor(target);
+	const tools = new ToolInput(input, {
+		tool: () => params.tool,
+		pickAt: (at, kinds) => selection.pickAt(at, kinds),
+		grab: (at) => {
+			const grab = editor.grabAt(at, params.selected);
+			return grab && { device: grab.id, body: grab.part === 'body' };
+		},
+		select: (target, menu) => params.select(target, menu),
+		hover: (target) => params.hover(target),
+		carrying: () => !!params.carry
+	});
 
 	/** The old Top-down switch, until the HUD replaces it: straight down from bird's-eye with north up, and back to the default view. */
 	function followTopDown(on: boolean) {
@@ -266,7 +262,7 @@ export function createAirflowScene(host: WorldHost, params: AirflowSceneParams, 
 		scene,
 		camera,
 		controls,
-		input: tools ?? input,
+		input: tools,
 		setEnvironment(environment) {
 			if (host.assets) lighting.setSky(host.assets.sky, environment);
 		},
@@ -339,8 +335,7 @@ export function createAirflowScene(host: WorldHost, params: AirflowSceneParams, 
 			// A device's ring and arrow lie round its feet.
 			devices.update(setup.devices, session.simTime, FLOOR_SYMBOLS, params.selected);
 			editor.update(setup.devices.find((d) => d.id === params.selected));
-			editor.setGhost(selection ? null : params.drag);
-			if (selection?.update(dt, reduced)) moving = true;
+			if (selection.update(dt, reduced)) moving = true;
 			markers.syncProbes(params.probes, readout.probes, view.units);
 			markers.update(dt, reduced);
 
@@ -355,7 +350,7 @@ export function createAirflowScene(host: WorldHost, params: AirflowSceneParams, 
 			backend.dispose();
 			disposeHouse(house);
 			markers.dispose();
-			selection?.dispose();
+			selection.dispose();
 			editor.dispose();
 			devices.dispose();
 			lighting.dispose();

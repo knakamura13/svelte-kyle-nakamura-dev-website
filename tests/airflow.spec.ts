@@ -72,8 +72,7 @@ async function changedShare(page: Page, before: Buffer, after: Buffer) {
 }
 
 /**
- * The airflow page before it has a Dock: the home is drawn, the status line says honestly whether the simulation is
- * running, and nothing throws. Where the browser has WebGPU the simulation runs on it (paused here, for reduced motion); where it
+ * The airflow page: the home is drawn, the status line says honestly whether the simulation is running, and nothing throws. Where the browser has WebGPU the simulation runs on it (paused here, for reduced motion); where it
  * does not, it runs on the processor in a worker at reduced detail, and the page says so. Only a browser that has neither says
  * the simulation cannot run, and still shows the home.
  */
@@ -193,7 +192,9 @@ test.describe('the airflow page', () => {
 			expect(await dominantShare(page, late)).toBeLessThan(0.9);
 			expect(await changedShare(page, early, late), 'the Stage is redrawn from new solver data').toBeGreaterThan(0.002);
 
-			// A click on the home leaves a probe, and its reading comes back from the worker.
+			// With the Probe tool a click on the home leaves a probe, and its reading comes back from the worker.
+			await page.keyboard.press('3');
+			await expect(page.locator('.hud')).toHaveAttribute('data-tool', 'probe');
 			const box = (await view.boundingBox())!;
 			const probe = view.locator('.stage-label[data-tone="probe"]');
 			for (const [x, y] of [
