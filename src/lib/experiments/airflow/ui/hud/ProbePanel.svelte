@@ -35,7 +35,7 @@
 				? `Touch the air, and lift your finger where a probe should read it, ${height} up.`
 				: `Click the air to pin a probe ${height} above the floor. It keeps reading the air there.`}
 	</p>
-	<div class="under sheet-more" data-state={spot ? (spot.rows.length ? 'reading' : 'no-air') : 'empty'}>
+	<div class="under" class:sheet-more={ui.phone} data-state={spot ? (spot.rows.length ? 'reading' : 'no-air') : 'empty'}>
 		<p class="eyebrow">{ui.phone ? 'Under your finger' : 'Under the pointer'}</p>
 		{#if spot}
 			<p class="sr-only">{spot.sentence}</p>

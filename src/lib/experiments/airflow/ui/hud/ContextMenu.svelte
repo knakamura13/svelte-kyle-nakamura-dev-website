@@ -77,7 +77,7 @@
 			<button type="button" class="ibtn close" aria-label="Close the menu" onclick={() => experience.closeMenu()}><Icon name="close" size={18} /></button>
 		</header>
 		<MenuBody {target} {menu} compact />
-		<button type="button" class="btn quiet details sheet-more" onclick={() => (ui.inspector = true)}>
+		<button type="button" class="btn quiet details" class:sheet-more={ui.phone} onclick={() => (ui.inspector = true)}>
 			<Icon name="details" size={16} />
 			<span>All settings</span>
 		</button>

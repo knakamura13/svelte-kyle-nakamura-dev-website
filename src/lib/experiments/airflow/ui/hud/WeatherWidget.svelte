@@ -135,12 +135,12 @@
 			{/each}
 		</div>
 	</div>
-	<div class="block steppers sheet-more">
+	<div class="block steppers" class:sheet-more={ui.phone}>
 		<p class="eyebrow">Temperature</p>
 		{@render stepper('outdoorTemp', 'Outdoor temperature', outdoor, '')}
 		{@render stepper('indoorTemp', 'Indoor start', indoor, 'Starts the air over')}
 	</div>
-	<div class="block sheet-more">
+	<div class="block" class:sheet-more={ui.phone}>
 		<p class="eyebrow">Outdoor air · PM2.5</p>
 		<div class="chips air-chips" role="group" aria-label="Outdoor air">
 			{#each AIR_PRESETS as preset (preset.id)}

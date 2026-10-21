@@ -108,7 +108,7 @@
 			</div>
 		</div>
 
-		<div class="cluster right glass sheet-more">
+		<div class="cluster right glass" class:sheet-more={sheet}>
 			<div class="seg walls" role="group" aria-label="Walls">
 				{#each WALL_MODES as mode (mode.id)}
 					<button type="button" aria-pressed={experience.view.walls === mode.id} aria-label={mode.label} use:tooltip={{ label: mode.label, hint: mode.hint, side: 'top' }} onclick={() => setWalls(mode.id)}>

@@ -45,7 +45,7 @@
 			</button>
 		{/each}
 	</div>
-	<p class="now sheet-more">Now: <strong>{words.rate.text}</strong>, {words.near}.</p>
+	<p class="now" class:sheet-more={ui.phone}>Now: <strong>{words.rate.text}</strong>, {words.near}.</p>
 	<button type="button" class="btn" onclick={focusWorld}><Icon name="target" size={18} />Release from the keyboard</button>
 	<p class="keys">In the 3D view: arrow keys move the cursor, <span class="key">Enter</span> starts and stops smoke.</p>
 </section>
