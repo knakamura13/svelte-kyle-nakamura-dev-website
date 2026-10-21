@@ -18,7 +18,7 @@
 	let rail: HTMLElement | undefined = $state();
 
 	// The first frame's one invitation, beside Build, until the visitor builds something or puts the hint away.
-	const hinting = $derived(ui.hint && experience.tool !== 'build' && experience.setup.devices.length === 0 && !experience.carry);
+	const hinting = $derived(ui.hint && experience.tool === 'select' && !experience.menu && !ui.popover && experience.setup.devices.length === 0 && !experience.carry);
 	$effect(() => {
 		if (experience.tool === 'build' || experience.setup.devices.length > 0) ui.hint = false;
 	});
@@ -181,6 +181,9 @@
 	}
 	.tool:active {
 		transform: scale(0.95);
+	}
+	.tool[aria-expanded='true'] {
+		background: var(--hud-press);
 	}
 	.tool[aria-pressed='true'] {
 		background: var(--hud-accent);

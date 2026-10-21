@@ -13,6 +13,7 @@
 		rotation = 0,
 		size = 120,
 		label = 'Wind direction',
+		compact = false,
 		onchange,
 		oncommit
 	}: {
@@ -24,6 +25,8 @@
 		rotation?: number;
 		size?: number;
 		label?: string;
+		/** A small dial: the four cardinal ticks and N only, so it stays clean at 44 to 60 px. */
+		compact?: boolean;
 		onchange: (bearing: number) => void;
 		/** Once a drag ends or a key is let go: for the announcement. */
 		oncommit?: (bearing: number) => void;
@@ -36,7 +39,7 @@
 	const handle = $derived(dialPoint(bearing, R - 9, rotation));
 	const tail = $derived(dialPoint(bearing, R - 20, rotation));
 	const head = $derived(dialPoint(bearing + 180, R - 16, rotation));
-	const ticks = Array.from({ length: 24 }, (_, i) => i * 15);
+	const ticks = $derived(compact ? [0, 90, 180, 270] : Array.from({ length: 24 }, (_, i) => i * 15));
 	const LETTERS = [
 		{ name: 'N', at: 0 },
 		{ name: 'E', at: 90 },
@@ -90,6 +93,7 @@
 	class="dial"
 	class:dragging
 	class:calm
+	class:compact
 	bind:this={dial}
 	width={size}
 	height={size}
@@ -123,7 +127,7 @@
 			<line x1={outer.x} y1={outer.y} x2={inner.x} y2={inner.y} class:major={at % 45 === 0} />
 		{/each}
 	</g>
-	{#each LETTERS as letter (letter.name)}
+	{#each compact ? LETTERS.slice(0, 1) : LETTERS as letter (letter.name)}
 		{@const p = dialPoint(letter.at, R - 17, rotation)}
 		<text x={p.x} y={p.y} class="letter" class:north={letter.name === 'N'} text-anchor="middle" dominant-baseline="central">{letter.name}</text>
 	{/each}
@@ -194,6 +198,15 @@
 		fill: var(--hud-accent);
 		stroke: #fff;
 		stroke-width: 1.6;
+	}
+	.compact .letter {
+		font-size: 13px;
+	}
+	.compact .shaft {
+		stroke-width: 3.6;
+	}
+	.compact .ticks line {
+		stroke-width: 2;
 	}
 	.calm .shaft,
 	.calm .arrowhead {

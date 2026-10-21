@@ -334,7 +334,7 @@ test.describe('the Inspector, the hover label and the probe cards', () => {
 	test('a probe card reads the air in large values once a reading of its own point arrives', () => {
 		const pin = { id: 'p2', x: 2, y: 1.1, z: 2 };
 		expect(probeCards(context({ probes: [pin] }))[0]).toMatchObject({ name: 'Probe 2', speed: null, message: 'Waiting for the first reading.' });
-		const reading = { id: 'p2', label: 'Probe 2', ...pin, u: 0.3, v: 0, w: -0.4, speed: 0.5, averageSpeed: null, temperature: 21, particulates: 0.01, inAir: true };
+		const reading = { ...pin, label: 'Probe 2', u: 0.3, v: 0, w: -0.4, speed: 0.5, averageSpeed: null, temperature: 21, particulates: 0.01, inAir: true };
 		const card = probeCards(context({ probes: [pin], readings: [reading] }))[0];
 		expect(card.speed).toBe(formatSpeed(0.5, 'metric').text);
 		close(card.heading!, vectorToBearing(0.3, -0.4));

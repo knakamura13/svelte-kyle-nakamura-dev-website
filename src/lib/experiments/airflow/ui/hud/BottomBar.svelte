@@ -249,7 +249,7 @@
 		}
 	}
 
-	/* The phone's View sheet: the same controls stacked, over the toolbar. */
+	/* The phone's View sheet: the same controls stacked in one glass sheet over the toolbar. */
 	.bar.sheet {
 		position: fixed;
 		left: 10px;
@@ -257,13 +257,33 @@
 		bottom: calc(86px + env(safe-area-inset-bottom));
 		display: grid;
 		grid-template-columns: minmax(0, 1fr);
-		gap: 8px;
+		gap: 6px;
+		padding: 8px;
+		border-radius: 22px;
+		background-color: var(--hud-glass-deep);
+		-webkit-backdrop-filter: var(--hud-blur);
+		backdrop-filter: var(--hud-blur);
+		box-shadow:
+			var(--hud-shadow),
+			inset 0 0 0 1px var(--hud-edge);
 		pointer-events: auto;
 		animation: hud-rise 260ms var(--hud-ease);
 	}
-	.bar.sheet .cluster {
+	.bar.sheet .cluster,
+	.bar.sheet .legend {
 		justify-self: stretch;
 		flex-wrap: wrap;
+		background: transparent;
+		-webkit-backdrop-filter: none;
+		backdrop-filter: none;
+		box-shadow: none;
+		animation: none;
+	}
+	.bar.sheet .overlays + .cluster,
+	.bar.sheet .cluster + .overlays {
+		border-top: 1px solid var(--hud-rule);
+		border-radius: 0;
+		padding-top: 10px;
 	}
 	.bar.sheet .overlays {
 		justify-items: stretch;

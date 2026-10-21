@@ -88,7 +88,7 @@
 <div class="weather glass" class:open bind:this={card}>
 	<div class="summary">
 		{#if !open}
-			<CompassDial bearing={conditions.windFrom} speed={conditions.windSpeed} {rotation} size={ui.phone ? 44 : 58} onchange={setBearing} oncommit={sayBearing} />
+			<CompassDial bearing={conditions.windFrom} speed={conditions.windSpeed} {rotation} size={ui.phone ? 44 : 58} compact onchange={setBearing} oncommit={sayBearing} />
 		{/if}
 		<div class="fact wind">
 			<span class="eyebrow">Wind</span>

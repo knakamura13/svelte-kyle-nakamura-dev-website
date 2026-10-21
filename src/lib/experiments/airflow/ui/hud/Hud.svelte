@@ -25,6 +25,8 @@
 	const experience = useAirflow();
 	const ui = provideHudUi();
 	const tool = $derived(experience.tool);
+	/** On a phone one sheet shows over the toolbar at a time: a small menu first, then the context menu, the Inspector, and the tool's panel. */
+	const sheet = $derived(ui.popover ? 'popover' : experience.menu && experience.selection ? 'menu' : ui.inspector ? 'inspector' : tool !== 'select' ? 'tool' : undefined);
 	const key = (target: { kind: string; id: string } | null) => (target ? `${target.kind}:${target.id}` : '');
 
 	let top: HTMLElement | undefined = $state();
@@ -107,6 +109,7 @@
 	data-selection={key(experience.selection)}
 	data-menu={experience.menu ? '' : undefined}
 	data-carrying={experience.carry ? '' : undefined}
+	data-sheet={ui.phone ? sheet : undefined}
 >
 	<div class="hud-top" bind:this={top}><TopBar /></div>
 	<div class="hud-weather" bind:this={weather}><WeatherWidget /></div>
@@ -547,6 +550,17 @@
 	.hud.phone .hud-status {
 		bottom: auto;
 		top: 64px;
+	}
+	/* One sheet at a time on a phone; the others wait under the one in front. */
+	.hud.phone[data-sheet='popover'] .hud-left > :global(:not(.rail-wrap)),
+	.hud.phone[data-sheet='menu'] .hud-left > :global(:not(.rail-wrap)),
+	.hud.phone[data-sheet='inspector'] .hud-left > :global(:not(.rail-wrap)),
+	.hud.phone[data-sheet='popover'] .hud-right,
+	.hud.phone[data-sheet='menu'] .hud-right,
+	.hud.phone[data-sheet='inspector'] .hud-right :global(.cards),
+	.hud.phone[data-sheet='tool'] .hud-right :global(.cards),
+	.hud.phone[data-sheet='popover'] :global(.menu.sheet) {
+		display: none;
 	}
 
 	@media (prefers-reduced-motion: reduce) {

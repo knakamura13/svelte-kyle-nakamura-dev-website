@@ -97,8 +97,9 @@
 		font-size: 28px;
 		color: var(--hud-text);
 	}
+	/* The headings keep their line break: the site hides it on a narrow screen, and the words would run together. */
 	.body :global(.portfolio-background h2 br) {
-		display: none;
+		display: inline;
 	}
 	.body :global(.takeaways li),
 	.body :global(.background-copy > p) {

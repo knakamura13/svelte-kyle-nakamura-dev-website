@@ -59,9 +59,10 @@
 		aspect-ratio: auto;
 		border-radius: 0;
 	}
+	/* The world's own focus ring: a thin line inside the edge of the window, under the HUD. */
 	.hud-frame :global(.stage-view:focus-visible::after) {
+		border: 2px solid rgb(95 213 154 / 0.75);
 		border-radius: 0;
-		border-color: #5fd59a;
 	}
 	/* The cursor says what a click does. */
 	.hud-frame[data-hovering] :global(.stage-view canvas) {

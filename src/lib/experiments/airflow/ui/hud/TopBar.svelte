@@ -109,7 +109,7 @@
 					<button type="button" class="home" aria-pressed={current} aria-describedby="hud-home-{plan.id}" onclick={() => chooseHome(plan.id)}>
 						<span class="plan-frame" aria-hidden="true">
 							<svg class="plan" viewBox={thumb.viewBox} preserveAspectRatio="xMidYMid meet">
-								{#each thumb.rooms as room (room.id)}<path d={room.d} fill={room.tint} />{/each}
+								{#each thumb.rooms as room (room.id)}<path class="room" d={room.d} fill={room.tint} />{/each}
 								{#each thumb.walls as wall, i (i)}<line class="wall" x1={wall.x1} y1={wall.y1} x2={wall.x2} y2={wall.y2} />{/each}
 								<path class="outline" d={thumb.outline} />
 								{#each thumb.openings as gap, i (i)}<line class="gap" class:window={gap.window} x1={gap.x1} y1={gap.y1} x2={gap.x2} y2={gap.y2} />{/each}
@@ -261,40 +261,39 @@
 			inset 0 0 0 2px var(--hud-accent),
 			0 10px 24px rgb(95 213 154 / 0.18);
 	}
+	/* A floor plan on paper: the Rooms in their wall colours, the walls in ink, the doors as gaps and the windows in sky blue. */
 	.plan-frame {
 		display: grid;
 		place-items: center;
 		height: 112px;
 		margin-bottom: 6px;
 		border-radius: 11px;
-		background: radial-gradient(120% 120% at 30% 20%, #2b3a33, #18211d);
+		background: linear-gradient(170deg, #f4f7f3, #dde5df);
 		overflow: hidden;
 	}
 	.plan {
-		width: 88%;
-		height: 88%;
-	}
-	.plan path {
-		opacity: 0.92;
+		width: 86%;
+		height: 86%;
+		filter: drop-shadow(0 3px 4px rgb(20 30 25 / 0.18));
 	}
 	.plan .outline {
 		fill: none;
-		stroke: #f6f1e8;
-		stroke-width: 0.16;
+		stroke: #33413a;
+		stroke-width: 0.17;
 		stroke-linejoin: round;
 	}
 	.plan .wall {
-		stroke: #f6f1e8;
-		stroke-width: 0.09;
+		stroke: #33413a;
+		stroke-width: 0.1;
 		stroke-linecap: square;
 	}
 	.plan .gap {
-		stroke: #23302a;
-		stroke-width: 0.22;
+		stroke: #f4f7f3;
+		stroke-width: 0.24;
 	}
 	.plan .gap.window {
-		stroke: #8cc8ef;
-		stroke-width: 0.12;
+		stroke: #6fb6e6;
+		stroke-width: 0.2;
 	}
 	.home-head {
 		display: flex;

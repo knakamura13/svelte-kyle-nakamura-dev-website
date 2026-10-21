@@ -68,6 +68,7 @@
 	.card {
 		display: grid;
 		gap: 6px;
+		min-width: 0;
 		padding: 8px 8px 10px 12px;
 		border-radius: 18px;
 		animation: hud-in 220ms var(--hud-ease);
@@ -123,6 +124,7 @@
 		display: flex;
 		align-items: center;
 		gap: 8px;
+		min-width: 0;
 	}
 	.speed {
 		font-size: 22px;
@@ -142,6 +144,8 @@
 		transition: transform 400ms var(--hud-ease);
 	}
 	.direction {
+		flex: 1;
+		min-width: 0;
 		overflow: hidden;
 		color: var(--hud-muted);
 		font-size: 11.5px;
