@@ -3,7 +3,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { plans } from '../../src/lib/experiments/airflow/homes/plans';
 import type { PlanId } from '../../src/lib/experiments/airflow/homes/types';
 import { LINK_VERSION, MAX_LINK_LENGTH, MAX_POSITION, decodeSetup, encodeSetup, linkCatalog, normalizeSetup, setupFromHash, setupToHash, type LinkCatalog } from '../../src/lib/experiments/airflow/link';
-import { COMPASS_POINTS, bearingToVector, compassName, describeBearing, describeDirection, vectorToBearing } from '../../src/lib/experiments/airflow/readout';
+import { COMPASS_POINTS, bearingToVector, compassName, describeBearing, describeDirection, vectorToBearing } from '../../src/lib/experiments/airflow/directionWords';
 import { AIR } from '../../src/lib/experiments/airflow/solver/types';
 import { DEFAULT_CLOCK, DEFAULT_CONDITIONS, DEFAULT_VIEW, LIMITS, MAX_DEVICES, blankSetup, type Conditions, type DeviceState, type Setup } from '../../src/lib/experiments/airflow/state';
 import {

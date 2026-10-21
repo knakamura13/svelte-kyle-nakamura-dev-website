@@ -10,7 +10,7 @@ import { anchorOf, cutSill, deviceBox, openingBox, pickTarget, rayBox, wallDista
 import { CUT_HEIGHT, DOWN_HEIGHT, type WallMode } from '../../src/lib/experiments/airflow/scene/walls/cutaway';
 import { LIMITS, type DeviceState } from '../../src/lib/experiments/airflow/state';
 import { formatSpeed } from '../../src/lib/experiments/airflow/units';
-import { vectorToBearing } from '../../src/lib/experiments/airflow/readout';
+import { vectorToBearing } from '../../src/lib/experiments/airflow/directionWords';
 import { carryHint, isClick, turnCarried } from '../../src/lib/experiments/airflow/ui/hud/carry';
 import { cardLines, inTab, towardMiddle } from '../../src/lib/experiments/airflow/ui/hud/catalog';
 import { bearingFromPointer, dialPoint, dialRotation, snapBearing, stepBearing, windWords } from '../../src/lib/experiments/airflow/ui/hud/compass';

@@ -1,4 +1,4 @@
-import { describeDirection } from './readout';
+import { describeDirection } from './directionWords';
 import type { AirReading } from './readouts';
 import type { UnitSystem } from './state';
 import { formatLength, formatParticulates, formatSpeed, formatTemperature } from './units';

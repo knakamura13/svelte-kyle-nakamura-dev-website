@@ -1,4 +1,4 @@
-import { compassWord, describeBearing } from '../readout';
+import { compassWord, describeBearing } from '../directionWords';
 import type { Conditions, UnitSystem } from '../state';
 import { UNIT_SPACE, formatSpeed, formatTemperature, sliderRange, type Formatted, type SliderRange } from '../units';
 

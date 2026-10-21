@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { useAirflow } from '../../experience.svelte';
-	import { describeBearing } from '../../readout';
+	import { describeBearing } from '../../directionWords';
 	import { formatPm25, weatherAnnouncement, weatherField, windFromAnnouncement } from '../weather';
 	import { dialRotation, windWords } from './compass';
 	import CompassDial from './CompassDial.svelte';

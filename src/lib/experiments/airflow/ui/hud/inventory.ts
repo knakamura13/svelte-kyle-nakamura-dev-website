@@ -3,7 +3,7 @@ import type { DeviceModel } from '../../devices/types';
 import { openingsByRoom, roomAt } from '../../homes/rooms';
 import type { HomePlan, OpeningSpec } from '../../homes/types';
 import { describeSpot, probeName } from '../../probeWords';
-import { describeDirection } from '../../readout';
+import { describeDirection } from '../../directionWords';
 import type { ProbeReading } from '../../readouts';
 import { MAX_DEVICES, MAX_PINS, type Pin, type Setup, type Target, type UnitSystem } from '../../state';
 import { formatParticulates, formatSpeed, formatTemperature } from '../../units';
