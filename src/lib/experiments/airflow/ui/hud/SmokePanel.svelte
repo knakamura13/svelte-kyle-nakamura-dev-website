@@ -158,8 +158,13 @@
 		gap: 5px;
 	}
 	:global(.hud.phone) .mark {
+		align-content: start;
 		min-height: 48px;
-		padding: 6px 8px;
+		padding: 6px 7px;
+	}
+	:global(.hud.phone) .mark-name {
+		font-size: 12px;
+		line-height: 1.2;
 	}
 	:global(.hud.phone) .btn,
 	:global(.hud.phone) .keys,

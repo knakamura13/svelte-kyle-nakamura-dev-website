@@ -43,7 +43,18 @@
 	const rated = (model: DeviceModel) => `${model.kind === 'air-purifier' ? 'Cleans ' : ''}${formatFlow(ratedFlow(model), units).text}`;
 
 	// ---- a card dragged straight into the world ----
-	let press: { pointer: number; x: number; y: number; moved: boolean; model: string } | null = null;
+	let press: { pointer: number; x: number; y: number; moved: boolean; model: string; swiped?: boolean } | null = null;
+
+	/**
+	 * On a phone a finger on a card may mean the strip, not the card: at the sheet's peek a sideways swipe scrolls the strip (the
+	 * browser's own pan, `touch-action: pan-x`) and only a drag upward takes the card out; in full a swipe scrolls the cards, and a tap
+	 * picks one up to put down with a tap in a room.
+	 */
+	function scrolls(event: PointerEvent, from: { x: number; y: number }) {
+		if (!ui.phone || event.pointerType !== 'touch') return false;
+		if (ui.sheetSize === 'full') return true;
+		return Math.abs(event.clientX - from.x) > Math.abs(event.clientY - from.y);
+	}
 
 	function follow(x: number, y: number) {
 		const at = overWorld(x, y) ? experience.bridge.pick?.(x, y) : null;
@@ -60,6 +71,10 @@
 	function move(event: PointerEvent) {
 		if (!press || press.pointer !== event.pointerId) return;
 		if (!press.moved && !isClick(press, { x: event.clientX, y: event.clientY })) {
+			if (scrolls(event, press)) {
+				press.swiped = true;
+				return;
+			}
 			press.moved = true;
 			experience.startCarry(press.model);
 			ui.held = true;
@@ -72,6 +87,7 @@
 		const done = press;
 		press = null;
 		ui.held = false;
+		if (done.swiped && !done.moved) return;
 		// A click picks it up: it follows the pointer until a click in a room puts it down.
 		if (!done.moved) {
 			if (experience.carry?.model === done.model && !experience.carry.moving) experience.cancelCarry();
@@ -400,6 +416,10 @@
 		gap: 0;
 		padding: 4px 4px 7px;
 		border-radius: 14px;
+		touch-action: pan-x;
+	}
+	:global(.hud.phone[data-sheet-size='full']) .card {
+		touch-action: pan-y;
 	}
 	:global(.hud.phone[data-sheet-size='peek']) .picture {
 		aspect-ratio: 1.55;
