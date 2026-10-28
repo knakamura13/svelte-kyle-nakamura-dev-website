@@ -29,10 +29,11 @@ import { ParticleField } from './particles';
  * Smoke: the solver's PM2.5, drawn as a lit volume. A ray from the camera is marched through the box that holds any visible smoke,
  * up to the nearest surface (`depth.ts`), and at each step the smoke takes out some of the light behind it and adds its own: the sky
  * light from all round and the sun's from its direction, dimmed by the smoke between the step and the sun, and brightest when the
- * sun is behind it. How much light it takes out grows with the square of the concentration: thick at `SMOKE_DENSE`, so the plume
- * round a source reads as smoke, while the same smoke mixed through a room (a tenth as strong) is a faint haze that the room reads
- * through, rather than a fog that whites it out. Smoke too thin to see is what the Smoke overlay is for. Within the field's blocks the
- * air carries a detail (`SMOKE_DETAIL`) that gathers the smoke into wisps, so a plume curls and frays where the field has one.
+ * sun is behind it. It is grey, so it dims the sunlit room behind it, as smoke does. How much light it takes out grows with a power of
+ * the concentration (`SMOKE_LOOK.power`): thick at `SMOKE_DENSE`, so the plume round a source reads as smoke, while the same smoke mixed
+ * through a room (a tenth as strong) is a haze that the room reads through, rather than a fog that hides it. Smoke too thin to see is
+ * what the Smoke overlay is for. Within the field's blocks the air carries a detail (`SMOKE_DETAIL`) that gathers the smoke into wisps,
+ * so a plume curls and frays where the field has one.
  *
  * At low quality it is puffs instead: soft round billboards carried by the air (`particles.ts`), born where the smoke is, each as
  * opaque as the smoke around it.
@@ -44,17 +45,23 @@ export const SMOKE_LOOK = {
 	decades: 2.5,
 	/**
 	 * Extinction of thick smoke (`dense`), per metre, and the power of the concentration it grows with. The plume a cooking burst makes,
-	 * about `dense` near its source and half a metre across, hides most of what is behind it (six sevenths); a room of smoke a tenth as
-	 * strong tints what is behind it by about a seventh across four metres. Above `cap` times `dense` it is no thicker. Lighter than
-	 * the soft volume of check-in 2, so that a room a burst has filled is not one white wall and the wisps of `SMOKE_DETAIL` show in it.
+	 * about `dense` near its source and half a metre across, hides nearly all of what is behind it (nineteen twentieths). Gentler than the
+	 * square, so smoke that has spread to a third of that strength still hides three fifths across a metre and reads as smoke; with the
+	 * square it hid a third and read as a veil of mist at check-in 3. A room of smoke a tenth as strong hides about a third across four
+	 * metres, a haze the room still reads through. Above `cap` times `dense` it is no thicker.
 	 */
-	extinction: 4,
-	power: 2,
+	extinction: 6,
+	power: 1.75,
 	cap: 6,
-	/** The share of the light smoke scatters, as a colour: a cool grey-white, so the late sun on it reads as smoke rather than as the walls' cream. */
-	albedo: new Color(0.8, 0.83, 0.88),
-	/** Henyey-Greenstein asymmetry: a little forward scattering, so smoke glows when the sun is behind it. */
-	anisotropy: 0.35,
+	/**
+	 * The share of the light smoke scatters, as a colour: a dark grey, cool against the late sun so that it lights grey rather than brown.
+	 * Smoke then dims the sunlit room behind it, as smoke does, even once it has spread thin. At check-in 3 a grey-white (0.8) lit it
+	 * cream, lighter than the floor, which read as mist, and a mid grey (0.45) left spread smoke about as bright as the floor, so it
+	 * vanished.
+	 */
+	albedo: new Color(0.32, 0.34, 0.4),
+	/** Henyey-Greenstein asymmetry: a little forward scattering, so smoke brightens when the sun is behind it, without turning milky. */
+	anisotropy: 0.25,
 	/** The level below which a cell holds no smoke worth marching through. */
 	visible: 0.01
 } as const;
@@ -153,7 +160,7 @@ float henyeyGreenstein(float cosine, float g) {
 	return (1.0 - g * g) / pow(1.0 + g * g - 2.0 * g * cosine, 1.5);
 }
 
-/** Extinction of smoke of concentration c, per metre: the square of the concentration as a share of thick smoke, up to the cap. */
+/** Extinction of smoke of concentration c, per metre: a power of the concentration as a share of thick smoke, up to the cap. */
 float extinctionOf(float c) {
 	return uExtinction * pow(clamp(c / uDense, 0.0, uCap), uPower);
 }
@@ -235,7 +242,7 @@ void main() {
 		}
 		if (sigma > 1e-3) {
 			// The smoke between here and the sun, from two samples toward it. Light that smoke has scattered more than once gets through
-			// more of it and less in one direction (the octaves of Wrenninge et al.), which keeps thick smoke white rather than grey.
+			// more of it and less in one direction (the octaves of Wrenninge et al.), so thick smoke is lit through rather than black.
 			// A wisp shades itself too, over the few centimetres of its own depth, so a dense one is darker than its edges.
 			float toward = extinctionNow(p + uSunDirection * 0.12) * 0.18 + extinctionNow(p + uSunDirection * 0.42) * 0.42 + sigma * 0.05;
 			float sun = (phase0 * exp(-toward) + 0.5 * phase1 * exp(-0.5 * toward) + 0.25 * phase2 * exp(-0.25 * toward)) / 1.75;

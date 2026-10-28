@@ -118,7 +118,9 @@ const worldShot = (page: Page) => view(page).screenshot({ mask: [page.locator('.
 
 /**
  * The share of the world's pixels that are clearly the air's blue (blue over red by 25 or more, and over green), and, given a second
- * picture, the share that it shows clearly lighter and greyer than the first (luminance up by 30, chroma down by 20): smoke over the room.
+ * picture, the share that it shows clearly greyer than the first (chroma down by 20, and darker or lighter by 20): smoke over the room,
+ * which is grey, so it dims the sunlit floor and lifts the shade. A pixel that is the air's blue in either picture is left out: a streak
+ * came or went there.
  */
 async function airShares(page: Page, first: Buffer, second?: Buffer) {
 	return page.evaluate(
@@ -138,14 +140,15 @@ async function airShares(page: Page, first: Buffer, second?: Buffer) {
 			const two = b ? await pixels(b) : null;
 			const luminance = (d: Uint8ClampedArray, i: number) => 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
 			const chroma = (d: Uint8ClampedArray, i: number) => Math.max(d[i], d[i + 1], d[i + 2]) - Math.min(d[i], d[i + 1], d[i + 2]);
+			const airBlue = (d: Uint8ClampedArray, i: number) => d[i + 2] - d[i] > 25 && d[i + 2] > d[i + 1];
 			let world = 0;
 			let blue = 0;
 			let smoke = 0;
 			for (let i = 0; i < one.length; i += 4) {
 				if (one[i] + one[i + 1] + one[i + 2] === 0 || (two && two[i] + two[i + 1] + two[i + 2] === 0)) continue;
 				world++;
-				if (one[i + 2] - one[i] > 25 && one[i + 2] > one[i + 1]) blue++;
-				if (two && luminance(two, i) - luminance(one, i) > 30 && chroma(one, i) - chroma(two, i) > 20) smoke++;
+				if (airBlue(one, i)) blue++;
+				if (two && !airBlue(one, i) && !airBlue(two, i) && Math.abs(luminance(two, i) - luminance(one, i)) > 20 && chroma(one, i) - chroma(two, i) > 20) smoke++;
 			}
 			return { blue: blue / world, smoke: smoke / world };
 		},
@@ -366,8 +369,9 @@ for (const phone of PHONES) {
 			const air = await worldShot(page);
 			const { blue } = await airShares(page, air);
 			test.info().annotations.push({ type: 'streaks', description: `${(blue * 100).toFixed(2)}% of the world's pixels are clearly the air's blue` });
-			// Measured 2026-10-21 at 390 by 844: 1.5 to 1.8% with the low tier's look (quality.ts), 0.01 to 0.02% with the desktop's. A cooking
-			// burst's plume, below, covers 0.5 to 0.8% within three seconds where the simulation runs on a GPU, and 0.4 to 0.6% with the old puffs.
+			// Measured 2026-10-28 at both sizes in the three browsers: 3.0 to 3.6% with the low tier's look (quality.ts); 0.01 to 0.02% with the
+			// desktop's on 2026-10-21. A cooking burst's plume, below, is clearly greyer over 0.37 to 0.51% when it first passes 0.3%, and the
+			// streaks moving alone, with no smoke, make 0.03 to 0.04% greyer.
 			expect(blue, 'the share of the world in clear streaks').toBeGreaterThan(0.005);
 
 			// A cooking burst from the keyboard's cursor, moved from the middle of the home to the living room's, caught as it is released.
@@ -379,12 +383,12 @@ for (const phone of PHONES) {
 			await page.keyboard.press('Enter');
 			await expect(page.locator('.hud [role="status"][data-releasing]')).toBeVisible();
 			// How much smoke is out depends on how fast this machine runs the simulation, so the plume is watched as it grows. The streaks
-			// moving meanwhile are not counted: where one comes or goes, a pixel turns bluer or darker, never lighter and greyer.
+			// moving meanwhile are not counted (`airShares` leaves out a pixel that is the air's blue in either picture).
 			let smoke = 0;
 			await expect
 				.poll(async () => (smoke = (await airShares(page, air, await worldShot(page))).smoke), { message: 'the share of the world a burst of smoke clearly covers', timeout: 20_000, intervals: [1000] })
 				.toBeGreaterThan(0.003);
-			test.info().annotations.push({ type: 'smoke', description: `${(smoke * 100).toFixed(2)}% of the world's pixels are clearly lighter and greyer` });
+			test.info().annotations.push({ type: 'smoke', description: `${(smoke * 100).toFixed(2)}% of the world's pixels are clearly greyer` });
 		});
 
 		test('has no WCAG 2.1 A/AA violations that axe can detect, with the sheets at their peek and in full', async ({ page, browserName }) => {
