@@ -400,8 +400,41 @@ test.describe('picking in the 3D world', () => {
 		// North of the Home, 1.8 m out, the letter N is behind the north wall, which stands; S, in front of the cut south wall, is not.
 		expect(selection.walled({ x: plan.width / 2, y: 0, z: -1.8 }), 'N').toBe(true);
 		expect(selection.walled({ x: plan.width / 2, y: 0, z: plan.depth + 1.8 }), 'S').toBe(false);
+		// Doors and windows count as the wall for a letter, and a cut wall's are cut with it: S still shows over the cut south wall.
+		expect(selection.walled({ x: plan.width / 2, y: 0, z: plan.depth + 1.8 }, { solid: true }), 'S, its windows filled').toBe(false);
 		selection.dispose();
 		home.dispose();
+	});
+
+	test('a compass letter seen through a window in a standing wall is hidden, as if the wall were whole', () => {
+		const plan = plans.find((p) => p.id === 'two-bedroom')!;
+		const window = plan.openings.find((o) => o.id === 'bathroom-window')!;
+		// S, 1.8 m south of the Home, and the middle of the bathroom window's frame in the south wall, as from heading 212 at check-in 3.
+		const s = { x: plan.width / 2, y: 0, z: plan.depth + 1.8 };
+		const frame = openingBox(plan, window, 0);
+		const middle = [0, 1, 2].map((i) => (frame.min[i] + frame.max[i]) / 2);
+		// A camera in the Home on the line from S through the window.
+		const camera = new PerspectiveCamera(45, 1440 / 900, 0.05, 600);
+		camera.position.set(2 * middle[0] - s.x, 2 * middle[1] - s.y, 2 * middle[2] - s.z);
+		camera.lookAt(s.x, s.y, s.z);
+		camera.updateMatrixWorld();
+		const looking = (cut: number | null) =>
+			new Selection({
+				camera,
+				rect: () => ({ left: 0, top: 0, width: 1440, height: 900 }) as DOMRect,
+				plan: () => plan,
+				models,
+				params: { tool: 'select', selection: null, hovered: null, select: () => {}, hover: () => {}, setup: blankSetup(plan.id), probes: [], drag: null },
+				// Walls with no solid part, so only the window's frame can stand between the camera and S.
+				walls: () => ({ boxes: [], cut: () => cut })
+			});
+		const standing = looking(null);
+		expect(standing.walled(s), 'to the pointer the window is a hole').toBe(false);
+		expect(standing.walled(s, { solid: true }), 'to a compass letter it is the wall').toBe(true);
+		const cut = looking(window.sill - 0.1);
+		expect(cut.walled(s, { solid: true }), 'cut down below the window, the wall hides nothing').toBe(false);
+		standing.dispose();
+		cut.dispose();
 	});
 });
 

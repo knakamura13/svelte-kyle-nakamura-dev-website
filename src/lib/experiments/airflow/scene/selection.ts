@@ -530,9 +530,10 @@ export class Selection {
 
 	/**
 	 * Whether a standing wall is between the camera and a point of the Home: then the pointer is on the wall, not on the floor or the air
-	 * behind it, and a Probe, smoke or a carried device does not go there.
+	 * behind it, and a Probe, smoke or a carried device does not go there. With `solid`, a door or window counts as the wall it stands in,
+	 * up to where that wall is cut: a compass letter drawn over the page and seen through a window would sit on the wall round it.
 	 */
-	walled(point: { x: number; y: number; z: number }): boolean {
+	walled(point: { x: number; y: number; z: number }, options: { solid?: boolean } = {}): boolean {
 		const walls = this.host.walls?.();
 		if (!walls) return false;
 		const origin = this.host.camera.getWorldPosition(this.point);
@@ -541,7 +542,21 @@ export class Selection {
 		const dz = point.z - origin.z;
 		const length = Math.hypot(dx, dy, dz);
 		if (length < 1e-6) return false;
-		return wallDistance([origin.x, origin.y, origin.z], [dx / length, dy / length, dz / length], walls.boxes) < length - 1e-3;
+		const boxes = options.solid ? [...walls.boxes, ...this.openingsStanding(walls)] : walls.boxes;
+		return wallDistance([origin.x, origin.y, origin.z], [dx / length, dy / length, dz / length], boxes) < length - 1e-3;
+	}
+
+	/** Each door's and window's frame, up to the height its wall stands now: the holes in `walls.boxes`, filled. */
+	private openingsStanding(walls: { cut(opening: string): number | null }): Box[] {
+		const plan = this.host.plan();
+		const boxes: Box[] = [];
+		for (const opening of plan.openings) {
+			const box = openingBox(plan, opening, 0);
+			const cut = walls.cut(opening.id);
+			if (cut !== null) box.max[1] = Math.min(box.max[1], cut);
+			if (box.max[1] > box.min[1] + 1e-3) boxes.push(box);
+		}
+		return boxes;
 	}
 
 	/**

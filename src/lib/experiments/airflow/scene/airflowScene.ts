@@ -330,10 +330,11 @@ export function createAirflowScene(host: WorldHost, params: AirflowSceneParams, 
 			}
 			const easing = home.update(look(), view.walls, dt, reduced);
 			const named = controls.state.zoom > LABEL_ZOOM;
-			// A Room's name gives way to a Probe's label that would sit on it, and a compass letter hides behind a wall that stands.
+			// A Room's name gives way to a Probe's label that would sit on it, and a compass letter hides behind a wall that stands, its
+			// doors and windows included.
 			const pins = params.probes.map((p): [number, number, number] => [p.x, p.y + 0.1, p.z]);
 			for (const label of house.rooms) label.enabled = named && !selection.crowded(label.position.toArray(), pins);
-			for (const label of house.compass) label.enabled = named && !selection.walled(label.position);
+			for (const label of house.compass) label.enabled = named && !selection.walled(label.position, { solid: true });
 
 			// The newest volume, but only once it is of this home. No plane is drawn: the air fills the rooms instead (`air/`). The slice
 			// is still read, for the hover readout and the height a probe or a puff of smoke is placed at.
