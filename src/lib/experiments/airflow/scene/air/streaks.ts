@@ -45,14 +45,16 @@ export const TAIL = 0.5;
 const MAX_LENGTH = 0.9;
 /**
  * The longest a streak is drawn on the screen, CSS pixels. Far off, a streak's tail is all of its `TAIL`; close to the eye the same
- * air would cross half the view in one long dash, the way rain does, so its tail is cut to this, and a near streak is a short flick.
+ * air would cross half the view in one long dash, the way rain does, so its tail is cut to this, and a near streak is a flick. (At 90,
+ * at check-in 3, eye level showed too little of the air.)
  */
-export const MAX_PIXELS = 90;
+export const MAX_PIXELS = 140;
 /**
  * Distances from the eye over which a streak fades in, m: none within the first, all of it from the second. A visitor standing in a
- * room sees the air round them as a light veil and the moving air across the room, not a curtain of lines at their face.
+ * room sees no curtain of lines at their face, and the moving air from about a metre out. (From 2 m, at check-in 3, the air at the
+ * windows across a room was hard to see.)
  */
-export const NEAR_FADE: readonly [number, number] = [0.5, 2.0];
+export const NEAR_FADE: readonly [number, number] = [0.35, 1.2];
 /**
  * Distances from the eye, m, over which a streak goes from a wisp (within the first: soft-headed, and stronger or fainter, wider or
  * narrower than the next) to the plain streak of the views from further out (beyond the second), which check-in 2 approved as they are.
@@ -153,7 +155,7 @@ void main() {
 	// is not a uniform hatching; further out they are all alike, as they were.
 	float near = 1.0 - smoothstep(uNearLook.x, uNearLook.y, distance);
 	uint seed = uint(index) * 2654435761u + uint(extra.y);
-	float strength = mix(1.0, mix(0.55, 1.0, hash01(seed, 101u)), near);
+	float strength = mix(1.0, mix(0.75, 1.0, hash01(seed, 101u)), near);
 	float girth = mix(1.0, mix(0.75, 1.3, hash01(seed, 211u)), near);
 	float alpha = uOpacity * strength * smoothstep(0.0, uFadeIn, age) * smoothstep(0.0, uFadeOut, life - age) * smoothstep(uSpeedFade.x, uSpeedFade.y, speed);
 	// Near the eye the air is a veil: the streaks fade out within uNearFade of it.
@@ -231,7 +233,7 @@ void main() {
 	// NaN pixel, blurred by the bloom, blanks the whole picture. So it is clamped, and anything that is not a number is discarded.
 	float across = 1.0 - smoothstep(0.25, 1.0, abs(vQuad.y));
 	float t = clamp(vQuad.x, 0.0, 1.0);
-	float alpha = vAlpha * across * pow(t, mix(1.6, 1.3, vNear)) * (1.0 - 0.85 * vNear * smoothstep(0.72, 1.0, t));
+	float alpha = vAlpha * across * pow(t, mix(1.6, 1.3, vNear)) * (1.0 - 0.6 * vNear * smoothstep(0.72, 1.0, t));
 	if (!(alpha >= 0.002)) discard;
 	gl_FragColor = vec4(vColor, alpha);
 	#include <colorspace_fragment>
