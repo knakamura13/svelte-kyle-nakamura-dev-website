@@ -1302,13 +1302,16 @@ test.describe('simulation session', () => {
 		});
 
 		test('the real tuner, on a device that falls behind: held for its first minute, then one step down that carries the run on, with its probe and fan', async () => {
-			const tuner = new Tuner({ kind: 'cpu' });
-			// Whatever this machine does, every frame is reported as the solver keeping up with a third of real time.
+			// The tuner believes the device holds 20,000 cells, which puts the studio at 20 cm.
+			const tuner = new Tuner({ kind: 'cpu', budget: 20_000 });
+			// Whatever this machine does, every frame is reported as the solver keeping up with a third of real time. The warm-up's
+			// measurement is set aside too: a machine busy enough to measure slow would start the run on the coarsest grid, with nothing
+			// coarser to step down to.
 			const tuning: Tuning = {
 				observe: (_kind, sample) => tuner.observe({ ...sample, rate: 0.3 }),
 				note: () => tuner.note ?? '',
 				probe: async (plan) => tuner.probe(plan),
-				calibrate: (_kind, cost) => tuner.calibrate(cost)
+				calibrate: () => tuner.calibrate(null)
 			};
 			const built = recording();
 			const { session, params, readout, announced } = makeSession(
