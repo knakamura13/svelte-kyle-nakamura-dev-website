@@ -252,9 +252,10 @@ void main() {
 			float toward = extinctionNow(p + uSunDirection * 0.12) * 0.18 + extinctionNow(p + uSunDirection * 0.42) * 0.42 + sigma * 0.05;
 			float sun = (phase0 * exp(-toward) + 0.5 * phase1 * exp(-0.5 * toward) + 0.25 * phase2 * exp(-0.25 * toward)) / 1.75;
 			// The sky's light and the room's comes mostly from above: the smoke over a point dims it, so a plume's underside and middle are
-			// darker than its top and its edges, and its billows have form.
+			// darker than its top and its edges, and its billows have form. Down to 60% of it: at 42%, with the smoke's dark grey, the thick
+			// middle of a plume was charcoal and blotchy (check-in 3).
 			float over = extinctionNow(p + vec3(0.0, 0.35, 0.0)) * 0.55;
-			vec3 lit = uSkyLight * BOUNCE * mix(0.42, 1.0, exp(-uShade * over)) + uSunLight * sun;
+			vec3 lit = uSkyLight * BOUNCE * mix(0.6, 1.0, exp(-uShade * over)) + uSunLight * sun;
 			float alpha = 1.0 - exp(-sigma * dt);
 			light += transmittance * alpha * uAlbedo * lit;
 			transmittance *= 1.0 - alpha;
