@@ -49,6 +49,11 @@ export const SMOKE_LOOK = {
 	 * square, so smoke that has spread to a third of that strength still hides three fifths across a metre and reads as smoke; with the
 	 * square it hid a third and read as a veil of mist at check-in 3. A room of smoke a tenth as strong hides about a third across four
 	 * metres, a haze the room still reads through. Above `cap` times `dense` it is no thicker.
+	 *
+	 * Steeper than light's own law, which is linear in the concentration, on purpose. Real smoke shows from about 10 mg/m³ across a metre
+	 * (a mass extinction of about 4 m²/g), so a burst is seen near its source and is gone within seconds once it mixes through a room
+	 * (about 0.15 mg/m³ for a cooking burst in a living room), while its PM2.5 stays. The volume draws smoke far thinner than the eye could
+	 * see, and the steep power keeps a spread burst fading as real smoke does; the Smoke overlay shows the PM2.5 after (check-in 3).
 	 */
 	extinction: 6,
 	power: 1.75,

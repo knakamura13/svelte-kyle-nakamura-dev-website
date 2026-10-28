@@ -286,13 +286,13 @@ The same burst from check-in 2's pose, measured as the mean brightness change ov
 - The phone's smoke puffs are a flat, unshaded film under the streaks, still brownish after the smoke change. They read as a film, not as smoke.
 - A few charcoal pockets by the dining chairs make the darker smoke a little blotchy near its source.
 
-**Calls for Kyle:**
-- **The compass letters.** N and E stand 1.8 m out at the floor. In the default view they are behind the far walls, and #84 hides them. The other way is to lift the letters above the walls.
-- **Furniture smaller than its solver box.** The sofa's box is 2.0 by 0.9 by 0.8 m and its model about 1.70 by 0.71 m, so a 19 cm strip in front and 15 cm at each end block air that looks free; a probe over the strip reads nothing. The ways out: shrink each solver box to its model, pad or build more pieces to fill their boxes, or keep it.
-- **The opening's end pose:** keep it, tilt it to 12 degrees, or turn it to heading 300.
-- **How long spread smoke shows.** It now fades out by 5 s instead of lingering as a pale veil. A gentler fade, a power below 1.75, would keep it longer, with a heavier haze in a room a burst has filled.
+**Kyle's calls** (2026-10-28):
+- **The compass letters** stay hidden while a standing wall is between them and the camera, as #84 made them. In the default view N and E, 1.8 m out at the floor, are behind the far walls.
+- **The furniture's solver boxes are its models.** Before, the sofa's box was 2.0 by 0.9 by 0.8 m and its model about 1.70 by 0.71 m, so strips of 15 to 19 cm blocked air that looked free. Each plan box is now what the scene draws for its piece, rounded out to the centimetre: 58 pieces shrank, by up to 28 cm, and none grew. `tests/solver/look-home.spec.ts` holds every side of every box to within a centimetre of what is drawn.
+- **The opening ends looking 12 degrees further down** (`OPENING_END.tilt`, from 2), which halves how much of the south window's air the bookcase hides.
+- **Spread smoke fades as real smoke does**, a call Kyle left to the physics. Smoke has to reach about 10 mg/m³ to be seen across a metre (a mass extinction of about 4 m²/g), while a cooking burst mixed through a living room is about 0.15 mg/m³. So real smoke shows near its source and is gone within seconds as it mixes, while its PM2.5 stays for minutes. The current fade does that, and the Smoke overlay shows the PM2.5 after the smoke has faded, so the fade stays.
 
 **Next:**
-1. Kyle's answers to check-in 3, then the backup branches deleted.
-2. The phone's puffs, the eye-level streaks, the S letter through the window, and the step down's streaks.
+1. The phone's puffs, the eye-level streaks, the S letter through the window, and the step down's streaks.
+2. Kyle's approval of check-in 3, then #82 to #84 closed and the backup branches deleted.
 3. Milestone 5.
