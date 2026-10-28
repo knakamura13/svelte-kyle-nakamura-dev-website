@@ -3,7 +3,8 @@ import { chromium, devices, expect, test, type CDPSession, type Page } from '@pl
 
 /**
  * The airflow page on a phone (#83): the world keeps most of the screen with a sheet at its peek and no panel covers another, every
- * sheet folds to its peek and opens in full, the camera frames the whole home above the sheets, the weather pill says its readings, the
+ * sheet folds to its peek and opens in full, the camera frames the whole home above the sheets, the first frame's hint points at Build
+ * from over the toolbar, the weather pill says its readings, the
  * fingers move the camera (one pans, two pinch and twist, a tap opens a window's menu), the low tier's air is clearly visible, axe finds
  * nothing, and the low tier holds 30 frames a second under a phone's processor. Emulated: an iPhone's 390 by 844 and an Android
  * phone's 360 by 800, with a touch screen. Chromium alone can make several fingers touch at once (its DevTools protocol), so the
@@ -221,6 +222,26 @@ for (const phone of PHONES) {
 				expect(box.x, `${name} is on the screen`).toBeGreaterThanOrEqual(0);
 				expect(box.x + box.width, `${name} is on the screen`).toBeLessThanOrEqual(phone.width);
 			}
+		});
+
+		test('the first frame’s hint stands over the toolbar with its pointer on Build', async ({ page }) => {
+			await page.emulateMedia({ reducedMotion: 'reduce' });
+			await openPhone(page);
+			const hint = page.getByRole('note').filter({ hasText: 'Drop a fan' });
+			await expect(hint).toBeVisible({ timeout: 6_000 });
+			const build = (await toolbar(page).locator('[data-tool="build"]').boundingBox())!;
+			const bubble = (await hint.boundingBox())!;
+			// The pointer is the bubble's ::before, a small square turned to a diamond: the bubble points where its middle is.
+			const pointer = await hint.evaluate((el) => {
+				const style = getComputedStyle(el, '::before');
+				return parseFloat(style.left) + parseFloat(style.width) / 2;
+			});
+			const tip = bubble.x + pointer;
+			expect(tip, 'the pointer is over the middle of Build').toBeGreaterThan(build.x + build.width / 4);
+			expect(tip, 'the pointer is over the middle of Build').toBeLessThan(build.x + (build.width * 3) / 4);
+			expect(bubble.y + bubble.height, 'the bubble stands over the toolbar').toBeLessThanOrEqual(build.y);
+			expect(bubble.x, 'the bubble is on the screen').toBeGreaterThanOrEqual(0);
+			expect(bubble.x + bubble.width, 'the bubble is on the screen').toBeLessThanOrEqual(phone.width);
 		});
 
 		test('the weather pill says the wind, the temperature and the outdoor air, and opens them as a sheet', async ({ page }) => {
