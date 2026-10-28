@@ -31,18 +31,18 @@ export const studio: HomePlan = {
 		doubleHung('main-south-window', 'Main room south window', on('south', 3.6))
 	],
 	furniture: [
-		{ id: 'bed', name: 'Queen bed', x: 5.6, z: 0, w: 1.5, d: 2.0, h: 0.5 },
-		{ id: 'nightstand', name: 'Nightstand', x: 7.15, z: 0.1, w: 0.45, d: 0.4, h: 0.6 },
+		{ id: 'bed', name: 'Queen bed', x: 5.6, z: 0, w: 1.5, d: 1.77, h: 0.5 },
+		{ id: 'nightstand', name: 'Nightstand', x: 7.15, z: 0.1, w: 0.45, d: 0.37, h: 0.6 },
 		{ id: 'wardrobe', name: 'Wardrobe', x: 3.6, z: 0, w: 1.2, d: 0.6, h: 2.0 },
-		{ id: 'sofa', name: 'Sofa', x: 4.6, z: 2.7, w: 2.0, d: 0.9, h: 0.8 },
-		{ id: 'coffee-table', name: 'Coffee table', x: 5.1, z: 3.95, w: 1.0, d: 0.5, h: 0.45 },
-		{ id: 'tv-console', name: 'TV console', x: 4.85, z: 4.85, w: 1.5, d: 0.45, h: 0.5 },
+		{ id: 'sofa', name: 'Sofa', x: 4.74, z: 2.79, w: 1.72, d: 0.72, h: 0.8 },
+		{ id: 'coffee-table', name: 'Coffee table', x: 5.13, z: 3.95, w: 0.95, d: 0.5, h: 0.37 },
+		{ id: 'tv-console', name: 'TV console', x: 4.95, z: 4.89, w: 1.3, d: 0.41, h: 0.5 },
 		{ id: 'dining-table', name: 'Dining table', x: 3.0, z: 3.9, w: 0.8, d: 0.8, h: 0.75 },
 		{ id: 'counter-south', name: 'Kitchen counter', x: 0, z: 4.8, w: 2.4, d: 0.6, h: 0.9 },
 		{ id: 'counter-west', name: 'Kitchen counter', x: 0, z: 3.6, w: 0.6, d: 1.2, h: 0.9 },
-		{ id: 'fridge', name: 'Refrigerator', x: 1.6, z: 1.8, w: 0.7, d: 0.7, h: 1.8 },
-		{ id: 'tub', name: 'Bathtub', x: 0, z: 0, w: 0.75, d: 1.5, h: 0.55 },
-		{ id: 'toilet', name: 'Toilet', x: 1.0, z: 0, w: 0.4, d: 0.7, h: 0.75 },
-		{ id: 'vanity', name: 'Vanity', x: 0.95, z: 1.3, w: 0.6, d: 0.5, h: 0.85 }
+		{ id: 'fridge', name: 'Refrigerator', x: 1.6, z: 1.8, w: 0.7, d: 0.55, h: 1.8 },
+		{ id: 'tub', name: 'Bathtub', x: 0, z: 0, w: 0.71, d: 1.5, h: 0.53 },
+		{ id: 'toilet', name: 'Toilet', x: 1.0, z: 0, w: 0.4, d: 0.61, h: 0.58 },
+		{ id: 'vanity', name: 'Vanity', x: 0.95, z: 1.35, w: 0.6, d: 0.45, h: 0.66 }
 	]
 };

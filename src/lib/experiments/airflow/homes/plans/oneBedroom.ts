@@ -39,22 +39,22 @@ export const oneBedroom: HomePlan = {
 		casement('bathroom-window', 'Bathroom window', on('east', 1.2), 'start', BATHROOM_WINDOW)
 	],
 	furniture: [
-		{ id: 'bed', name: 'Queen bed', x: 1.65, z: 1.6, w: 1.5, d: 2.0, h: 0.5 },
-		{ id: 'nightstand-west', name: 'Nightstand', x: 1.1, z: 3.2, w: 0.45, d: 0.4, h: 0.6 },
-		{ id: 'nightstand-east', name: 'Nightstand', x: 3.25, z: 3.2, w: 0.45, d: 0.4, h: 0.6 },
+		{ id: 'bed', name: 'Queen bed', x: 1.65, z: 1.83, w: 1.5, d: 1.77, h: 0.5 },
+		{ id: 'nightstand-west', name: 'Nightstand', x: 1.1, z: 3.23, w: 0.45, d: 0.37, h: 0.6 },
+		{ id: 'nightstand-east', name: 'Nightstand', x: 3.25, z: 3.23, w: 0.45, d: 0.37, h: 0.6 },
 		{ id: 'wardrobe', name: 'Wardrobe', x: 4.2, z: 0.3, w: 0.6, d: 1.2, h: 2.0 },
 		{ id: 'dresser', name: 'Dresser', x: 3.0, z: 0.1, w: 1.0, d: 0.5, h: 0.85 },
-		{ id: 'desk', name: 'Desk', x: 0.1, z: 0.6, w: 0.6, d: 1.2, h: 0.75 },
-		{ id: 'tub', name: 'Bathtub', x: 7.65, z: 0, w: 0.75, d: 1.5, h: 0.55 },
-		{ id: 'toilet', name: 'Toilet', x: 6.9, z: 0, w: 0.4, d: 0.7, h: 0.75 },
-		{ id: 'vanity', name: 'Vanity', x: 6.9, z: 1.9, w: 0.6, d: 0.5, h: 0.85 },
-		{ id: 'fridge', name: 'Refrigerator', x: 7.7, z: 2.4, w: 0.7, d: 0.7, h: 1.8 },
+		{ id: 'desk', name: 'Desk', x: 0.1, z: 0.67, w: 0.44, d: 1.06, h: 0.75 },
+		{ id: 'tub', name: 'Bathtub', x: 7.69, z: 0, w: 0.71, d: 1.5, h: 0.53 },
+		{ id: 'toilet', name: 'Toilet', x: 6.9, z: 0, w: 0.4, d: 0.61, h: 0.58 },
+		{ id: 'vanity', name: 'Vanity', x: 6.9, z: 1.95, w: 0.6, d: 0.45, h: 0.66 },
+		{ id: 'fridge', name: 'Refrigerator', x: 7.85, z: 2.4, w: 0.55, d: 0.7, h: 1.8 },
 		{ id: 'counter-north', name: 'Kitchen counter', x: 6.0, z: 2.4, w: 1.6, d: 0.6, h: 0.9 },
 		{ id: 'counter-east', name: 'Kitchen counter', x: 7.8, z: 3.1, w: 0.6, d: 2.3, h: 0.9 },
 		{ id: 'dining-table', name: 'Dining table', x: 6.8, z: 5.9, w: 0.8, d: 1.2, h: 0.75 },
-		{ id: 'sofa', name: 'Sofa', x: 3.3, z: 4.6, w: 0.9, d: 2.0, h: 0.8 },
-		{ id: 'coffee-table', name: 'Coffee table', x: 1.9, z: 5.1, w: 0.5, d: 1.0, h: 0.45 },
-		{ id: 'tv-console', name: 'TV console', x: 0.1, z: 4.85, w: 0.45, d: 1.5, h: 0.5 },
-		{ id: 'armchair', name: 'Armchair', x: 1.4, z: 6.7, w: 0.8, d: 0.8, h: 0.8 }
+		{ id: 'sofa', name: 'Sofa', x: 3.39, z: 4.74, w: 0.72, d: 1.72, h: 0.8 },
+		{ id: 'coffee-table', name: 'Coffee table', x: 1.9, z: 5.13, w: 0.5, d: 0.95, h: 0.37 },
+		{ id: 'tv-console', name: 'TV console', x: 0.1, z: 4.95, w: 0.41, d: 1.3, h: 0.5 },
+		{ id: 'armchair', name: 'Armchair', x: 1.4, z: 6.83, w: 0.8, d: 0.67, h: 0.76 }
 	]
 };

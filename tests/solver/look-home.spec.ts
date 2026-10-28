@@ -106,8 +106,8 @@ test.describe('the furniture', () => {
 	test('knows how far each side of a piece is from a wall', () => {
 		// Bedroom 1's bed stands against the north wall.
 		expect(wallDistances(plan, piece('bed-1')).north).toBeCloseTo(0, 6);
-		// The sofa's back is 0.55 m from the wall between the living room and the hall (at x 4.8, 0.1 thick).
-		expect(wallDistances(plan, piece('sofa')).east).toBeCloseTo(0.55, 6);
+		// The sofa's back is 0.64 m from the wall between the living room and the hall (at x 4.8, 0.1 thick).
+		expect(wallDistances(plan, piece('sofa')).east).toBeCloseTo(0.64, 6);
 		// The coffee table stands free on every side but the far ones.
 		expect(Math.min(...Object.values(wallDistances(plan, piece('coffee-table'))))).toBeGreaterThan(1);
 	});
@@ -230,6 +230,22 @@ test.describe('the furniture', () => {
 			expect(solids.min.x).toBeCloseTo(Math.min(...each.furniture.map((f) => f.x)), 5);
 			expect(solids.max.z).toBeCloseTo(Math.max(...each.furniture.map((f) => f.z + f.d)), 5);
 			expect(view.solids.geometry.getAttribute('position').count, each.id).toBe(24 * each.furniture.length);
+			view.dispose();
+		}
+	});
+
+	test('every piece fills its box to the centimetre, so the solver blocks no air where the room looks open', () => {
+		const assets = kit();
+		for (const each of plans) {
+			const view = buildFurniture(each, materials(), assets);
+			view.group.updateMatrixWorld(true);
+			for (const piece of each.furniture) {
+				const drawn = new Box3().setFromObject(view.group.getObjectByName(piece.id)!);
+				const top = (piece.y ?? 0) + piece.h;
+				// What each side of the box leaves undrawn, m: the plans' boxes are what is drawn, rounded out to the centimetre.
+				const undrawn = [drawn.min.x - piece.x, piece.x + piece.w - drawn.max.x, drawn.min.z - piece.z, piece.z + piece.d - drawn.max.z, top - drawn.max.y];
+				for (const gap of undrawn) expect(gap, `${each.id} ${piece.id}: a side of its box left undrawn, m`).toBeLessThanOrEqual(0.011);
+			}
 			view.dispose();
 		}
 	});

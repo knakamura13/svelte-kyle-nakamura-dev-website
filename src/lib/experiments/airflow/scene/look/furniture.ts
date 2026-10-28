@@ -7,7 +7,9 @@ import type { Materials } from './materials';
 
 /**
  * The plans' furniture, drawn with the Kenney Furniture Kit (CC0). Each piece of a plan is a solid box to the solver, and the solver
- * keeps exactly that box; what is drawn for it keeps its own proportions. A model of the kit is scaled by one factor on every axis,
+ * keeps exactly that box; what is drawn for it keeps its own proportions. The plans' boxes are what is drawn, to the centimetre, so the
+ * air goes wherever the room looks open (decided at check-in 3; before, a model smaller than its box left air blocked round it, 19 cm
+ * in front of a sofa). A model of the kit is scaled by one factor on every axis,
  * the largest that keeps it inside the box (`uniformFit`; a bed's headboard may stand a little over it), stands on the floor against
  * the back of the box, and where it leaves the box short the rest is padded with what belongs there: legs under the sideboard, a
  * cabinet over the fridge, a lamp on a nightstand, a laptop on the desk. Where no model of the kit has a piece's proportions it is
