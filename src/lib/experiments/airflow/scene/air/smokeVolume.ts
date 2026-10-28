@@ -401,6 +401,7 @@ uniform float uFadeOut;
 attribute float aParticle;
 varying vec2 vCorner;
 varying float vAlpha;
+varying float vSeed;
 ${VOLUME_GLSL}
 
 void main() {
@@ -417,10 +418,12 @@ void main() {
 		return;
 	}
 	vec4 view = viewMatrix * vec4(state.xyz, 1.0);
-	view.xy += position.xy * uSize * (0.6 + 0.4 * level);
+	// A quarter larger than the puff, for its billows (the fragment's outline reaches at most this far).
+	view.xy += position.xy * uSize * 1.25 * (0.6 + 0.4 * level);
 	gl_Position = projectionMatrix * view;
 	vCorner = position.xy;
 	vAlpha = alpha;
+	vSeed = fract(aParticle * 0.6180339887);
 }
 `;
 
@@ -429,13 +432,20 @@ uniform vec3 uColor;
 uniform float uOpacity;
 varying vec2 vCorner;
 varying float vAlpha;
+varying float vSeed;
 
 void main() {
-	float r2 = dot(vCorner, vCorner) * 4.0;
+	// A billow rather than a disc: the outline swells and dips round the puff, differently for each one, within its quad.
+	float angle = atan(vCorner.y, vCorner.x);
+	float edge = 1.25 + 0.16 * sin(angle * 3.0 + vSeed * 6.2832) + 0.09 * sin(angle * 5.0 + vSeed * 17.0);
+	float r2 = dot(vCorner, vCorner) * 4.0 * edge * edge;
 	if (r2 >= 1.0) discard;
 	float alpha = uOpacity * vAlpha * (1.0 - r2) * (1.0 - r2);
 	if (!(alpha >= 0.003)) discard;
-	gl_FragColor = vec4(uColor, alpha);
+	// Lit from above, as the volume is: its top lighter, its underside and its thick middle darker, and each puff a little lighter or
+	// darker than the next, so a plume has form rather than being one flat sheet.
+	float shade = mix(0.62, 1.15, 0.5 + vCorner.y) * mix(0.72, 1.0, r2) * (0.8 + 0.35 * fract(vSeed * 7.31));
+	gl_FragColor = vec4(uColor * shade, alpha);
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
 }
@@ -511,10 +521,13 @@ export class SmokePuffs {
 		uniforms.uOpacity.value = look.opacity ?? this.base.opacity;
 	}
 
-	/** Lit as the volume is, but evenly: the sky, and half the sun. */
+	/**
+	 * Lit as the volume is, but evenly: the sky, and a quarter of the sun. Inside smoke the volume's sun is mostly shadowed, so it is the
+	 * sky's cool grey; a flat puff lit by half the low sun came out a warm taupe at check-in 3, as bright as the floor.
+	 */
 	setLighting(lighting: SmokeLighting) {
 		const color = this.mesh.material.uniforms.uColor.value as Color;
-		color.copy(lighting.sun).multiplyScalar(0.5).add(lighting.sky).multiply(SMOKE_LOOK.albedo);
+		color.copy(lighting.sun).multiplyScalar(0.25).add(lighting.sky).multiply(SMOKE_LOOK.albedo);
 	}
 
 	reset() {
