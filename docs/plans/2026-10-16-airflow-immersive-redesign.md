@@ -169,7 +169,7 @@ Kyle approved check-in 2 on 2026-10-20 and paused the project. Milestones 1 to 3
 - `scene/particles.ts`, `arrows.ts`, `SliceLayer` and `dollhouse.ts` are drawn by nothing now and imported only by tests. Remove them.
 
 **Notes for the agents that resume this:**
-- A worktree may start from `main`, where merging this branch conflicts (`playwright.config.ts`, `RangeField.svelte`). Point the empty branch at this branch's tip with `git reset --hard` instead.
+- A worktree may start from `main`, which lacks this branch's work. Point the empty branch at this branch's tip with `git reset --hard` instead of merging.
 - Vite's dev server refuses a `node_modules` that is a symlink into another worktree. Use `yarn build && yarn preview`, allow it in a scratch config (`server.fs.allow`), or install `node_modules` in the worktree.
 - The machine is often loaded by other sessions. Run end-to-end specs at `--workers=2`, check `uptime` before blaming the code, and re-measure frame rates on mains power.
 
@@ -307,4 +307,9 @@ Kyle approved check-in 3 on 2026-10-28, and milestone 4 is closed: #81 to #84 ar
 - **#84's furniture criterion** said the solver's boxes stay the plan's; Kyle's call at check-in 3 changed that, and the boxes are now the models' (8ae252d).
 - **Left as they are:** the phone's smoke is warm under the golden-hour light, and the eye-level streaks are about half way back to check-in 2's density, where long strokes over the TV console begin to look like rain.
 
-**Next:** milestone 5, the performance pass against the budgets, the accessibility floor and the hardening issues (#57, #58 to #65), then the launch (#69), whose merge has to resolve main's changes to `playwright.config.ts` and `RangeField.svelte`. Optional: #66 and #67; a stretch: #85.
+### Main merged in (2026-10-28)
+
+Main is merged into this branch (41c132e) ahead of milestone 5, so CI (`yarn run check` and `yarn test:e2e`) runs on #45 from now on. Two files conflicted, and each keeps both sides: `playwright.config.ts` takes main's web server environment, which stubs GitHub, beside this branch's `PW_PORT`, and `RangeField.svelte` takes main's announcement of a value changed before hydration, with this branch's shared `experience`.
+- **Checks on the merge:** `yarn run check` has 0 errors, and the end-to-end suite has 851 passed, 21 skipped and 4 failed. All four fail on main too. The Learning Korean story's axe check at 390 px fails in all three browsers, as in main's own CI run of 4dd2c48, so CI on #45 is expected to fail until main fixes it. The Chromium test of Back pressed as a transitioned link changes the URL is flaky on this machine: under the same load it failed 11 of 20 runs on main's tree and 9 of 20 on the merge.
+
+**Next:** milestone 5, the performance pass against the budgets, the accessibility floor and the hardening issues (#57, #58 to #65), then the launch (#69). Optional: #66 and #67; a stretch: #85.
