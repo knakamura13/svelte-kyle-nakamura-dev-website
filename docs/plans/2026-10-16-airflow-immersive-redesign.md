@@ -280,10 +280,11 @@ The same burst from check-in 2's pose, measured as the mean brightness change ov
 - **A step down still clears the streaks for a moment.** `adoptWorld` (`scene/air/index.ts`) resets the streaks and the puffs for any new world, though a step down's world carries the air on (`SimulationSession.carry`). Particle positions are in metres, so they could ride on through a world of the same Home. The renderer cannot yet tell such a world from a restart.
 - **The opening's end and #84's furniture.** Both west windows stay clear on a desktop and a phone. The bookcase stands centre-left in front, hides about 12% of the south window's air, and draws the eye. A tilt of 12 degrees halves that (`?camera=2.0,5.0,332,0.6,12`). Heading 300 hides nothing, but the air then comes toward the camera and its streaks look shorter (`?camera=2.0,5.2,300,0.6,8`).
 
-**Found at check-in 3:**
+**Found at check-in 3** (all but the last fixed below):
 - The eye-level streaks are much sparser and fainter than at check-in 2. They no longer read as rain, but the air at the windows is hard to see (`eye-level-streaks.jpg` against check-in 2's `hud-eye-level.jpg`).
 - From heading 212 the S letter shows through the bathroom window, painted on the south wall.
 - The phone's smoke puffs are a flat, unshaded film under the streaks, still brownish after the smoke change. They read as a film, not as smoke.
+- A step down clears the streaks for a moment (the interplay above).
 - A few charcoal pockets by the dining chairs make the darker smoke a little blotchy near its source.
 
 **Kyle's calls** (2026-10-28):
@@ -292,7 +293,12 @@ The same burst from check-in 2's pose, measured as the mean brightness change ov
 - **The opening ends looking 12 degrees further down** (`OPENING_END.tilt`, from 2), which halves how much of the south window's air the bookcase hides.
 - **Spread smoke fades as real smoke does**, a call Kyle left to the physics. Smoke has to reach about 10 mg/m³ to be seen across a metre (a mass extinction of about 4 m²/g), while a cooking burst mixed through a living room is about 0.15 mg/m³. So real smoke shows near its source and is gone within seconds as it mixes, while its PM2.5 stays for minutes. The current fade does that, and the Smoke overlay shows the PM2.5 after the smoke has faded, so the fade stays.
 
+**The findings, fixed** (2026-10-28, each shot before and after with the same pose and procedure; the comparisons were sent to Kyle):
+- **A step down keeps the air.** Each `World` has an `id`, and the session's `carry` marks the world that took another's air (`carriedFrom`). The air's renderers (`scene/air/index.ts`) keep the streaks, the puffs and the last picture through such a world, moving on through that picture until the new grid's first one comes; a restart, another Home or the furniture shown or hidden still starts the air afresh. Forced by slowing the page 16 times after its first minute, from 209,942 cells at 10 cm to 62,268 at 15 cm, the streaks' share of the living room in the half second after the switch went from 0.02% (all gone, back after 1.8 s and overshooting to twice as many at 2.8 s) to 0.85%, against 0.91% before it.
+- **A compass letter is hidden behind a window or door** in a standing wall, as behind the wall (`Selection.walled` with `solid`), up to where the wall is cut. From heading 212, S no longer shows through the bathroom window; N and E still show there, and the default view still hides N and E.
+- **The eye-level streaks show the air across the room again.** Near the eye they fade in from 0.35 to 1.2 m rather than 0.5 to 2 m, reach 140 px on the screen rather than 90, are 75 to 100% strong rather than 55 to 100%, and their soft heads dim by 60% rather than 85%; falling air still makes short flicks of different lengths. About half way back to check-in 2's density, with long diagonal strokes over the TV console the one place that still looks a little like rain.
+- **A phone's smoke puffs read as smoke.** Each billows rather than being a disc, is shaded from above (lighter on top, darker underneath and in its middle) with its own tone, and is lit by the sky and a quarter of the sun rather than half, as the volume's shadowed inside is. They are drawn after the streaks, so the smoke covers the streaks in it (`renderOrder.ts`). From the same view, a cooking burst went from lighter than the floor (143 against 126) to darker (106), with twice the spread of brightness in its middle; it is still warm, as the golden-hour light is.
+
 **Next:**
-1. The phone's puffs, the eye-level streaks, the S letter through the window, and the step down's streaks.
-2. Kyle's approval of check-in 3, then #82 to #84 closed and the backup branches deleted.
-3. Milestone 5.
+1. Kyle's approval of check-in 3, then #82 to #84 closed and the backup branches deleted.
+2. Milestone 5.
