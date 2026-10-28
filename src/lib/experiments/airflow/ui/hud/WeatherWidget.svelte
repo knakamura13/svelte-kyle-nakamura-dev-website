@@ -1,18 +1,21 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { useAirflow } from '../../experience.svelte';
-	import { describeBearing } from '../../directionWords';
+	import { compassWord, describeBearing } from '../../directionWords';
 	import { formatPm25, weatherAnnouncement, weatherField, windFromAnnouncement } from '../weather';
 	import { dialRotation, windWords } from './compass';
 	import CompassDial from './CompassDial.svelte';
 	import Icon from './Icon.svelte';
 	import { AIR_PRESETS, WIND_PRESETS, airPreset, canStep, stepValue, windPreset, type StepKey } from './presets';
+	import SheetGrip from './SheetGrip.svelte';
 	import { tooltip } from './tips.svelte';
 	import { useHudUi } from './ui.svelte';
 
 	/**
 	 * The weather, top right: the compass dial with the wind's speed beside it, the outdoor temperature and the outdoor air at a glance.
-	 * Opened, it has the wind's speeds, steppers for the outdoor and the indoor starting temperature, and the outdoor air presets.
+	 * Opened, it has the wind's speeds, steppers for the outdoor and the indoor starting temperature, and the outdoor air presets. On a
+	 * phone it is a pill that says the same three things in two lines, and opens them as a sheet over the toolbar: at its peek the dial,
+	 * and in full the speeds, the temperatures and the outdoor air.
 	 */
 	const experience = useAirflow();
 	const ui = useHudUi();
@@ -25,6 +28,11 @@
 	const indoor = $derived(weatherField('indoorTemp', conditions.indoorTemp, units));
 	const air = $derived(airPreset(conditions.outdoorPm25));
 	const gust = $derived(windPreset(conditions.windSpeed));
+	const calm = $derived(!(conditions.windSpeed > 0));
+	/** The phone's pill in words: what its two lines show, for a screen reader. */
+	const said = $derived(
+		`Weather: ${calm ? 'calm' : `wind from the ${compassWord(conditions.windFrom)} at ${speed.spoken}`}; ${outdoor.spoken} outside; outdoor air ${(air?.label ?? formatPm25(conditions.outdoorPm25).spoken).toLowerCase()}.`
+	);
 
 	/** The camera's turn, so north on the dial is north on screen. */
 	let rotation = $state(0);
@@ -65,12 +73,14 @@
 	}
 
 	let card: HTMLElement | undefined = $state();
+	let sheet: HTMLElement | undefined = $state();
 	let toggle: HTMLButtonElement | undefined = $state();
-	// A press outside the card closes it.
+	// A press outside the card (and the phone's sheet) closes it.
 	$effect(() => {
 		if (!open) return;
 		const outside = (event: PointerEvent) => {
-			if (!card?.contains(event.target as Node)) ui.popover = null;
+			const target = event.target as Node;
+			if (!card?.contains(target) && !sheet?.contains(target)) ui.popover = null;
 		};
 		addEventListener('pointerdown', outside, true);
 		return () => removeEventListener('pointerdown', outside, true);
@@ -95,11 +105,93 @@
 	</div>
 {/snippet}
 
+{#snippet details()}
+	<div class="wind-row">
+		<CompassDial bearing={conditions.windFrom} speed={conditions.windSpeed} {rotation} size={ui.phone ? 88 : 132} onchange={setBearing} oncommit={sayBearing} />
+		<div class="wind-words">
+			<p class="wind-title">{wind.short}</p>
+			<p class="wind-toward">{wind.toward}</p>
+			{#if ui.phone}
+				<!-- At the sheet's peek the dial and the speed: a tap goes to the next of the wind's speeds, as the desktop's chip does. -->
+				<button type="button" class="speed-chip" aria-label="Wind speed {speed.spoken}{gust ? `, ${gust.label.toLowerCase()}` : ''}. Next speed" onclick={nextWind}
+					>{gust ? `${gust.id === 'calm' ? 'Calm' : gust.label.replace(' breeze', '')} · ` : ''}{speed.display}<Icon name="chevron-right" size={14} /></button
+				>
+			{:else}
+				<p class="hint">Drag the green handle, or focus the dial and use the arrow keys.</p>
+			{/if}
+		</div>
+	</div>
+	<div class="block" class:sheet-more={ui.phone}>
+		<p class="eyebrow">Wind speed</p>
+		<div class="chips" role="group" aria-label="Wind speed">
+			{#each WIND_PRESETS as preset (preset.id)}
+				<button
+					type="button"
+					class="chip"
+					aria-pressed={gust?.id === preset.id}
+					use:tooltip={{ label: preset.label, hint: weatherField('windSpeed', preset.value, units).display, side: 'bottom' }}
+					onclick={() => setWind(preset.value, preset.label)}>{preset.id === 'calm' ? 'Calm' : preset.label.replace(' breeze', '')}</button
+				>
+			{/each}
+		</div>
+	</div>
+	<div class="block steppers" class:sheet-more={ui.phone}>
+		<p class="eyebrow">Temperature</p>
+		{@render stepper('outdoorTemp', 'Outdoor temperature', outdoor, '')}
+		{@render stepper('indoorTemp', 'Indoor start', indoor, 'Starts the air over')}
+	</div>
+	<div class="block" class:sheet-more={ui.phone}>
+		<p class="eyebrow">Outdoor air · PM2.5</p>
+		<div class="chips air-chips" role="group" aria-label="Outdoor air">
+			{#each AIR_PRESETS as preset (preset.id)}
+				{@const pm = formatPm25(preset.value)}
+				<button type="button" class="chip" data-air={preset.id} aria-pressed={air?.id === preset.id} aria-label="{preset.label}, {pm.spoken}" use:tooltip={{ label: preset.label, hint: `${pm.text} of PM2.5 outdoors`, side: 'bottom' }} onclick={() => setAir(preset.value, preset.label)}>
+					<span class="air-dot" aria-hidden="true"></span>{preset.label}
+				</button>
+			{/each}
+		</div>
+	</div>
+{/snippet}
+
+{#if ui.phone}
+	<!-- The phone's pill: the wind, the temperature and the outdoor air in two lines, the dial beside them as a picture. It opens the sheet. -->
+	<button
+		type="button"
+		class="weather weather-pill glass"
+		class:open
+		bind:this={toggle}
+		aria-expanded={open}
+		aria-controls="hud-weather-details"
+		aria-label={said}
+		onclick={() => ui.toggle('weather')}
+	>
+		<CompassDial bearing={conditions.windFrom} speed={conditions.windSpeed} {rotation} size={38} compact interactive={false} onchange={setBearing} />
+		<span class="pill-lines" aria-hidden="true">
+			<span class="pill-wind">
+				<span class="pill-from">{calm ? 'Calm' : describeBearing(conditions.windFrom).compass}</span>
+				{#if !calm}<span class="pill-speed">{speed.display}</span>{/if}
+			</span>
+			<span class="pill-rest" data-air={air?.id ?? 'custom'}>
+				<span>{outdoor.display}</span>
+				<span class="pill-sep"></span>
+				<span class="air-dot"></span>
+				<span>{air?.label ?? formatPm25(conditions.outdoorPm25).text}</span>
+			</span>
+		</span>
+	</button>
+	{#if open}
+		<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+		<div class="weather-sheet glass deep" id="hud-weather-details" role="dialog" tabindex="-1" aria-label="Weather" data-sheet bind:this={sheet} onkeydown={keydown}>
+			<SheetGrip label="the weather" onclose={() => (ui.popover = null)} />
+			<div class="details">{@render details()}</div>
+		</div>
+	{/if}
+{:else}
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="weather glass" class:open bind:this={card} onkeydown={keydown}>
 	<div class="summary">
 		{#if !open}
-			<CompassDial bearing={conditions.windFrom} speed={conditions.windSpeed} {rotation} size={ui.phone ? 44 : 58} compact onchange={setBearing} oncommit={sayBearing} />
+			<CompassDial bearing={conditions.windFrom} speed={conditions.windSpeed} {rotation} size={58} compact onchange={setBearing} oncommit={sayBearing} />
 		{/if}
 		<div class="fact wind">
 			<span class="eyebrow">Wind</span>
@@ -137,48 +229,10 @@
 	</div>
 
 	{#if open}
-		<div class="details" id="hud-weather-details">
-			<div class="wind-row">
-				<CompassDial bearing={conditions.windFrom} speed={conditions.windSpeed} {rotation} size={ui.phone ? 112 : 132} onchange={setBearing} oncommit={sayBearing} />
-				<div class="wind-words">
-					<p class="wind-title">{wind.short}</p>
-					<p class="wind-toward">{wind.toward}</p>
-					<p class="hint">Drag the green handle, or focus the dial and use the arrow keys.</p>
-				</div>
-			</div>
-			<div class="block">
-				<p class="eyebrow">Wind speed</p>
-				<div class="chips" role="group" aria-label="Wind speed">
-					{#each WIND_PRESETS as preset (preset.id)}
-						<button
-							type="button"
-							class="chip"
-							aria-pressed={gust?.id === preset.id}
-							use:tooltip={{ label: preset.label, hint: weatherField('windSpeed', preset.value, units).display, side: 'bottom' }}
-							onclick={() => setWind(preset.value, preset.label)}>{preset.id === 'calm' ? 'Calm' : preset.label.replace(' breeze', '')}</button
-						>
-					{/each}
-				</div>
-			</div>
-			<div class="block steppers">
-				<p class="eyebrow">Temperature</p>
-				{@render stepper('outdoorTemp', 'Outdoor temperature', outdoor, '')}
-				{@render stepper('indoorTemp', 'Indoor start', indoor, 'Starts the air over')}
-			</div>
-			<div class="block">
-				<p class="eyebrow">Outdoor air · PM2.5</p>
-				<div class="chips air-chips" role="group" aria-label="Outdoor air">
-					{#each AIR_PRESETS as preset (preset.id)}
-						{@const pm = formatPm25(preset.value)}
-						<button type="button" class="chip" data-air={preset.id} aria-pressed={air?.id === preset.id} aria-label="{preset.label}, {pm.spoken}" use:tooltip={{ label: preset.label, hint: `${pm.text} of PM2.5 outdoors`, side: 'bottom' }} onclick={() => setAir(preset.value, preset.label)}>
-							<span class="air-dot" aria-hidden="true"></span>{preset.label}
-						</button>
-					{/each}
-				</div>
-			</div>
-		</div>
+		<div class="details" id="hud-weather-details">{@render details()}</div>
 	{/if}
 </div>
+{/if}
 
 <style>
 	.weather {
@@ -340,21 +394,98 @@
 		box-shadow: 0 0 0 2px rgb(5 38 26 / 0.35);
 	}
 
-	:global(.hud.phone) .weather {
-		padding: 4px;
+	/* ---- the phone: a pill with the three readings, and the details as a sheet over the toolbar ---- */
+	.weather.weather-pill {
+		display: flex;
+		align-items: center;
+		gap: 9px;
+		width: max-content;
+		min-height: 48px;
+		padding: 5px 15px 5px 5px;
+		border: 0;
+		border-radius: 24px;
+		text-align: left;
 	}
-	:global(.hud.phone) .weather:not(.open) .fact {
-		display: none;
+	.weather.weather-pill:active {
+		transform: scale(0.97);
 	}
-	:global(.hud.phone) .weather.open {
+	.weather.weather-pill.open {
+		box-shadow:
+			var(--hud-shadow),
+			inset 0 0 0 1.5px var(--hud-accent);
+	}
+	.pill-lines {
+		display: grid;
+		gap: 2px;
+		line-height: 1.15;
+	}
+	.pill-wind {
+		display: flex;
+		align-items: baseline;
+		gap: 6px;
+	}
+	.pill-from {
+		font-size: 14.5px;
+		font-weight: 800;
+		letter-spacing: -0.01em;
+	}
+	.pill-speed {
+		color: var(--hud-accent);
+		font-size: 12px;
+		font-weight: 750;
+	}
+	.pill-rest {
+		display: flex;
+		align-items: center;
+		gap: 5px;
+		color: var(--hud-muted);
+		font-size: 11.5px;
+		font-weight: 700;
+		white-space: nowrap;
+	}
+	.pill-sep {
+		width: 3px;
+		height: 3px;
+		border-radius: 50%;
+		background: currentColor;
+		opacity: 0.7;
+	}
+	.pill-rest .air-dot {
+		width: 7px;
+		height: 7px;
+		box-shadow: none;
+	}
+	.weather-sheet {
 		position: fixed;
-		left: 10px;
-		right: 10px;
-		top: auto;
+		left: calc(10px + env(safe-area-inset-left));
+		right: calc(10px + env(safe-area-inset-right));
 		bottom: calc(86px + env(safe-area-inset-bottom));
-		width: auto;
 		max-height: 72vh;
 		overflow-y: auto;
-		animation-name: hud-rise;
+		overscroll-behavior: contain;
+		padding: 24px 14px 16px;
+		border-radius: 22px;
+		animation: hud-rise 260ms var(--hud-ease);
+	}
+	.weather-sheet .details {
+		gap: 14px;
+		margin-top: 0;
+		padding: 0 2px;
+	}
+	.weather-sheet .wind-row {
+		gap: 14px;
+	}
+	.weather-sheet .wind-words {
+		justify-items: start;
+	}
+	.weather-sheet .speed-chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		min-height: 36px;
+		margin-top: 4px;
+		padding: 0 8px 0 12px;
+		border-radius: 12px;
+		font-size: 12.5px;
 	}
 </style>

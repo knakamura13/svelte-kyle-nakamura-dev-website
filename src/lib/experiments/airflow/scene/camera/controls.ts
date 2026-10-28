@@ -4,6 +4,7 @@ import {
 	clampTilt,
 	clampZoom,
 	farDistance,
+	frameLens,
 	homeView,
 	panBy,
 	panScale,
@@ -13,7 +14,9 @@ import {
 	type CameraBounds,
 	type CameraMotion,
 	type CameraPose,
-	type CameraState
+	type CameraState,
+	type ViewFit,
+	type ViewFrame
 } from './sims';
 
 /** What the camera needs from the Stage: the motion preference, the view's size, and where a point on the screen meets the floor. */
@@ -23,6 +26,8 @@ export interface CameraHost {
 	size(): { width: number; height: number };
 	/** Where a point on the screen (normalized device coordinates, y up) meets the floor of the Home, or null. */
 	floorAt(ndc: { x: number; y: number }): { x: number; z: number } | null;
+	/** The part of the view to frame the Home in (a phone's HUD leaves the middle of the screen), or null for all of it. Asked every frame. */
+	frame?(): ViewFrame | null;
 }
 
 /** The parts of a pointer event the camera reads, so tests can hand it plain objects. */
@@ -89,6 +94,12 @@ export class SimsCamera {
 	private bounds: CameraBounds;
 	private far = 20;
 	private aspect = 1.6;
+	/** The part of the view the Home is framed in (`CameraHost.frame`), the aspect of that part, and how far the picture is shifted to centre on it, px. */
+	private frame: ViewFrame | null = null;
+	private framed = 1.6;
+	private shift = { x: 0, y: 0 };
+	/** What a framed default view fits the Home to; null unframed, where the default view is the approved desktop one. */
+	private fit: ViewFit | null = null;
 	private current: CameraPose;
 	private readonly drags = new Map<number, Drag>();
 	private readonly touches = new Map<number, { x: number; y: number }>();
@@ -103,10 +114,11 @@ export class SimsCamera {
 		bounds: CameraBounds
 	) {
 		this.bounds = { ...bounds };
-		this.goal = homeView(bounds);
-		this.state = { ...this.goal };
+		this.frame = host.frame?.() ?? null;
 		this.camera.fov = FOV;
 		this.measure();
+		this.goal = homeView(bounds, this.framed, this.fit ?? undefined);
+		this.state = { ...this.goal };
 		this.current = pose(this.state, this.bounds, this.far);
 		this.apply();
 	}
@@ -115,7 +127,7 @@ export class SimsCamera {
 	setBounds(bounds: CameraBounds) {
 		this.bounds = { ...bounds };
 		this.measure();
-		Object.assign(this.goal, homeView(bounds, this.aspect));
+		Object.assign(this.goal, homeView(bounds, this.framed, this.fit ?? undefined));
 		Object.assign(this.state, this.goal);
 		Object.assign(this.motion, still());
 		this.drags.clear();
@@ -128,16 +140,46 @@ export class SimsCamera {
 		this.aspect = aspect;
 		this.camera.aspect = aspect;
 		this.measure();
-		if (!this.touched) {
-			Object.assign(this.goal, homeView(this.bounds, aspect));
-			Object.assign(this.state, this.goal);
-			Object.assign(this.motion, still());
-		}
+		this.rest();
 		this.apply();
 	}
 
+	/**
+	 * The part of the view to frame the Home in, or null for all of it: on a phone, the screen the HUD leaves. The picture is shifted to
+	 * centre on it and the bird's-eye distance fits the Home in it; until the visitor has moved the camera, the default view is refitted.
+	 */
+	setFrame(frame: ViewFrame | null) {
+		const same = frame === this.frame || (!!frame && !!this.frame && frame.top === this.frame.top && frame.right === this.frame.right && frame.bottom === this.frame.bottom && frame.left === this.frame.left);
+		if (same) return;
+		this.frame = frame ? { ...frame } : null;
+		this.measure();
+		this.rest();
+		this.apply();
+	}
+
+	/** Until the visitor has moved the camera, it stands at the default view for the view's shape and frame. */
+	private rest() {
+		if (this.touched) return;
+		Object.assign(this.goal, homeView(this.bounds, this.framed, this.fit ?? undefined));
+		Object.assign(this.state, this.goal);
+		Object.assign(this.motion, still());
+	}
+
 	private measure() {
-		this.far = farDistance(this.bounds, MathUtils.degToRad(FOV), this.aspect);
+		const fov = MathUtils.degToRad(FOV);
+		if (!this.frame) {
+			this.far = farDistance(this.bounds, fov, this.aspect);
+			this.framed = this.aspect;
+			this.shift = { x: 0, y: 0 };
+			this.fit = null;
+			return;
+		}
+		const { height } = this.host.size();
+		const lens = frameLens({ width: this.aspect * height, height }, this.frame, fov);
+		this.far = farDistance(this.bounds, lens.fov, lens.aspect);
+		this.framed = lens.aspect;
+		this.shift = lens.shift;
+		this.fit = { fov: lens.fov, aspect: lens.aspect, far: this.far };
 	}
 
 	/** The focus the camera eases toward, m, and the pose it is in now. */
@@ -167,7 +209,7 @@ export class SimsCamera {
 
 	/** Back to the Home's default view. */
 	reset() {
-		Object.assign(this.goal, homeView(this.bounds, this.aspect));
+		Object.assign(this.goal, homeView(this.bounds, this.framed, this.fit ?? undefined));
 		this.touched = true;
 	}
 
@@ -359,6 +401,7 @@ export class SimsCamera {
 
 	/** Once a frame: held keys move the goal, the springs move the camera toward it. Returns true while the camera is moving. */
 	update(dt: number): boolean {
+		if (this.host.frame) this.setFrame(this.host.frame());
 		for (const hold of this.held) this.drive(hold, dt);
 		const moving = stepCamera(this.state, this.motion, this.goal, dt, this.host.reducedMotion());
 		this.apply();
@@ -375,6 +418,15 @@ export class SimsCamera {
 		this.camera.near = Math.min(0.5, Math.max(0.04, this.current.distance * 0.015));
 		this.camera.far = Math.max(400, this.far * 6);
 		this.camera.updateProjectionMatrix();
+		// Framed (a phone): the picture is shifted so that what the camera looks at is in the middle of the frame, at the same scale.
+		if (this.shift.x || this.shift.y) {
+			const { height } = this.host.size();
+			const width = this.aspect * height;
+			const m = this.camera.projectionMatrix.elements;
+			m[8] = (-2 * this.shift.x) / Math.max(1, width);
+			m[9] = (2 * this.shift.y) / Math.max(1, height);
+			this.camera.projectionMatrixInverse.copy(this.camera.projectionMatrix).invert();
+		}
 		this.camera.updateMatrixWorld();
 	}
 }

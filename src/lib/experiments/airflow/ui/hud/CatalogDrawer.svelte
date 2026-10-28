@@ -8,6 +8,7 @@
 	import { CATALOG_TABS, cardLines, inTab, type CatalogTab } from './catalog';
 	import Icon from './Icon.svelte';
 	import { DEVICE_KINDS, ratedFlow } from './menus';
+	import SheetGrip from './SheetGrip.svelte';
 	import { useHudUi } from './ui.svelte';
 	import { overWorld } from './world';
 
@@ -42,7 +43,18 @@
 	const rated = (model: DeviceModel) => `${model.kind === 'air-purifier' ? 'Cleans ' : ''}${formatFlow(ratedFlow(model), units).text}`;
 
 	// ---- a card dragged straight into the world ----
-	let press: { pointer: number; x: number; y: number; moved: boolean; model: string } | null = null;
+	let press: { pointer: number; x: number; y: number; moved: boolean; model: string; swiped?: boolean } | null = null;
+
+	/**
+	 * On a phone a finger on a card may mean the strip, not the card: at the sheet's peek a sideways swipe scrolls the strip (the
+	 * browser's own pan, `touch-action: pan-x`) and only a drag upward takes the card out; in full a swipe scrolls the cards, and a tap
+	 * picks one up to put down with a tap in a room.
+	 */
+	function scrolls(event: PointerEvent, from: { x: number; y: number }) {
+		if (!ui.phone || event.pointerType !== 'touch') return false;
+		if (ui.sheetSize === 'full') return true;
+		return Math.abs(event.clientX - from.x) > Math.abs(event.clientY - from.y);
+	}
 
 	function follow(x: number, y: number) {
 		const at = overWorld(x, y) ? experience.bridge.pick?.(x, y) : null;
@@ -59,6 +71,10 @@
 	function move(event: PointerEvent) {
 		if (!press || press.pointer !== event.pointerId) return;
 		if (!press.moved && !isClick(press, { x: event.clientX, y: event.clientY })) {
+			if (scrolls(event, press)) {
+				press.swiped = true;
+				return;
+			}
 			press.moved = true;
 			experience.startCarry(press.model);
 			ui.held = true;
@@ -71,6 +87,7 @@
 		const done = press;
 		press = null;
 		ui.held = false;
+		if (done.swiped && !done.moved) return;
 		// A click picks it up: it follows the pointer until a click in a room puts it down.
 		if (!done.moved) {
 			if (experience.carry?.model === done.model && !experience.carry.moving) experience.cancelCarry();
@@ -110,15 +127,7 @@
 	const count = (id: CatalogTab) => experience.models.filter((model) => inTab(model, id)).length;
 </script>
 
-<section class="drawer glass" aria-labelledby="hud-catalog-title">
-	<header class="head">
-		<div>
-			<h2 id="hud-catalog-title" class="title">Build</h2>
-			<p class="sub" data-full={full ? '' : undefined}>{placed} of {MAX_DEVICES} placed</p>
-		</div>
-		<button type="button" class="ibtn" aria-label="Close the catalog" onclick={() => experience.setTool('select')}><Icon name="close" size={18} /></button>
-	</header>
-
+{#snippet tabs()}
 	<div class="tabs seg" role="tablist" aria-label="Catalog">
 		{#each CATALOG_TABS as t (t.id)}
 			<button type="button" role="tab" data-tab={t.id} aria-selected={tab === t.id} aria-controls="hud-catalog-panel" tabindex={tab === t.id ? 0 : -1} onclick={() => (tab = t.id)} onkeydown={tabKey}>
@@ -127,6 +136,29 @@
 			</button>
 		{/each}
 	</div>
+{/snippet}
+
+<section class="drawer glass" aria-labelledby="hud-catalog-title" data-sheet={ui.phone ? '' : undefined}>
+	{#if ui.phone}
+		<!-- A phone's sheet: the title and the tabs in one row, then a strip of small cards to drag up into a room; in full, the cards in two columns. -->
+		<SheetGrip label="the catalog" onclose={() => experience.setTool('select')} />
+		<header class="head phone-head">
+			<h2 id="hud-catalog-title" class="title">Build</h2>
+			<p class="sub" data-full={full ? '' : undefined}>{placed}<span aria-hidden="true">/</span><span class="sr-only"> of </span>{MAX_DEVICES}<span class="sr-only"> placed</span></p>
+			{@render tabs()}
+			<button type="button" class="ibtn" aria-label="Close the catalog" onclick={() => experience.setTool('select')}><Icon name="close" size={18} /></button>
+		</header>
+	{:else}
+		<header class="head">
+			<div>
+				<h2 id="hud-catalog-title" class="title">Build</h2>
+				<p class="sub" data-full={full ? '' : undefined}>{placed} of {MAX_DEVICES} placed</p>
+			</div>
+			<button type="button" class="ibtn" aria-label="Close the catalog" onclick={() => experience.setTool('select')}><Icon name="close" size={18} /></button>
+		</header>
+
+		{@render tabs()}
+	{/if}
 
 	<div class="grid scroll" id="hud-catalog-panel" role="tabpanel" aria-label={tab === 'fans' ? 'Fans' : 'Purifiers'}>
 		{#each shown as model (model.id)}
@@ -326,19 +358,87 @@
 		line-height: 1.6;
 	}
 
+	/* ---- the phone's sheet ---- */
 	:global(.hud.phone) .drawer {
+		grid-template-rows: auto minmax(0, 1fr);
+		gap: 10px;
 		width: auto;
-		max-height: 46vh;
+		max-height: 62vh;
+		padding: 22px 12px 12px;
 		animation-name: hud-rise;
 	}
-	:global(.hud.phone) .grid {
-		grid-template-columns: none;
-		grid-auto-flow: column;
-		grid-auto-columns: 128px;
-		overflow-x: auto;
-		overflow-y: hidden;
+	.phone-head {
+		align-items: center;
+		gap: 8px;
+	}
+	.phone-head .title {
+		font-size: 17px;
+	}
+	.phone-head .sub {
+		margin: 0;
+		padding: 1px 7px;
+		border-radius: 8px;
+		background: rgb(255 255 255 / 0.08);
+		font-size: 11px;
+		font-weight: 750;
+	}
+	.phone-head .tabs {
+		margin-left: auto;
+	}
+	.phone-head .tabs > button {
+		flex: none;
+		min-height: 36px;
+		padding: 0 11px;
+	}
+	.phone-head .tabs :global(.icon),
+	.phone-head .tab-count {
+		display: none;
+	}
+	.phone-head .ibtn {
+		margin: 0 -4px 0 0;
+		color: var(--hud-muted);
 	}
 	:global(.hud.phone) .foot {
 		display: none;
+	}
+	/* At its peek, a strip of small cards: the picture and the name, to drag up into a room. */
+	:global(.hud.phone[data-sheet-size='peek']) .grid {
+		grid-template-columns: none;
+		grid-auto-flow: column;
+		grid-auto-columns: 104px;
+		gap: 8px;
+		overflow-x: auto;
+		overflow-y: hidden;
+		overscroll-behavior: contain;
+		scrollbar-width: none;
+	}
+	:global(.hud.phone[data-sheet-size='peek']) .card {
+		gap: 0;
+		padding: 4px 4px 7px;
+		border-radius: 14px;
+		touch-action: pan-x;
+	}
+	:global(.hud.phone[data-sheet-size='full']) .card {
+		touch-action: pan-y;
+	}
+	:global(.hud.phone[data-sheet-size='peek']) .picture {
+		aspect-ratio: 1.55;
+		margin-bottom: 4px;
+		border-radius: 10px;
+	}
+	:global(.hud.phone[data-sheet-size='peek']) .kind,
+	:global(.hud.phone[data-sheet-size='peek']) .card-maker,
+	:global(.hud.phone[data-sheet-size='peek']) .card-flow {
+		display: none;
+	}
+	:global(.hud.phone[data-sheet-size='peek']) .card-title {
+		overflow: hidden;
+		font-size: 11.5px;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	/* In full, the cards as on a desktop, two to a row. */
+	:global(.hud.phone[data-sheet-size='full']) .grid {
+		overflow-y: auto;
 	}
 </style>

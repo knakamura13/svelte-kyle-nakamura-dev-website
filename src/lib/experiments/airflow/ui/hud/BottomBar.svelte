@@ -5,13 +5,16 @@
 	import { formatDuration } from '../../units';
 	import { shortfall } from '../clock';
 	import Icon from './Icon.svelte';
+	import SheetGrip from './SheetGrip.svelte';
 	import { OVERLAYS, WALL_MODES } from './tools';
 	import { tooltip } from './tips.svelte';
 	import { useHudUi } from './ui.svelte';
 
 	/**
 	 * The bottom bar: time on the left (pause, 1×, 5×, 20× and the simulated clock), the overlay switcher in the middle with its legend
-	 * over it, and on the right the wall modes, About and Advanced. On a phone it is the View sheet that rises over the toolbar.
+	 * over it, and on the right the wall modes, About and Advanced. On a phone it is the View sheet that rises over the toolbar: at its
+	 * peek the time and the overlays, and in full the walls, the Inspector, About and Advanced too. With the sheet shut, an overlay's
+	 * legend stays under the top bar.
 	 */
 	const experience = useAirflow();
 	const ui = useHudUi();
@@ -39,8 +42,24 @@
 	const setOverlay = (id: OverlayId) => experience.setOverlay(id);
 </script>
 
+{#snippet legendCard(floating: boolean)}
+	{#if legend}
+		<div class="legend glass" class:floating role="group" aria-label="Legend: {legend.title}">
+			<p class="legend-title"><span>{legend.title}</span><span class="legend-unit">{legend.unit}</span></p>
+			<div class="legend-bar" role="img" aria-label={legend.description} style:background={legend.gradient}></div>
+			<ol class="legend-ticks" aria-hidden="true">
+				{#each legend.ticks as tick (tick.at)}<li style:--at={tick.at}>{tick.label.value}</li>{/each}
+			</ol>
+		</div>
+	{/if}
+{/snippet}
+
+<!-- On a phone with the View sheet shut, an overlay's legend stays in sight, under the top bar. -->
+{#if sheet && !open}{@render legendCard(true)}{/if}
+
 {#if open}
-	<div class="bar" class:sheet id="hud-view-sheet" role={sheet ? 'dialog' : undefined} aria-label={sheet ? 'View' : undefined}>
+	<div class="bar" class:sheet id="hud-view-sheet" role={sheet ? 'dialog' : undefined} aria-label={sheet ? 'View' : undefined} data-sheet={sheet ? '' : undefined}>
+		{#if sheet}<SheetGrip label="View" onclose={() => (ui.popover = null)} />{/if}
 		<div class="cluster time glass" role="group" aria-label="Time">
 			<button
 				type="button"
@@ -71,15 +90,7 @@
 		</div>
 
 		<div class="overlays">
-			{#if legend}
-				<div class="legend glass" role="group" aria-label="Legend: {legend.title}">
-					<p class="legend-title"><span>{legend.title}</span><span class="legend-unit">{legend.unit}</span></p>
-					<div class="legend-bar" role="img" aria-label={legend.description} style:background={legend.gradient}></div>
-					<ol class="legend-ticks" aria-hidden="true">
-						{#each legend.ticks as tick (tick.at)}<li style:--at={tick.at}>{tick.label.value}</li>{/each}
-					</ol>
-				</div>
-			{/if}
+			{@render legendCard(false)}
 			<div class="cluster glass" role="group" aria-label="Overlay">
 				<div class="seg">
 					{#each OVERLAYS as info (info.id)}
@@ -97,7 +108,7 @@
 			</div>
 		</div>
 
-		<div class="cluster right glass">
+		<div class="cluster right glass" class:sheet-more={sheet}>
 			<div class="seg walls" role="group" aria-label="Walls">
 				{#each WALL_MODES as mode (mode.id)}
 					<button type="button" aria-pressed={experience.view.walls === mode.id} aria-label={mode.label} use:tooltip={{ label: mode.label, hint: mode.hint, side: 'top' }} onclick={() => setWalls(mode.id)}>
@@ -249,13 +260,13 @@
 	/* The phone's View sheet: the same controls stacked in one glass sheet over the toolbar. */
 	.bar.sheet {
 		position: fixed;
-		left: 10px;
-		right: 10px;
+		left: calc(10px + env(safe-area-inset-left));
+		right: calc(10px + env(safe-area-inset-right));
 		bottom: calc(86px + env(safe-area-inset-bottom));
 		display: grid;
 		grid-template-columns: minmax(0, 1fr);
 		gap: 6px;
-		padding: 8px;
+		padding: 20px 8px 8px;
 		border-radius: 22px;
 		background-color: var(--hud-glass-deep);
 		-webkit-backdrop-filter: var(--hud-blur);
@@ -291,10 +302,22 @@
 	.bar.sheet .seg-text {
 		display: inline;
 	}
+	/* The overlays in one row, each its icon over its name, as the toolbar's tools are. */
 	.bar.sheet .overlays .seg {
 		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
+		grid-template-columns: repeat(4, minmax(0, 1fr));
 		width: 100%;
+	}
+	.bar.sheet .overlays .seg > button {
+		flex-direction: column;
+		gap: 3px;
+		min-width: 0;
+		min-height: 54px;
+		padding: 6px 2px 5px;
+	}
+	.bar.sheet .overlays .seg-text {
+		font-size: 11px;
+		white-space: nowrap;
 	}
 	.bar.sheet .time .seg {
 		flex: 1;
@@ -304,5 +327,22 @@
 	}
 	.bar.sheet .right {
 		justify-content: space-between;
+	}
+	/* The legend with the sheet shut: a small card under the top bar, out of the way of the sheets. */
+	.legend.floating {
+		position: fixed;
+		top: calc(70px + env(safe-area-inset-top));
+		left: calc(10px + env(safe-area-inset-left));
+		width: min(232px, calc(100vw - 20px));
+		padding: 8px 12px 6px;
+		border-radius: 14px;
+		pointer-events: none;
+	}
+	.legend.floating .legend-title {
+		margin-bottom: 5px;
+		font-size: 11px;
+	}
+	.legend.floating .legend-bar {
+		height: 6px;
 	}
 </style>

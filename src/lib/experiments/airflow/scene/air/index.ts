@@ -9,8 +9,8 @@ import { AirFields } from './fields';
 import { MarchTarget } from './march';
 import { solidMask, type SolidMask } from './mask';
 import { Mute, Overlay } from './overlay';
-import { SMOKE_STEPS, SmokePuffs, SmokeVolume, smokeBounds, type SmokeLighting } from './smokeVolume';
-import { STREAK_COUNTS, STREAK_PIXELS, Streaks } from './streaks';
+import { SMOKE_STEPS, SmokePuffs, SmokeVolume, smokeBounds, type PuffLook, type SmokeLighting } from './smokeVolume';
+import { STREAK_COUNTS, STREAK_PIXELS, Streaks, type StreakLook } from './streaks';
 
 export { STREAK_AIR, overlayLegend, streakColor, type OverlayLegend, type OverlayLegendOptions } from './legend';
 export { STREAK_COUNTS } from './streaks';
@@ -37,6 +37,18 @@ export interface AirOptions {
 	/** The sun the smoke is lit by. Absent: the brightest directional light in the scene, looked for again now and then. */
 	sun?: DirectionalLight;
 	quality?: QualityTier;
+	/** What the tier asks of the air's look beyond its defaults (`look/quality.ts`). */
+	look?: AirLook;
+}
+
+/**
+ * What a quality tier may ask of the air's look, where it differs from the air's defaults for that tier: the streaks' number, the
+ * narrowest and widest they are drawn (CSS pixels), their opacity and tails, and the smoke puffs' number, size and opacity. A phone's
+ * low tier draws fewer, coarser pixels, so it asks for bolder air.
+ */
+export interface AirLook {
+	streaks?: StreakLook & { count?: number; pixels?: readonly [number, number] };
+	puffs?: PuffLook;
 }
 
 export interface Air {
@@ -46,7 +58,8 @@ export interface Air {
 	update(volume: Volume | null, dt: number): boolean;
 	/** Off, or the quantity the overlay colours the streaks and the haze by, at the view's sensitivity (default 0.5). */
 	setOverlay(kind: OverlayId, options?: { sensitivity?: number }): void;
-	setQuality(tier: QualityTier): void;
+	/** The tier's streak count and smoke (puffs on low), and what it asks of the look (`AirLook`). */
+	setQuality(tier: QualityTier, look?: AirLook): void;
 	/** Whether the streaks are drawn (the Dock's Tracers). */
 	setStreaks(on: boolean): void;
 	dispose(): void;
@@ -104,9 +117,11 @@ export function createAir(options: AirOptions): Air {
 	const depth = new DepthPrepass();
 	const march = new MarchTarget(depth.uniforms);
 	let tier: QualityTier = options.quality ?? 'high';
+	let look: AirLook = options.look ?? {};
 	let precise = true;
-	const streaks = new Streaks(STREAK_COUNTS[tier], fields, precise);
-	streaks.setPixels(STREAK_PIXELS[tier]);
+	const streaks = new Streaks(look.streaks?.count ?? STREAK_COUNTS[tier], fields, precise);
+	streaks.setPixels(look.streaks?.pixels ?? STREAK_PIXELS[tier]);
+	streaks.setLook(look.streaks);
 	const smoke = new SmokeVolume(fields, depth.uniforms, march.size);
 	const overlay = new Overlay(fields, depth.uniforms, march.size);
 	let puffs: SmokePuffs | null = null;
@@ -139,8 +154,15 @@ export function createAir(options: AirOptions): Air {
 
 	const setSmokeMode = () => {
 		const low = tier === 'low';
+		// A tier that asks for another number of puffs gets a new set of them.
+		if (puffs && low && look.puffs?.count !== undefined && puffs.field.count !== look.puffs.count) {
+			group.remove(puffs.mesh);
+			puffs.dispose();
+			puffs = null;
+		}
 		if (low && !puffs) {
-			puffs = new SmokePuffs(fields, precise);
+			puffs = new SmokePuffs(fields, precise, look.puffs?.count);
+			puffs.setLook(look.puffs);
 			puffs.mesh.renderOrder = RENDER_ORDER.puffs;
 			group.add(puffs.mesh);
 			if (fields.newest && world) puffs.births(fields.newest, world.raster);
@@ -260,11 +282,14 @@ export function createAir(options: AirOptions): Air {
 			if (next === 'off') mute.restore();
 			else if (options.muted) mute.apply();
 		},
-		setQuality(next) {
-			if (next === tier) return;
+		setQuality(next, nextLook = {}) {
+			if (next === tier && nextLook === look) return;
 			tier = next;
-			streaks.setCount(STREAK_COUNTS[tier]);
-			streaks.setPixels(STREAK_PIXELS[tier]);
+			look = nextLook;
+			streaks.setCount(look.streaks?.count ?? STREAK_COUNTS[tier]);
+			streaks.setPixels(look.streaks?.pixels ?? STREAK_PIXELS[tier]);
+			streaks.setLook(look.streaks);
+			puffs?.setLook(look.puffs);
 			setSmokeMode();
 		},
 		setStreaks(on) {

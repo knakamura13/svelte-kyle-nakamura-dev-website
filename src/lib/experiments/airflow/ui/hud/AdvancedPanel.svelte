@@ -21,6 +21,7 @@
 	import PhysicsPanel from '../PhysicsPanel.svelte';
 	import HudRange from './HudRange.svelte';
 	import Icon from './Icon.svelte';
+	import SheetGrip from './SheetGrip.svelte';
 	import { QUALITIES } from './tools';
 	import { useHudUi } from './ui.svelte';
 
@@ -80,7 +81,8 @@
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-<div class="advanced glass deep" role="dialog" tabindex="-1" aria-modal="false" aria-labelledby="hud-advanced-title" bind:this={panel} onkeydown={keydown}>
+<div class="advanced glass deep" role="dialog" tabindex="-1" aria-modal="false" aria-labelledby="hud-advanced-title" data-sheet={ui.phone ? '' : undefined} bind:this={panel} onkeydown={keydown}>
+	{#if ui.phone}<SheetGrip label="Advanced" peek={false} onclose={() => (ui.panel = null)} />{/if}
 	<header class="head">
 		<div>
 			<p class="eyebrow">Settings</p>
@@ -270,11 +272,12 @@
 
 	:global(.hud.phone) .advanced {
 		top: auto;
-		left: 10px;
-		right: 10px;
+		left: calc(10px + env(safe-area-inset-left));
+		right: calc(10px + env(safe-area-inset-right));
 		bottom: calc(86px + env(safe-area-inset-bottom));
 		width: auto;
 		max-height: 74vh;
+		padding-top: 12px;
 		animation-name: hud-rise;
 	}
 </style>

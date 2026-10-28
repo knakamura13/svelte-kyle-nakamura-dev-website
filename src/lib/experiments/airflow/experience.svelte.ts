@@ -7,6 +7,7 @@ import type { HomePlan, PlanId } from './homes/types';
 import { describeBearing } from './directionWords';
 import { emptyReadout, type AirflowReadout } from './readouts';
 import type { Scenario } from './scenarios';
+import type { ViewFrame } from './scene/camera/sims';
 import type { DragPreview } from './scene/selection';
 import { DEFAULT_CLOCK, DEFAULT_VIEW, LIMITS, MAX_DEVICES, MAX_PINS, blankSetup, type Clock, type Conditions, type DeviceState, type OverlayId, type Pin, type Setup, type Target, type Tool, type UnitSystem, type View } from './state';
 import { towardMiddle } from './ui/hud/catalog';
@@ -34,6 +35,8 @@ export interface StageBridge {
 	pick?: (clientX: number, clientY: number) => { x: number; y: number; z: number } | null;
 	/** Where a thing's context menu hangs on the page, CSS pixels from the viewport's corner, or null when it is gone or behind the camera. */
 	anchor?: (target: Target) => { x: number; y: number } | null;
+	/** The other way, written by the HUD: on a phone, the part of the screen its bars and sheets leave for the camera to frame the Home in. */
+	frame?: ViewFrame | null;
 }
 
 const sameTarget = (a: Target | null, b: Target | null) => a === b || (!!a && !!b && a.kind === b.kind && a.id === b.id);

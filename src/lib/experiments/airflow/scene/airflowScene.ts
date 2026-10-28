@@ -13,7 +13,7 @@ import { MAX_PINS, type OverlayId, type View } from '../state';
 import { createAir } from './air';
 import { FOV, SimsCamera } from './camera/controls';
 import { openingFor } from './camera/opening';
-import { cameraFromSearch } from './camera/sims';
+import { cameraFromSearch, type ViewFrame } from './camera/sims';
 import { DeviceEditor, type Grab } from './deviceEditor';
 import type { Point3 } from './deviceMath';
 import { DeviceMeshes } from './deviceMeshes';
@@ -67,6 +67,8 @@ export interface AirflowSceneParams extends SessionParams, SelectionParams {
 	bridge: {
 		pick?: (clientX: number, clientY: number) => Point3 | null;
 		anchor?: (target: Target) => { x: number; y: number } | null;
+		/** And what the world needs from the HUD: on a phone, the part of the screen the camera frames the Home in. */
+		frame?: ViewFrame | null;
 	};
 }
 
@@ -159,7 +161,8 @@ export function createAirflowScene(host: WorldHost, params: AirflowSceneParams, 
 		world: () => (session.world?.raster.plan.id === house.plan.id ? session.world : null),
 		muted: () => [house.home.group, devices.group],
 		sun: lighting.sun,
-		quality: host.quality().tier
+		quality: host.quality().tier,
+		look: host.quality().air
 	});
 	let overlay: { kind: OverlayId; sensitivity: number } | null = null;
 	const controls = new SimsCamera(
@@ -171,7 +174,9 @@ export function createAirflowScene(host: WorldHost, params: AirflowSceneParams, 
 				return { width: box.width, height: box.height };
 			},
 			// A double click flies to the floor of the Home under the pointer.
-			floorAt: (ndc) => pointOnPlane(camera, ndc, 0, house.plan)
+			floorAt: (ndc) => pointOnPlane(camera, ndc, 0, house.plan),
+			// On a phone the Home is framed in the screen the HUD leaves it.
+			frame: () => params.bridge.frame ?? null
 		},
 		house.home.bounds
 	);
@@ -275,13 +280,15 @@ export function createAirflowScene(host: WorldHost, params: AirflowSceneParams, 
 		},
 		setQuality(quality) {
 			lighting.setQuality(quality);
-			// The air follows the tier: fewer streaks on medium and low, and puffs for the smoke on low.
-			air.setQuality(quality.tier);
+			// The air follows the tier: fewer streaks on medium and low, and puffs for the smoke on low, drawn as the tier asks (`quality.air`).
+			air.setQuality(quality.tier, quality.air);
 		},
 		takeShadowChange: () => house.home.takeShadowChange(),
 		aoBox: () => house.home.aoBox(),
 		warmUp: () => session.warmUp(),
 		opening: (aspect) => openingFor(house.plan, aspect),
+		// A second finger makes a pinch: what the first was doing (a probe to pin, smoke, a fan in hand) is dropped, not done.
+		cancelTouch: () => input.reset(),
 		key(event) {
 			// C steps the walls through cutaway, up and down, as the bottom bar's wall modes do.
 			if (event.key !== 'c' && event.key !== 'C') return false;

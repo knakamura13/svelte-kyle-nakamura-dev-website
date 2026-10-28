@@ -4,6 +4,7 @@
 	import { menuFor } from './inventory';
 	import { placeCard, type CardPlacement } from './layout';
 	import MenuBody from './MenuBody.svelte';
+	import SheetGrip from './SheetGrip.svelte';
 	import { homeContext } from './context';
 	import { useHudUi } from './ui.svelte';
 	import { focusWorld } from './world';
@@ -58,10 +59,12 @@
 		data-side={placement?.side}
 		style:left={ui.phone ? undefined : `${placement?.left ?? -9999}px`}
 		style:top={ui.phone ? undefined : `${placement?.top ?? -9999}px`}
+		data-sheet={ui.phone ? '' : undefined}
 		bind:this={card}
 		bind:clientWidth={width}
 		bind:clientHeight={height}
 	>
+		{#if ui.phone}<SheetGrip label={menu.title} onclose={() => experience.closeMenu()} />{/if}
 		{#if placement?.notch && !ui.phone}
 			<span class="notch" data-side={placement.side} style:left="{placement.notch.x}px" style:top="{placement.notch.y}px" aria-hidden="true"></span>
 		{/if}
@@ -74,7 +77,16 @@
 			<button type="button" class="ibtn close" aria-label="Close the menu" onclick={() => experience.closeMenu()}><Icon name="close" size={18} /></button>
 		</header>
 		<MenuBody {target} {menu} compact />
-		<button type="button" class="btn quiet details" onclick={() => (ui.inspector = true)}>
+		<!-- On a phone one sheet shows at a time, so the menu gives way to the Inspector, which keeps the choice. -->
+		<button
+			type="button"
+			class="btn quiet details"
+			class:sheet-more={ui.phone}
+			onclick={() => {
+				ui.inspector = true;
+				if (ui.phone) experience.closeMenu();
+			}}
+		>
 			<Icon name="details" size={16} />
 			<span>All settings</span>
 		</button>
@@ -156,12 +168,22 @@
 		font-size: 12px;
 	}
 	.menu.sheet {
-		left: 10px;
-		right: 10px;
+		left: calc(10px + env(safe-area-inset-left));
+		right: calc(10px + env(safe-area-inset-right));
 		bottom: calc(86px + env(safe-area-inset-bottom));
+		gap: 10px;
 		width: auto;
 		max-height: 60vh;
+		padding: 22px 14px 10px;
 		overflow-y: auto;
+		overscroll-behavior: contain;
 		animation-name: hud-rise;
+	}
+	/* At its peek, the title and the presets (or a probe's reading); the fine control, the notes and the actions wait for the grabber. */
+	:global(.hud.phone[data-sheet-size='peek']) .menu.sheet :global(:is(.fine, .caption, .note, .actions)) {
+		display: none;
+	}
+	.menu.sheet .close {
+		margin: -6px -8px -4px 0;
 	}
 </style>

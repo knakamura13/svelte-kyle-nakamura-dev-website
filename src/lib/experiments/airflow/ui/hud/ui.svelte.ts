@@ -12,6 +12,9 @@ export type HudPanel = 'about' | 'advanced' | null;
 /** The small menus that drop from a button, one at a time: the Home picker, the Scenario menu, the weather's details, and the phone's View sheet. */
 export type HudPopover = 'home' | 'scenario' | 'weather' | 'view' | null;
 
+/** How much of a phone's bottom sheet shows: its peek (its title and its first row) or all of it. */
+export type SheetSize = 'peek' | 'full';
+
 export class HudUi {
 	panel: HudPanel = $state(null);
 	popover: HudPopover = $state(null);
@@ -23,6 +26,8 @@ export class HudUi {
 	held = $state(false);
 	/** The phone layout: the rail is a bottom toolbar and panels are bottom sheets. */
 	phone = $state(false);
+	/** How much of the phone's one open sheet shows. Each sheet opens at its own size (`Hud.svelte`), and its grabber changes it. */
+	sheetSize: SheetSize = $state('peek');
 	/** The one invitation of the first frame, beside the Build tool, until the visitor builds or puts it away. */
 	hint = $state(true);
 	/** How much of the window the HUD's bars and panels cover at each edge, px, so a context menu stays in the free part. */

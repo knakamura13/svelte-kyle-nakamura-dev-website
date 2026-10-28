@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { useAirflow } from '../../experience.svelte';
 	import type { Tool } from '../../state';
 	import AboutPanel from './AboutPanel.svelte';
@@ -29,9 +29,19 @@
 	const experience = useAirflow();
 	const ui = provideHudUi();
 	const tool = $derived(experience.tool);
-	/** On a phone one sheet shows over the toolbar at a time: a small menu first, then the context menu, the Inspector, and the tool's panel. */
-	const sheet = $derived(ui.popover ? 'popover' : experience.menu && experience.selection ? 'menu' : ui.inspector ? 'inspector' : tool !== 'select' ? 'tool' : undefined);
+	/** On a phone one sheet shows over the toolbar at a time: Advanced, a small menu, the context menu, the Inspector, then the tool's panel. */
+	const sheet = $derived(ui.panel === 'advanced' ? 'advanced' : ui.popover ? 'popover' : experience.menu && experience.selection ? 'menu' : ui.inspector ? 'inspector' : tool !== 'select' ? 'tool' : undefined);
 	const key = (target: { kind: string; id: string } | null) => (target ? `${target.kind}:${target.id}` : '');
+
+	/**
+	 * Which sheet is open, down to the thing or tool it is for. Each opens at its peek, the world in view above it, except the ones that
+	 * are lists to read or choose from: the Inspector and the Home and Scenario pickers open in full.
+	 */
+	const sheetKey = $derived(sheet === 'popover' ? `popover:${ui.popover}` : sheet === 'tool' ? `tool:${tool}` : sheet === 'menu' ? `menu:${key(experience.selection)}` : (sheet ?? ''));
+	$effect(() => {
+		const opened = sheetKey;
+		untrack(() => (ui.sheetSize = opened === 'inspector' || opened === 'popover:home' || opened === 'popover:scenario' ? 'full' : 'peek'));
+	});
 
 	let top: HTMLElement | undefined = $state();
 	let weather: HTMLElement | undefined = $state();
@@ -39,7 +49,15 @@
 	let right: HTMLElement | undefined = $state();
 	let bottom: HTMLElement | undefined = $state();
 
-	/** The free part of the window, for the context menu: inside the bars and the panels at each edge. */
+	/**
+	 * On a phone the camera frames the home in the part of the screen the HUD leaves it: under the top bar and the weather, and over the
+	 * toolbar with room for a sheet at its peek (`PEEK_ROOM`, px), so opening one covers lawn rather than the home. A desktop frames the
+	 * whole window, as approved at check-in 2.
+	 */
+	const PEEK_ROOM = 150;
+	const FRAME_GAP = 8;
+
+	/** The free part of the window, for the context menu: inside the bars and the panels at each edge. On a phone, the camera's frame too. */
 	function measure() {
 		const width = innerWidth;
 		const height = innerHeight;
@@ -55,11 +73,32 @@
 			top: t + gap,
 			bottom: (b && b.height > 0 ? height - b.top : 0) + gap
 		};
+		// The frame is measured from the layout, not the painted boxes: the bars rise into place as the page opens, and a frame taken
+		// mid-rise would shift the picture by a few pixels when the next measure corrects it.
+		const toolbar = ui.phone ? left?.querySelector<HTMLElement>('.rail') : null;
+		const bar = top?.querySelector<HTMLElement>('.topbar');
+		const pill = weather?.querySelector<HTMLElement>('.weather');
+		experience.bridge.frame =
+			toolbar && toolbar.offsetHeight > 0
+				? { top: Math.round(Math.max(layoutBottom(bar), layoutBottom(pill)) + FRAME_GAP), right: 0, bottom: Math.round(height - layoutTop(toolbar) + FRAME_GAP + PEEK_ROOM), left: 0 }
+				: null;
 	}
+
+	/** Where an element is laid out, px from the top of the window, without the transforms its animations add. */
+	function layoutTop(element: HTMLElement | null | undefined) {
+		let y = 0;
+		for (let at: HTMLElement | null = element ?? null; at; at = at.offsetParent as HTMLElement | null) y += at.offsetTop;
+		return y;
+	}
+	const layoutBottom = (element: HTMLElement | null | undefined) => (element ? layoutTop(element) + element.offsetHeight : 0);
 
 	onMount(() => {
 		const phone = matchMedia('(max-width: 699px)');
-		const sync = () => (ui.phone = phone.matches);
+		const sync = () => {
+			ui.phone = phone.matches;
+			// The phone's bars are laid out on the next frame.
+			requestAnimationFrame(measure);
+		};
 		sync();
 		phone.addEventListener('change', sync);
 		const observer = new ResizeObserver(measure);
@@ -114,6 +153,7 @@
 	data-menu={experience.menu ? '' : undefined}
 	data-carrying={experience.carry ? '' : undefined}
 	data-sheet={ui.phone ? sheet : undefined}
+	data-sheet-size={ui.phone && sheet ? ui.sheetSize : undefined}
 >
 	<div class="hud-top" bind:this={top}><TopBar /></div>
 	<div class="hud-weather" bind:this={weather}><WeatherWidget /></div>
@@ -536,7 +576,25 @@
 		grid-template-columns: minmax(0, 1fr) auto;
 		grid-template-rows: auto minmax(0, 1fr) auto;
 		gap: 8px;
-		padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
+		padding: calc(10px + env(safe-area-inset-top)) calc(10px + env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left));
+		/* No double-tap zoom on the HUD's buttons: a tap is a tap at once. */
+		touch-action: manipulation;
+	}
+	/* The toolbar stays in front of the sheets, which fold and slide down behind it. */
+	.hud.phone .hud-left > :global(.rail-wrap) {
+		z-index: 30;
+	}
+	.hud.phone .hud-left > :global(:not(.rail-wrap)) {
+		position: relative;
+		z-index: 1;
+	}
+	/* A sheet at its peek shows its title and its first row; the rest (`.sheet-more`) waits for its grabber. */
+	.hud.phone[data-sheet-size='peek'] :global(.sheet-more) {
+		display: none !important;
+	}
+	/* While the first frame's hint stands over the toolbar, probe cards stand over it. */
+	.hud.phone:has(:global(.opening-hint)) .hud-right {
+		padding-bottom: 64px;
 	}
 	.hud.phone .hud-top {
 		grid-area: 1 / 1 / 2 / 2;
@@ -563,16 +621,19 @@
 	}
 	.hud.phone .hud-status {
 		bottom: auto;
-		top: 64px;
+		top: calc(70px + env(safe-area-inset-top));
 	}
 	/* One sheet at a time on a phone; the others wait under the one in front. */
+	.hud.phone[data-sheet='advanced'] .hud-left > :global(:not(.rail-wrap)),
 	.hud.phone[data-sheet='popover'] .hud-left > :global(:not(.rail-wrap)),
 	.hud.phone[data-sheet='menu'] .hud-left > :global(:not(.rail-wrap)),
 	.hud.phone[data-sheet='inspector'] .hud-left > :global(:not(.rail-wrap)),
+	.hud.phone[data-sheet='advanced'] .hud-right,
 	.hud.phone[data-sheet='popover'] .hud-right,
 	.hud.phone[data-sheet='menu'] .hud-right,
 	.hud.phone[data-sheet='inspector'] .hud-right :global(.cards),
 	.hud.phone[data-sheet='tool'] .hud-right :global(.cards),
+	.hud.phone[data-sheet='advanced'] :global(.menu.sheet),
 	.hud.phone[data-sheet='popover'] :global(.menu.sheet) {
 		display: none;
 	}

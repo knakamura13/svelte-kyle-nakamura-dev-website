@@ -3,6 +3,8 @@
 	import { describeStrength, smokeMarks, type SmokeMark } from '../../smokeWords';
 	import { formatLength } from '../../units';
 	import Icon from './Icon.svelte';
+	import SheetGrip from './SheetGrip.svelte';
+	import { useHudUi } from './ui.svelte';
 	import { focusWorld } from './world';
 
 	/**
@@ -10,6 +12,7 @@
 	 * and whether smoke is being released now.
 	 */
 	const experience = useAirflow();
+	const ui = useHudUi();
 	const marks = smokeMarks();
 	const strength = $derived(experience.emission.strength);
 	const words = $derived(describeStrength(strength));
@@ -26,10 +29,11 @@
 	}
 </script>
 
-<section class="panel glass" aria-labelledby="hud-smoke-title">
+<section class="panel glass" aria-labelledby="hud-smoke-title" data-sheet={ui.phone ? '' : undefined}>
+	{#if ui.phone}<SheetGrip label="the Smoke tool" onclose={() => experience.setTool('select')} />{/if}
 	<header>
 		<h2 id="hud-smoke-title" class="title">Smoke</h2>
-		<p class="status" role="status" data-releasing={releasing ? '' : undefined}><span class="dot" aria-hidden="true"></span>{releasing ? 'Releasing' : 'Not releasing'}</p>
+		<p class="status" role="status" data-releasing={releasing ? '' : undefined}><span class="dot" aria-hidden="true"></span>{releasing ? 'Releasing' : ui.phone ? 'Hold a finger on the air' : 'Not releasing'}</p>
 	</header>
 	<p class="how">Press and hold on the air to release smoke {height} above the floor. It drifts where the air takes it.</p>
 	<div class="marks" role="group" aria-label="Smoke strength">
@@ -41,7 +45,7 @@
 			</button>
 		{/each}
 	</div>
-	<p class="now">Now: <strong>{words.rate.text}</strong>, {words.near}.</p>
+	<p class="now" class:sheet-more={ui.phone}>Now: <strong>{words.rate.text}</strong>, {words.near}.</p>
 	<button type="button" class="btn" onclick={focusWorld}><Icon name="target" size={18} />Release from the keyboard</button>
 	<p class="keys">In the 3D view: arrow keys move the cursor, <span class="key">Enter</span> starts and stops smoke.</p>
 </section>
@@ -141,11 +145,26 @@
 		justify-content: flex-start;
 	}
 	:global(.hud.phone) .panel {
+		gap: 10px;
 		width: auto;
+		padding: 22px 12px 12px;
 		animation-name: hud-rise;
+	}
+	:global(.hud.phone) .title {
+		font-size: 17px;
 	}
 	:global(.hud.phone) .marks {
 		grid-template-columns: repeat(4, minmax(0, 1fr));
+		gap: 5px;
+	}
+	:global(.hud.phone) .mark {
+		align-content: start;
+		min-height: 48px;
+		padding: 6px 7px;
+	}
+	:global(.hud.phone) .mark-name {
+		font-size: 12px;
+		line-height: 1.2;
 	}
 	:global(.hud.phone) .btn,
 	:global(.hud.phone) .keys,

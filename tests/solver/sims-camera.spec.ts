@@ -11,20 +11,26 @@ import {
 	PITCH_MAX,
 	PITCH_MIN,
 	TILT_LIMIT,
+	FIT_FILL,
 	cameraFromSearch,
 	clampFocus,
 	clampTilt,
 	distanceAt,
 	farDistance,
+	fitZoom,
+	frameLens,
+	homeCorners,
 	homeView,
 	pitchAt,
 	pose,
+	projectThrough,
 	spring,
 	still,
 	stepCamera,
 	wrapAngle,
 	type CameraBounds,
-	type CameraState
+	type CameraState,
+	type ViewFrame
 } from '../../src/lib/experiments/airflow/scene/camera/sims';
 
 /**
@@ -350,8 +356,8 @@ test.describe('the controls', () => {
 		controls.setAspect(390 / 844);
 		expect(controls.goal).toEqual(homeView(HOME, 390 / 844));
 		expect(controls.goal.zoom).toBeGreaterThan(HOME_ZOOM - 0.05);
-		// The two-bedroom is wider than deep, so the camera looks east-north-east, along its 12 m.
-		expect(controls.yawDegrees).toBe(70);
+		// The two-bedroom is wider than deep, so the camera looks east by north, nearly along its 12 m.
+		expect(controls.yawDegrees).toBe(82);
 		// Turned the other way up, it goes back to the landscape view; once moved, a new shape leaves the camera where it is.
 		controls.setAspect(1.6);
 		expect(controls.goal).toEqual(homeView(HOME));
@@ -387,5 +393,69 @@ test.describe('the controls', () => {
 		const outside = rig();
 		outside.controls.jumpTo({ x: -5, z: 3, zoom: 0 });
 		expect(outside.controls.goal.x).toBe(FOCUS_INSET);
+	});
+});
+
+test.describe('a phone’s frame', () => {
+	/** The frame a phone's HUD leaves at 390 by 844: under the top bar, and over the toolbar with room for a sheet at its peek. */
+	const PHONE = { width: 390, height: 844 };
+	const FRAME: ViewFrame = { top: 72, right: 0, bottom: 232, left: 0 };
+
+	test('the lens of a frame: the frame’s own field of view and shape, and the shift that centres the picture on it, at the same scale', () => {
+		const none = frameLens(PHONE, null, FOV);
+		expect(none).toEqual({ fov: FOV, aspect: 390 / 844, shift: { x: 0, y: 0 } });
+		const lens = frameLens(PHONE, FRAME, FOV);
+		// 540 of the 844 px: the same angle a pixel, so the frame's field is the share of the view's tangent that its height is.
+		expect(Math.tan(lens.fov / 2)).toBeCloseTo((Math.tan(FOV / 2) * 540) / 844, 9);
+		expect(lens.aspect).toBeCloseTo(390 / 540, 9);
+		// The frame's middle is 72 + 270 = 342 px down, 80 px over the view's.
+		expect(lens.shift).toEqual({ x: 0, y: -80 });
+		// A frame from a HUD caught mid-layout, taller than the view, is held to a share of it, with its middle on the view.
+		const squashed = frameLens(PHONE, { top: 600, right: 0, bottom: 600, left: 0 }, FOV);
+		expect(squashed.fov).toBeGreaterThan(0);
+		expect(Math.abs(squashed.shift.y)).toBeLessThanOrEqual(844 / 2);
+	});
+
+	test('the default view in a frame comes as close as keeps the whole home in it, and no closer', () => {
+		const lens = frameLens(PHONE, FRAME, FOV);
+		const fit = { fov: lens.fov, aspect: lens.aspect, far: farDistance(HOME, lens.fov, lens.aspect) };
+		const view = homeView(HOME, lens.aspect, fit);
+		const inside = (zoom: number) =>
+			homeCorners(HOME).every((corner) => {
+				const at = projectThrough(pose({ ...view, zoom, tilt: clampTilt(view.tilt, zoom) }, HOME, fit.far), corner, lens);
+				return !!at && Math.abs(at.x) <= FIT_FILL + 1e-9 && Math.abs(at.y) <= FIT_FILL + 1e-9;
+			});
+		expect(view.zoom).toBe(fitZoom(view, HOME, fit));
+		expect(inside(view.zoom), 'every corner of the home, and the ground round it, is in the frame').toBe(true);
+		expect(inside(view.zoom - 0.02), 'a little closer, one is not').toBe(false);
+		// The home is wider than deep and the frame is narrow, so it is the width that binds: some corner is at the frame's side.
+		const widest = Math.max(...homeCorners(HOME).map((corner) => Math.abs(projectThrough(pose(view, HOME, fit.far), corner, lens)!.x)));
+		expect(widest).toBeGreaterThan(FIT_FILL - 0.02);
+	});
+
+	test('the controls frame the home where the HUD leaves room, shift the picture to the frame’s middle, and leave a desktop as it was', () => {
+		let frame: ViewFrame | null = FRAME;
+		const camera = new PerspectiveCamera(45, 390 / 844, 0.1, 400);
+		const host: CameraHost = { reducedMotion: () => true, size: () => PHONE, floorAt: () => null, frame: () => frame };
+		const controls = new SimsCamera(camera, host, HOME);
+		controls.setAspect(390 / 844);
+		controls.update(1 / 60);
+		const lens = frameLens(PHONE, FRAME, FOV);
+		const fit = { fov: lens.fov, aspect: lens.aspect, far: farDistance(HOME, lens.fov, lens.aspect) };
+		expect(controls.goal).toEqual(homeView(HOME, lens.aspect, fit));
+		// What the camera looks at is drawn in the middle of the frame, 342 px down, not of the screen.
+		const [tx, ty, tz] = controls.pose.target;
+		const target = camera.position.clone().set(tx, ty, tz).project(camera);
+		expect((-target.y * 0.5 + 0.5) * PHONE.height).toBeCloseTo(342, 3);
+		expect((target.x * 0.5 + 0.5) * PHONE.width).toBeCloseTo(195, 3);
+		// And a pick through the shifted lens is where the picture shows: the frame's middle unprojects onto the line to the target.
+		const ray = camera.position.clone().set(0, (1 - (2 * 342) / PHONE.height), 0.5).unproject(camera).sub(camera.position).normalize();
+		const toTarget = camera.position.clone().set(tx, ty, tz).sub(camera.position).normalize();
+		expect(ray.dot(toTarget)).toBeCloseTo(1, 6);
+		// No frame (a desktop's HUD): the desktop's view, and no shift.
+		frame = null;
+		controls.update(1 / 60);
+		expect(controls.goal).toEqual(homeView(HOME, 390 / 844));
+		expect(camera.projectionMatrix.elements[9]).toBe(0);
 	});
 });

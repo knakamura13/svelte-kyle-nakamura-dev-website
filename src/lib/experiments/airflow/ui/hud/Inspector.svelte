@@ -10,6 +10,7 @@
 	import Icon from './Icon.svelte';
 	import { inventory, menuFor } from './inventory';
 	import MenuBody from './MenuBody.svelte';
+	import SheetGrip from './SheetGrip.svelte';
 	import { tooltip } from './tips.svelte';
 	import { useHudUi } from './ui.svelte';
 
@@ -86,7 +87,8 @@
 		<span>Inspector</span>
 	</button>
 {:else}
-	<section id="hud-inspector" class="inspector glass" aria-labelledby="hud-inspector-title" bind:this={panel}>
+	<section id="hud-inspector" class="inspector glass" aria-labelledby="hud-inspector-title" data-sheet={ui.phone ? '' : undefined} bind:this={panel}>
+		{#if ui.phone}<SheetGrip label="the Inspector" onclose={close} />{/if}
 		<header class="head">
 			{#if menu}
 				<button type="button" class="ibtn back" aria-label="Back to everything in the home" onclick={back}><Icon name="chevron-left" size={20} /></button>
@@ -379,11 +381,16 @@
 	}
 	:global(.hud.phone) .inspector {
 		position: fixed;
-		left: 10px;
-		right: 10px;
+		left: calc(10px + env(safe-area-inset-left));
+		right: calc(10px + env(safe-area-inset-right));
 		bottom: calc(86px + env(safe-area-inset-bottom));
 		width: auto;
 		max-height: 62vh;
+		padding-top: 22px;
 		animation-name: hud-rise;
+	}
+	/* At its peek, the title and the first rows; the rest scrolls, or the grabber shows all of it. */
+	:global(.hud.phone[data-sheet-size='peek']) .body {
+		max-height: 112px;
 	}
 </style>
