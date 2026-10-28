@@ -1,4 +1,4 @@
-import { compassWord, describeBearing } from '../../readout';
+import { compassWord, describeBearing } from '../../directionWords';
 
 /**
  * The weather widget's compass dial, as numbers: where a pointer on the dial points, what the keys do, and where the dial draws

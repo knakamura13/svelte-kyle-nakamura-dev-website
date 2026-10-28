@@ -7,7 +7,7 @@ import { effectiveOpenings } from '../../src/lib/experiments/airflow/sim/world';
 import { blankSetup, type DeviceState } from '../../src/lib/experiments/airflow/state';
 
 /**
- * How far open each opening is, as the solver has it. The dollhouse draws from the same function, so a window the solver
+ * How far open each opening is, as the solver has it. The world draws from the same function, so a window the solver
  * holds open is never drawn shut.
  */
 

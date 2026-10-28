@@ -2,7 +2,7 @@
 	import { tick } from 'svelte';
 	import { useAirflow } from '../../experience.svelte';
 	import { powerLabel } from '../../devices/model';
-	import { describeBearing } from '../../readout';
+	import { describeBearing } from '../../directionWords';
 	import type { Target } from '../../state';
 	import { displayRange, formatLength, sliderRange } from '../../units';
 	import { homeContext } from './context';

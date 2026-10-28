@@ -1,4 +1,20 @@
-import { BufferGeometry, Float32BufferAttribute, Group, Mesh, MeshBasicMaterial, Raycaster, Vector2, Vector3, type Material, type PerspectiveCamera } from 'three';
+import {
+	BoxGeometry,
+	BufferGeometry,
+	Float32BufferAttribute,
+	Group,
+	InstancedMesh,
+	Matrix4,
+	Mesh,
+	MeshBasicMaterial,
+	MeshStandardMaterial,
+	Quaternion,
+	Raycaster,
+	Vector2,
+	Vector3,
+	type Material,
+	type PerspectiveCamera
+} from 'three';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
@@ -10,7 +26,7 @@ import { isExterior, type Furniture, type HomePlan, type OpeningSpec } from '../
 import type { DeviceState, Pin, Setup, Target, Tool } from '../state';
 import { DeviceMeshes } from './deviceMeshes';
 import { SLOP_PX } from './input';
-import { RENDER_ORDER } from './sliceLayer';
+import { RENDER_ORDER } from './renderOrder';
 
 /**
  * What a click on the 3D world chooses, for the HUD's context menus and Inspector: a door or window, a fan or purifier, or a Probe.
@@ -63,6 +79,34 @@ export function openingBox(plan: Pick<HomePlan, 'width' | 'depth'>, opening: Ope
 	const u1 = placement.center + width / 2 + margin;
 	return placement.axis === 'x' ? { min: [u0, y0, placement.at - half], max: [u1, y1, placement.at + half] } : { min: [placement.at - half, y0, u0], max: [placement.at + half, y1, u1] };
 }
+
+/**
+ * The box a click takes for a door or window whose wall is cut down to `height` (cutaway, or walls down): what is left of it, the
+ * stretch of the cut wall under its frame from the floor to the cap, through the whole wall, so a click on the cap over a window or on a
+ * door's stub chooses it. Above the cap a ray passes on into the room, as it does over the rest of the cut wall.
+ */
+export function cutOpeningBox(plan: Pick<HomePlan, 'width' | 'depth'>, opening: OpeningSpec, height: number, margin = PICK_MARGIN): Box {
+	const box = openingBox(plan, opening, margin);
+	box.min[1] = 0;
+	box.max[1] = Math.max(0, height) + margin;
+	return box;
+}
+
+/**
+ * The strip that marks a window on the cap of a wall cut down below it, `height` m up: as long as the window's frame is wide and as
+ * deep as the wall, a hair above the cap. A door needs none, since its own stub shows where it is; null for one, and for a window
+ * whose sill is not above the cut.
+ */
+export function cutSill(plan: Pick<HomePlan, 'width' | 'depth'>, opening: OpeningSpec, height: number): Box | null {
+	if (opening.kind === 'door' || opening.kind === 'sliding-door' || opening.sill < height + 0.02) return null;
+	const box = openingBox(plan, opening, 0);
+	box.min[1] = height;
+	box.max[1] = height + SILL_THICKNESS;
+	return box;
+}
+
+/** How thick the strip on a cut wall's cap over a window is, m. */
+const SILL_THICKNESS = 0.012;
 
 /** The top of a device, m above the floor: a pedestal fan's head, or its body. */
 const deviceTop = (model: DeviceModel, device: DeviceState) => (model.kind === 'pedestal-fan' ? device.y + device.height + model.diameter / 2 + 0.02 : device.y + model.body.height);
@@ -134,8 +178,11 @@ export interface PickScene {
 	furniture: boolean;
 	/** The walls as they stand now (their solid parts, each as high as its wall stands): a ray stops at the first it meets. */
 	walls?: readonly Box[];
-	/** A thing that cannot be clicked right now (an Opening whose wall is cut away below it, say). */
-	hidden?: (target: Target) => boolean;
+	/**
+	 * How high an Opening's wall stands, m, when it is cut down below the top of its frame (cutaway, or walls down); null while it stands
+	 * whole. A cut Opening is clicked by what is left of it (`cutOpeningBox`).
+	 */
+	cutAt?: (opening: string) => number | null;
 }
 
 export interface Picked extends Target {
@@ -157,18 +204,23 @@ export function wallDistance(origin: Vec3, direction: Vec3, walls: readonly Box[
 	return nearest;
 }
 
+/** The box a click takes for a door or window as its wall stands now: its whole frame, or what is left of it in a cut wall. */
+export function pickBox(scene: Pick<PickScene, 'plan' | 'cutAt'>, opening: OpeningSpec): Box {
+	const cut = scene.cutAt?.(opening.id) ?? null;
+	return cut === null ? openingBox(scene.plan, opening) : cutOpeningBox(scene.plan, opening, cut);
+}
+
 /**
  * What a ray from the camera (origin, unit direction) takes: the nearest door, window, device or Probe it meets that no piece of
- * furniture and no standing wall is in front of, with a Probe or a device preferred over a window just behind it. `kinds` limits
- * what it looks for.
+ * furniture and no standing wall is in front of, with a Probe or a device preferred over a window just behind it. A door or window in
+ * a wall that is cut down is met at what is left of it, the cap over a window or a door's stub. `kinds` limits what it looks for.
  */
 export function pickTarget(origin: Vec3, direction: Vec3, scene: PickScene, kinds: readonly Target['kind'][] = ['opening', 'device', 'probe']): Picked | null {
 	const hits: Picked[] = [];
 	const consider = (kind: Target['kind'], id: string, distance: number | null) => {
-		if (distance === null || scene.hidden?.({ kind, id })) return;
-		hits.push({ kind, id, distance });
+		if (distance !== null) hits.push({ kind, id, distance });
 	};
-	if (kinds.includes('opening')) for (const opening of scene.plan.openings) consider('opening', opening.id, rayBox(origin, direction, openingBox(scene.plan, opening)));
+	if (kinds.includes('opening')) for (const opening of scene.plan.openings) consider('opening', opening.id, rayBox(origin, direction, pickBox(scene, opening)));
 	if (kinds.includes('device'))
 		for (const device of scene.devices) {
 			const model = scene.models.get(device.model);
@@ -260,10 +312,18 @@ export interface SelectionHost {
 	params: SelectionParams & { setup: Setup; probes: readonly Pin[]; drag: DragPreview | null };
 	/**
 	 * The walls as they stand now: their solid parts stop a ray, so nothing behind a full-height wall is chosen, and an Opening whose wall
-	 * is cut away (`cut`) cannot be chosen either. Absent: picking sees through the walls.
+	 * is cut down (`cut` gives the height it stands at, or null while it is whole) is chosen by what is left of it. Absent: picking sees
+	 * through the walls.
 	 */
-	walls?(): { boxes: readonly Box[]; cut(opening: string): boolean };
+	walls?(): { boxes: readonly Box[]; cut(opening: string): number | null };
 }
+
+/** How close two labels' points may be on the page, CSS px across and up, before one sits on the other: a Room's name and a Probe's "Probe 1 0.4 mph". */
+const LABEL_CLEAR = { x: 150, y: 36 };
+
+/** The window frames' white, for the strips that mark a window on a cut wall's cap, and the most strips a Home has. */
+const SILL_COLOR = 0xf2eee6;
+const MAX_SILLS = 48;
 
 /** The HUD's one accent, and the ghost's two colours. */
 const ACCENT = 0x5fd59a;
@@ -407,12 +467,22 @@ export class Selection {
 	private readonly chosen = outline(ACCENT, 3.5, 1);
 	private readonly under = outline(HOVER, 2, 0.75);
 	private readonly ghost: Ghost;
+	/** The strips on the caps of cut walls over the windows they cut away (`cutSill`): where a click chooses such a window. */
+	private readonly sills = new InstancedMesh(new BoxGeometry(1, 1, 1), new MeshStandardMaterial({ color: SILL_COLOR, roughness: 0.55 }), MAX_SILLS);
+	private readonly matrix = new Matrix4();
+	private readonly scale = new Vector3();
+	private readonly turn = new Quaternion();
+	private sillShape = '';
 	private shapes = { chosen: '', under: '' };
 	private pulse = 0;
 
 	constructor(private readonly host: SelectionHost) {
 		this.ghost = new Ghost(host.models);
-		this.group.add(this.chosen, this.under, this.ghost.group);
+		this.sills.count = 0;
+		this.sills.receiveShadow = true;
+		this.sills.frustumCulled = false;
+		this.sills.name = 'cut-sills';
+		this.group.add(this.chosen, this.under, this.ghost.group, this.sills);
 	}
 
 	private scene(walls = false): PickScene {
@@ -421,9 +491,32 @@ export class Selection {
 		const standing = walls ? this.host.walls?.() : undefined;
 		if (standing) {
 			scene.walls = standing.boxes;
-			scene.hidden = (target) => target.kind === 'opening' && standing.cut(target.id);
+			scene.cutAt = (opening) => standing.cut(opening);
 		}
 		return scene;
+	}
+
+	/** Lays a strip on the cap of each cut wall over every window it cut away, at the height the wall stands now. */
+	private drawSills() {
+		const walls = this.host.walls?.();
+		const plan = this.host.plan();
+		const boxes: Box[] = [];
+		if (walls)
+			for (const opening of plan.openings) {
+				const height = walls.cut(opening.id);
+				const sill = height === null ? null : cutSill(plan, opening, height);
+				if (sill && boxes.length < MAX_SILLS) boxes.push(sill);
+			}
+		const shape = boxes.map((b) => [...b.min, ...b.max].map((n) => n.toFixed(4)).join(',')).join(';');
+		if (shape === this.sillShape) return;
+		this.sillShape = shape;
+		boxes.forEach((b, n) => {
+			this.point.set((b.min[0] + b.max[0]) / 2, (b.min[1] + b.max[1]) / 2, (b.min[2] + b.max[2]) / 2);
+			this.scale.set(b.max[0] - b.min[0], b.max[1] - b.min[1], b.max[2] - b.min[2]);
+			this.sills.setMatrixAt(n, this.matrix.compose(this.point, this.turn, this.scale));
+		});
+		this.sills.count = boxes.length;
+		this.sills.instanceMatrix.needsUpdate = true;
 	}
 
 	/** What is under a point of the Stage, in normalized device coordinates. The camera's matrices must be current, as they are after a frame. */
@@ -449,6 +542,19 @@ export class Selection {
 		const length = Math.hypot(dx, dy, dz);
 		if (length < 1e-6) return false;
 		return wallDistance([origin.x, origin.y, origin.z], [dx / length, dy / length, dz / length], walls.boxes) < length - 1e-3;
+	}
+
+	/**
+	 * Whether a label over `point` would sit on one over any of `others` (a Room's name under a Probe's label, say): their points within
+	 * `LABEL_CLEAR` CSS pixels of each other across and up, the size of two labels side by side.
+	 */
+	crowded(point: Vec3, others: readonly Vec3[]): boolean {
+		const at = this.project(point);
+		if (!at) return false;
+		return others.some((other) => {
+			const there = this.project(other);
+			return !!there && Math.abs(there.x - at.x) < LABEL_CLEAR.x && Math.abs(there.y - at.y) < LABEL_CLEAR.y;
+		});
 	}
 
 	/** Where a point of the Home is on the page, CSS pixels from the viewport's corner, or null behind the camera. */
@@ -486,6 +592,7 @@ export class Selection {
 	update(dt: number, reducedMotion: boolean): boolean {
 		const box = this.host.rect();
 		this.resolution.set(Math.max(1, box.width), Math.max(1, box.height));
+		this.drawSills();
 		const { selection, hovered, drag } = this.host.params;
 		this.draw(this.chosen, 'chosen', selection);
 		const under = hovered && !(selection && hovered.kind === selection.kind && hovered.id === selection.id) ? hovered : null;
@@ -508,6 +615,9 @@ export class Selection {
 			line.geometry.dispose();
 			(line.material as LineMaterial).dispose();
 		}
+		this.sills.geometry.dispose();
+		(this.sills.material as MeshStandardMaterial).dispose();
+		this.sills.dispose();
 		this.group.removeFromParent();
 	}
 }

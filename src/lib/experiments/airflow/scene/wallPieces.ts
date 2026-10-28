@@ -1,7 +1,7 @@
 import { isExterior, type HomePlan, type OpeningSpec, type Wall } from '../homes/types';
 
 /**
- * The dollhouse's walls and openings as plain numbers, so Node can check them: which walls there are, the hole each
+ * The Home's walls and openings as plain numbers, so Node can check them: which walls there are, the hole each
  * door or window cuts, the pieces of wall left around the holes, and where each sash, panel or leaf sits at an open
  * amount. Positions are the solver's (x east, y up, z south, metres). On a wall, u runs along it in the plan's own
  * coordinate (x on a wall running east-west, z on one running north-south), y is height, and n crosses it: world +z

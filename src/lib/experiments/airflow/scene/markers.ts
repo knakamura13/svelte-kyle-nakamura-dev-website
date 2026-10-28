@@ -5,7 +5,7 @@ import type { ProbeReading } from '../readouts';
 import type { Pin, UnitSystem } from '../state';
 import { formatSpeed } from '../units';
 import type { Point3 } from './deviceMath';
-import { RENDER_ORDER } from './sliceLayer';
+import { RENDER_ORDER } from './renderOrder';
 
 const INK = 0x202a24;
 const SMOKE = 0xd9822b;

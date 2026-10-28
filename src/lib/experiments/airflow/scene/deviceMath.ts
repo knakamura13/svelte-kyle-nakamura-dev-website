@@ -3,7 +3,7 @@ import type { ExteriorPlacement, Facade, HomePlan, OpeningSpec } from '../homes/
 import { LIMITS, type DeviceState } from '../state';
 
 /**
- * Pure geometry for placing and aiming Devices in the dollhouse, testable in Node. Scene coordinates are the
+ * Pure geometry for placing and aiming Devices in the Home, testable in Node. Scene coordinates are the
  * solver's, in metres: x east, y up, z south (north is -z), origin at the plan's north-west floor corner. `yaw` is
  * degrees clockwise from north seen from above; `tilt` is degrees up.
  */

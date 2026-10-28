@@ -10,7 +10,7 @@ import { windowSeat } from '../../src/lib/experiments/airflow/scene/deviceMath';
 import type { DeviceState } from '../../src/lib/experiments/airflow/state';
 
 /**
- * The stand-ins for devices in the dollhouse must point and sit where the solver's fans do: a fan the page draws facing
+ * The devices the world draws must point and sit where the solver's fans do: a fan the page draws facing
  * east but pushing north would be a lie. These compare what is drawn (`headPose`) with what `devices/solver.ts` reads
  * (`aimVector`, `headPosition`, `oscillatedYaw`).
  */

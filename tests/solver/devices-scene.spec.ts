@@ -3,7 +3,7 @@ import { OPENING_LIMITS, type HomePlan, type OpeningSpec } from '../../src/lib/e
 import { clampToHome, snapToWindow, tiltFromPointer, windowOpening, wrapDegrees, yawFromPointer } from '../../src/lib/experiments/airflow/scene/deviceMath';
 import { LIMITS, type DeviceState } from '../../src/lib/experiments/airflow/state';
 
-/** The pure math behind placing and aiming Devices in the dollhouse, on a small hand-made plan. */
+/** The pure math behind placing and aiming Devices in the Home, on a small hand-made plan. */
 
 const window = (id: string, kind: OpeningSpec['kind'], placement: OpeningSpec['placement'], anchor: OpeningSpec['anchor'] = 'bottom'): OpeningSpec => ({
 	id,

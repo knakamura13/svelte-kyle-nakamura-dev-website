@@ -97,6 +97,8 @@ export class WallsView {
 	private readonly shadow = uncutShadow();
 	/** Something that casts a shadow moved (a door swung, a sash slid) since the scene last asked: the shadow map is stale. */
 	shadowsChanged = true;
+	/** The standing boxes as of the walls' heights now, or null once a height has moved (`standingBoxes`). */
+	private standing: WallBox[] | null = null;
 
 	constructor(
 		private readonly plan: HomePlan,
@@ -358,23 +360,29 @@ export class WallsView {
 
 	/**
 	 * The walls as they stand now, for picking: each solid part of a wall (its doors and windows are holes) as a box as high as its wall
-	 * stands, so a ray stops at a full-height wall and passes over one that is cut away.
+	 * stands, so a ray stops at a full-height wall and passes over one that is cut away. The scene asks every frame (the compass letters,
+	 * the strips on cut walls' caps), so the boxes are kept until a wall's height moves.
 	 */
-	standingBoxes(): WallBox[] {
+	standingBoxes(): readonly WallBox[] {
+		if (this.standing) return this.standing;
 		const boxes: WallBox[] = [];
 		for (const solid of this.solids) {
 			const top = Math.min(solid.max[1], this.views[solid.wall]?.height ?? solid.max[1]);
 			if (top <= solid.min[1] + 1e-3) continue;
 			boxes.push({ min: solid.min, max: [solid.max[0], top, solid.max[2]] });
 		}
+		this.standing = boxes;
 		return boxes;
 	}
 
-	/** Whether an Opening's wall stands lower than the top of its frame now (cut away, or down), so the Opening is not whole and cannot be chosen. */
-	openingCut(id: string): boolean {
+	/**
+	 * How high an Opening's wall stands now, m, when that is lower than the top of its frame (cut away, or down), so the Opening is not
+	 * whole and is chosen by what is left of it (`selection.ts`); null while its wall stands whole.
+	 */
+	openingCut(id: string): number | null {
 		const found = this.openingWalls.get(id);
-		if (!found) return false;
-		return (this.views[found.wall]?.height ?? Infinity) < found.top - 0.01;
+		const height = found ? this.views[found.wall]?.height : undefined;
+		return found && height !== undefined && height < found.top - 0.01 ? height : null;
 	}
 
 	/** Once a frame: eases every wall toward its height (all at once when `instant`). Returns true while any is still moving. */
@@ -386,6 +394,7 @@ export class WallsView {
 				view.height += (view.goal - view.height) * k;
 				if (Math.abs(view.goal - view.height) < 0.002) view.height = view.goal;
 				else easing = true;
+				this.standing = null;
 			}
 			if (Math.abs(view.height - view.applied) > 0.0005 || (view.height === view.goal && view.applied !== view.goal)) {
 				view.applied = view.height;

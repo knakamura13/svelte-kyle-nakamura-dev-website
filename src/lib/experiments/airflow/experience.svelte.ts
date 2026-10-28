@@ -4,7 +4,7 @@ import { newDevice } from './devices/placement';
 import { deviceAt, placeAt } from './devices/surfaces';
 import type { DeviceModel } from './devices/types';
 import type { HomePlan, PlanId } from './homes/types';
-import { describeBearing } from './readout';
+import { describeBearing } from './directionWords';
 import { emptyReadout, type AirflowReadout } from './readouts';
 import type { Scenario } from './scenarios';
 import type { DragPreview } from './scene/selection';

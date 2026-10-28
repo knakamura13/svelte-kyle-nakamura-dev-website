@@ -4,7 +4,7 @@ import { clay, disposeTree } from '$lib/experiments/engine/kit';
 import { aimVector, oscillatedYaw } from '../devices/model';
 import type { DeviceModel, FanModel } from '../devices/types';
 import type { DeviceState } from '../state';
-import { RENDER_ORDER } from './sliceLayer';
+import { RENDER_ORDER } from './renderOrder';
 
 /** The body's colors, and the cue that a fan is running. */
 const BODY = 0x4a5651;

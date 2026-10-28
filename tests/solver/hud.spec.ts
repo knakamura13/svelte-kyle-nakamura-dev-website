@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { PerspectiveCamera } from 'three';
 import { DEVICE_MODELS } from '../../src/lib/experiments/airflow/devices/catalog';
 import { deviceDefaults } from '../../src/lib/experiments/airflow/devices/placement';
 import { newDevice } from '../../src/lib/experiments/airflow/devices/placement';
@@ -6,11 +7,11 @@ import { plans } from '../../src/lib/experiments/airflow/homes/plans';
 import { isExterior, type HomePlan, type OpeningSpec } from '../../src/lib/experiments/airflow/homes/types';
 import { Home } from '../../src/lib/experiments/airflow/scene/look/home';
 import { Materials } from '../../src/lib/experiments/airflow/scene/look/materials';
-import { anchorOf, deviceBox, openingBox, pickTarget, rayBox, wallDistance, type PickScene, type Vec3 } from '../../src/lib/experiments/airflow/scene/selection';
-import type { WallMode } from '../../src/lib/experiments/airflow/scene/walls/cutaway';
-import { LIMITS, type DeviceState } from '../../src/lib/experiments/airflow/state';
+import { Selection, anchorOf, cutSill, deviceBox, openingBox, pickTarget, rayBox, wallDistance, type PickScene, type Vec3 } from '../../src/lib/experiments/airflow/scene/selection';
+import { CUT_HEIGHT, DOWN_HEIGHT, type WallMode } from '../../src/lib/experiments/airflow/scene/walls/cutaway';
+import { LIMITS, blankSetup, type DeviceState } from '../../src/lib/experiments/airflow/state';
 import { formatSpeed } from '../../src/lib/experiments/airflow/units';
-import { vectorToBearing } from '../../src/lib/experiments/airflow/readout';
+import { vectorToBearing } from '../../src/lib/experiments/airflow/directionWords';
 import { carryHint, isClick, turnCarried } from '../../src/lib/experiments/airflow/ui/hud/carry';
 import { cardLines, inTab, towardMiddle } from '../../src/lib/experiments/airflow/ui/hud/catalog';
 import { bearingFromPointer, dialPoint, dialRotation, snapBearing, stepBearing, windWords } from '../../src/lib/experiments/airflow/ui/hud/compass';
@@ -18,7 +19,7 @@ import { ROOM_TINTS, homeCard, planThumbnail } from '../../src/lib/experiments/a
 import { inventory, menuFor, openingState, powerState, probeCards, targetWords, type HomeContext } from '../../src/lib/experiments/airflow/ui/hud/inventory';
 import { placeCard } from '../../src/lib/experiments/airflow/ui/hud/layout';
 import { deviceMenu, openingMenu } from '../../src/lib/experiments/airflow/ui/hud/menus';
-import { AIR_PRESETS, WIND_PRESETS, activePreset, airPreset, stepValue, WINDOW_PRESETS } from '../../src/lib/experiments/airflow/ui/hud/presets';
+import { AIR_PRESETS, BEAUFORT, KNOT, PM25_AQI, WIND_PRESETS, activePreset, airPreset, aqiCategory, beaufortForce, stepValue, WINDOW_PRESETS } from '../../src/lib/experiments/airflow/ui/hud/presets';
 import { OVERLAYS, overlayOfLayer } from '../../src/lib/experiments/airflow/ui/hud/tools';
 
 /** The HUD's pure parts (milestone 3 of the immersive redesign): the compass dial, the presets, the card placement, the menu models and picking. */
@@ -75,6 +76,72 @@ test.describe('presets', () => {
 		}
 		expect(activePreset(WINDOW_PRESETS, 0.5)?.id).toBe('half');
 		expect(activePreset(WINDOW_PRESETS, 0.3)).toBeNull();
+	});
+
+	test('each outdoor air preset is in the AQI category it names, by the EPA’s PM2.5 breakpoints (May 2026 TAD, Table 6)', () => {
+		// The published table, transcribed: the top of each category, µg/m³, 24-hour mean.
+		expect(PM25_AQI.map((band) => [band.category, band.upTo])).toEqual([
+			['Good', 9.0],
+			['Moderate', 35.4],
+			['Unhealthy for Sensitive Groups', 55.4],
+			['Unhealthy', 125.4],
+			['Very Unhealthy', 225.4],
+			['Hazardous', Infinity]
+		]);
+		expect(PM25_AQI.map((band) => band.aqi)).toEqual([
+			[0, 50],
+			[51, 100],
+			[101, 150],
+			[151, 200],
+			[201, 300],
+			[301, 500]
+		]);
+		// The edges: a concentration is truncated to one decimal, and Hazardous goes on past the AQI's 500 (325.4 µg/m³).
+		expect([9.0, 9.05, 9.1, 35.4, 35.49, 35.5, 125.5, 225.4, 225.5, 325.4, 500].map(aqiCategory)).toEqual([
+			'Good',
+			'Good',
+			'Moderate',
+			'Moderate',
+			'Moderate',
+			'Unhealthy for Sensitive Groups',
+			'Very Unhealthy',
+			'Very Unhealthy',
+			'Hazardous',
+			'Hazardous',
+			'Hazardous'
+		]);
+		for (const preset of AIR_PRESETS) expect(aqiCategory(preset.value), preset.id).toBe(preset.category);
+		expect(AIR_PRESETS.map((preset) => preset.category)).toEqual(['Good', 'Moderate', 'Very Unhealthy', 'Hazardous']);
+	});
+
+	test('each wind preset is its Beaufort force’s mean on the control’s step, and inside that force’s limits', () => {
+		// The published scale in knots (NWS Storm Prediction Center; the Met Office gives the same limits and the means).
+		expect(Object.values(BEAUFORT).map((band) => [band.force, band.knots[0], band.knots[1], band.mean])).toEqual([
+			[0, 0, 0.99, 0],
+			[1, 1, 3, 2],
+			[2, 4, 6, 5],
+			[3, 7, 10, 9],
+			[4, 11, 16, 13],
+			[5, 17, 21, 19],
+			[6, 22, 27, 24],
+			[7, 28, 33, 30]
+		]);
+		close(KNOT, 0.514444, 6);
+		expect(WIND_PRESETS.map((preset) => [preset.id, preset.label, preset.value])).toEqual([
+			['calm', 'Calm', 0],
+			['light', 'Light breeze', 2.5],
+			['gentle', 'Gentle breeze', 4.5],
+			['fresh', 'Fresh breeze', 10],
+			['strong', 'Strong breeze', 12.5]
+		]);
+		for (const preset of WIND_PRESETS) {
+			expect(beaufortForce(preset.value), preset.id).toBe(preset.force);
+			const band = Object.values(BEAUFORT).find((b) => b.force === preset.force)!;
+			// The mean, in m/s, is within half a step of the preset.
+			expect(Math.abs(band.mean * KNOT - preset.value), preset.id).toBeLessThanOrEqual(0.25);
+		}
+		// A speed is rounded to whole knots first, so a force begins half a knot below its lowest whole knot.
+		expect([0, 0.25, 0.6, 1.5, 3.4, 5.6, 8.6, 11.5, 14.5, 20].map(beaufortForce)).toEqual([0, 0, 1, 1, 3, 4, 5, 6, 7, 8]);
 	});
 
 	test('a stepper moves one step of the visitor’s units and stops at the limits', () => {
@@ -220,10 +287,25 @@ test.describe('picking in the 3D world', () => {
 	function wallsIn(home: Home, mode: WallMode, look = { camera: { x: 1, z: 1 }, focus: { x: 2, z: 2 }, zoom: 0.2 }) {
 		home.update(look, mode, 0, true);
 		const { walls } = home;
-		return { walls: walls.standingBoxes(), hidden: (target: { kind: string; id: string }) => target.kind === 'opening' && walls.openingCut(target.id) };
+		return { walls: walls.standingBoxes(), cutAt: (opening: string) => walls.openingCut(opening) };
 	}
 
-	test('a click stops at a wall that stands and passes over one that is cut down, and a door or window in a cut wall cannot be chosen', () => {
+	/** A ray from above the room's side of an Opening, down at the middle of its wall's cap when the wall stands `height` m high. */
+	function rayAtCap(plan: HomePlan, opening: OpeningSpec, height: number): { origin: Vec3; direction: Vec3 } {
+		const [x, , z] = anchorOf({ kind: 'opening', id: opening.id }, { plan, devices: [], models, probes: [] })!;
+		const { placement } = opening;
+		// Half a wall's thickness to the outside of an outside wall's line, since outside walls stand outside the footprint.
+		const out = isExterior(placement) ? { north: [0, -0.1], south: [0, 0.1], west: [-0.1, 0], east: [0.1, 0] }[placement.facade] : [0, 0];
+		const target: Vec3 = [x + out[0], height, z + out[1]];
+		// From 1.2 m up and 1 m into the room, which is south of a north wall, and so on; an inside wall's room is either side.
+		const into = isExterior(placement) ? { north: [0, 1], south: [0, -1], west: [1, 0], east: [-1, 0] }[placement.facade] : placement.axis === 'x' ? [0, 1] : [1, 0];
+		const origin: Vec3 = [target[0] + into[0], height + 1.2, target[2] + into[1]];
+		const d: Vec3 = [target[0] - origin[0], target[1] - origin[1], target[2] - origin[2]];
+		const length = Math.hypot(...d);
+		return { origin, direction: [d[0] / length, d[1] / length, d[2] / length] };
+	}
+
+	test('a click stops at a wall that stands and passes over one that is cut down, and a door or window in a cut wall is chosen by its cut', () => {
 		const plan = plans.find((p) => p.id === 'two-bedroom')!;
 		const home = new Home(plan, new Materials(1, null), null, { furniture: false });
 		// From the bathroom, at eye height, toward a Probe in Bedroom 2 behind the wall between them (no door in it there).
@@ -238,31 +320,87 @@ test.describe('picking in the 3D world', () => {
 		// Without the walls (as before they were handed over) the Probe was taken through the wall.
 		expect(pickTarget(origin, direction, { plan, devices: [], models, probes: [pin], furniture: false })?.id).toBe('p1');
 
-		// Walls up, every door and window is whole and can be chosen from its room; walls down, none of them can.
+		// Walls up, every door and window is whole and can be chosen from its room. Walls down, a ray at its middle passes over the low
+		// wall, but one at the wall's cap where it was (a window's sill strip, or a door's stub) still chooses it.
 		for (const opening of plan.openings) {
 			const { origin: at, direction: toward } = rayAt(plan, opening);
 			expect(pickTarget(at, toward, scene('up'), ['opening'])?.id, `${opening.id}, walls up`).toBe(opening.id);
-			expect(home.walls.openingCut(opening.id), `${opening.id}, walls up`).toBe(false);
-			expect(pickTarget(at, toward, scene('down'), ['opening']), `${opening.id}, walls down`).toBeNull();
-			expect(home.walls.openingCut(opening.id), `${opening.id}, walls down`).toBe(true);
+			expect(home.walls.openingCut(opening.id), `${opening.id}, walls up`).toBeNull();
+			expect(pickTarget(at, toward, scene('down'), ['opening'])?.id ?? null, `${opening.id}, walls down, at the frame's middle`).not.toBe(opening.id);
+			expect(home.walls.openingCut(opening.id), `${opening.id}, walls down`).toBeCloseTo(DOWN_HEIGHT, 6);
+			const cap = rayAtCap(plan, opening, DOWN_HEIGHT);
+			expect(pickTarget(cap.origin, cap.direction, scene('down'), ['opening'])?.id, `${opening.id}, walls down, at its cap`).toBe(opening.id);
+			// A window's place on the cap is marked; a door shows its own stub.
+			const sill = cutSill(plan, opening, DOWN_HEIGHT);
+			if (opening.kind === 'door' || opening.kind === 'sliding-door') expect(sill, opening.id).toBeNull();
+			else {
+				expect(sill!.min[1]).toBeCloseTo(DOWN_HEIGHT, 6);
+				expect(sill!.max[1] - sill!.min[1]).toBeLessThan(0.02);
+				expect(Math.max(sill!.max[0] - sill!.min[0], sill!.max[2] - sill!.min[2])).toBeCloseTo(opening.width, 6);
+			}
+			expect(cutSill(plan, opening, plan.ceiling), `${opening.id}: no strip once the wall stands above the sill`).toBeNull();
 		}
 		home.dispose();
 	});
 
-	test('in cutaway, the wall between the camera and the room drops and its windows cannot be chosen, while the far walls keep theirs', () => {
+	test('in cutaway, the wall between the camera and the room drops and its windows are chosen from the world by their place on its cap', () => {
 		const plan = plans.find((p) => p.id === 'two-bedroom')!;
 		const home = new Home(plan, new Materials(1, null), null, { furniture: false });
 		// At eye level outside the west wall, looking east into the living room: the west wall is cut, the walls beyond stand.
 		const look = { camera: { x: -2, z: 5.4 }, focus: { x: 2.4, z: 5.4 }, zoom: 0.1 };
-		const { walls, hidden } = wallsIn(home, 'cutaway', look);
+		const { walls, cutAt } = wallsIn(home, 'cutaway', look);
 		const west = plan.openings.filter((o) => 'facade' in o.placement && o.placement.facade === 'west');
 		expect(west.length).toBeGreaterThan(0);
-		for (const opening of west) expect(hidden({ kind: 'opening', id: opening.id }), `${opening.id} is in the cut wall`).toBe(true);
+		for (const opening of west) expect(cutAt(opening.id), `${opening.id} is in the cut wall`).toBeCloseTo(CUT_HEIGHT, 6);
 		const east = plan.openings.filter((o) => 'facade' in o.placement && o.placement.facade === 'east');
-		for (const opening of east) expect(hidden({ kind: 'opening', id: opening.id }), `${opening.id} stands`).toBe(false);
-		// The camera looks over the cut wall into the room: nothing stops the ray before the room.
+		for (const opening of east) expect(cutAt(opening.id), `${opening.id} stands`).toBeNull();
+		// The camera looks over the cut wall into the room: nothing stops the ray before the room, and it chooses no window on the way.
 		const origin: Vec3 = [-2, 1.6, 5.4];
 		expect(wallDistance(origin, [1, 0, 0], walls)).toBeGreaterThan(2.2);
+		const scene: PickScene = { plan, devices: [], models, probes: [], furniture: false, walls, cutAt };
+		for (const opening of west) {
+			const { placement } = opening as { placement: { center: number } };
+			expect(pickTarget([-2, 1.6, placement.center], [1, 0, 0], scene, ['opening']), `${opening.id}: over its cut wall`).toBeNull();
+			// From the camera, down at the cap where the window was: the window, whose menu then opens beside it.
+			const target: Vec3 = [-0.1, CUT_HEIGHT, placement.center];
+			const d: Vec3 = [target[0] - origin[0], target[1] - origin[1], target[2] - origin[2]];
+			const length = Math.hypot(...d);
+			expect(pickTarget(origin, [d[0] / length, d[1] / length, d[2] / length], scene, ['opening'])?.id, `${opening.id}: at its place on the cap`).toBe(opening.id);
+			// What is drawn there: a strip the window's width on the cap, the depth of the wall.
+			const sill = cutSill(plan, opening, CUT_HEIGHT)!;
+			expect(sill.min).toEqual([-0.2, CUT_HEIGHT, expect.closeTo(placement.center - opening.width / 2, 9)]);
+			expect(sill.max).toEqual([0, expect.closeTo(CUT_HEIGHT + 0.012, 9), expect.closeTo(placement.center + opening.width / 2, 9)]);
+		}
+		home.dispose();
+	});
+
+	test('a Room’s name gives way to a Probe’s label on top of it, and a compass letter behind a standing wall is hidden', () => {
+		const plan = plans.find((p) => p.id === 'two-bedroom')!;
+		const home = new Home(plan, new Materials(1, null), null, { furniture: false });
+		// The default view's kind of camera: south-west of the Home, well out and looking down at its middle.
+		const camera = new PerspectiveCamera(45, 1440 / 900, 0.05, 600);
+		camera.position.set(-2, 9, 15);
+		camera.lookAt(plan.width / 2, 0, plan.depth / 2);
+		camera.updateMatrixWorld();
+		const look = { camera: { x: -2, z: 15 }, focus: { x: plan.width / 2, z: plan.depth / 2 }, zoom: 0.9 };
+		home.update(look, 'cutaway', 0, true);
+		const selection = new Selection({
+			camera,
+			rect: () => ({ left: 0, top: 0, width: 1440, height: 900 }) as DOMRect,
+			plan: () => plan,
+			models,
+			params: { tool: 'select', selection: null, hovered: null, select: () => {}, hover: () => {}, setup: blankSetup(plan.id), probes: [], drag: null },
+			walls: () => ({ boxes: home.walls.standingBoxes(), cut: (id) => home.walls.openingCut(id) })
+		});
+		const living = home.roomAnchors.find((anchor) => anchor.id === 'living')!.position;
+		const room: Vec3 = [living.x, living.y, living.z];
+		expect(selection.crowded(room, [[living.x + 0.2, 1.2, living.z]]), 'a Probe at the middle of the room').toBe(true);
+		expect(selection.crowded(room, [[living.x + 2.5, 1.2, living.z]]), 'one across the room').toBe(false);
+		expect(selection.crowded(room, []), 'no Probes').toBe(false);
+		// North of the Home, 1.8 m out, the letter N is behind the north wall, which stands; S, in front of the cut south wall, is not.
+		expect(selection.walled({ x: plan.width / 2, y: 0, z: -1.8 }), 'N').toBe(true);
+		expect(selection.walled({ x: plan.width / 2, y: 0, z: plan.depth + 1.8 }), 'S').toBe(false);
+		selection.dispose();
 		home.dispose();
 	});
 });

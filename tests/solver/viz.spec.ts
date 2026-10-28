@@ -1,9 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { legendFor } from '../../src/lib/experiments/airflow/viz/legend';
 import { PALETTES, STOPS, colorFor, headingRim, hexToRgb, rgbToOklab, sampleLut, scaleFraction, type Rgb } from '../../src/lib/experiments/airflow/viz/palettes';
-import { ARROW_SPACING, DirectionArrows } from '../../src/lib/experiments/airflow/scene/arrows';
-import { sampleAt } from '../../src/lib/experiments/airflow/scene/sliceLayer';
-import type { Slice } from '../../src/lib/experiments/airflow/solver/types';
 
 /** OKLab lightness of entry i of a lookup. */
 const lightness = (lut: Uint8Array, i: number) => rgbToOklab([lut[4 * i] / 255, lut[4 * i + 1] / 255, lut[4 * i + 2] / 255])[0];
@@ -78,45 +75,4 @@ test('a narrow legend thins its ticks evenly and keeps the ends; the baseline la
 	}
 	const celsius = legendFor('temperature', { ...options, baseline: 0, format, units: { temperature: { scale: 1, offset: 21 } } });
 	expect(celsius.ticks.map((tick) => tick.value + 21)).toEqual([16, 18, 20, 22, 24, 26]);
-});
-
-test('sampleAt interpolates over air only and reports furniture as not air', () => {
-	const nx = 4;
-	const nz = 2;
-	const fill = (v: number) => new Float32Array(nx * nz).fill(v);
-	const slice: Slice = { nx, nz, h: 0.1, y: 1.05, u: fill(1), v: fill(0), w: fill(0), speed: fill(1), theta: fill(2), particulates: fill(0), fluid: new Uint8Array(nx * nz).fill(1) };
-	slice.fluid[1] = 0;
-	slice.speed[1] = 99;
-	// Inside cell 0, whose bilinear neighbour (cell 1) is furniture and must not count.
-	const inAir = sampleAt(slice, 0.06, 0.05);
-	expect(inAir.air).toBe(true);
-	expect(inAir.speed).toBeCloseTo(1, 6);
-	expect(sampleAt(slice, 0.15, 0.05).air).toBe(false);
-});
-
-/** A slice of uniform flow: `u` east and `w` south, m/s, all air. */
-function uniformFlow(u: number, w: number): Slice {
-	const nx = 40;
-	const nz = 24;
-	const fill = (v: number) => new Float32Array(nx * nz).fill(v);
-	return { nx, nz, h: 0.3, y: 1.05, u: fill(u), v: fill(0), w: fill(w), speed: fill(Math.hypot(u, w)), theta: fill(0), particulates: fill(0), fluid: new Uint8Array(nx * nz).fill(1) };
-}
-
-test('arrows point along the flow (x east, z south), and a larger spacing draws fewer', () => {
-	const options = { sensitivity: 1, baseline: 0 };
-	const dense = new DirectionArrows(12, 7.2);
-	const sparse = new DirectionArrows(12, 7.2, 2 * ARROW_SPACING);
-	expect(sparse.mesh.instanceMatrix.count).toBeLessThan(dense.mesh.instanceMatrix.count / 3);
-	// The first column of an instance's matrix is where the glyph's tip axis points, scaled to the arrow's length.
-	const matrix = dense.mesh.instanceMatrix.array;
-	dense.update(uniformFlow(1, 0), options);
-	expect(dense.mesh.count).toBeGreaterThan(0);
-	expect(matrix[0]).toBeGreaterThan(0.1);
-	expect(Math.abs(matrix[1])).toBeLessThan(1e-6);
-	expect(Math.abs(matrix[2])).toBeLessThan(1e-6);
-	dense.update(uniformFlow(0, 1), options);
-	expect(Math.abs(matrix[0])).toBeLessThan(1e-6);
-	expect(matrix[2]).toBeGreaterThan(0.1);
-	dense.dispose();
-	sparse.dispose();
 });

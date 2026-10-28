@@ -57,8 +57,9 @@ export class StageController {
 	private readonly resizes: ResizeObserver;
 
 	constructor(private readonly factories: SceneRegistry) {
+		// Tenths, and the hand-off's own share, so a Stage is told the moment it crosses `VISIBLE` rather than at the next tenth.
 		this.seen = new IntersectionObserver(this.onSeen, {
-			threshold: Array.from({ length: 11 }, (_, i) => i / 10)
+			threshold: [...Array.from({ length: 11 }, (_, i) => i / 10), VISIBLE].sort((a, b) => a - b)
 		});
 		this.near = new IntersectionObserver(this.onNear, { rootMargin: '90% 0px' });
 		this.resizes = new ResizeObserver(this.onResize);

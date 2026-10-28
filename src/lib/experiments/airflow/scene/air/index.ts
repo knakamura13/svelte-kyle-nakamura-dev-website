@@ -3,6 +3,7 @@ import type { World } from '../../sim/world';
 import type { Volume } from '../../solver/volume';
 import type { OverlayId } from '../../state';
 import type { QualityTier } from '../look/quality';
+import { RENDER_ORDER } from '../renderOrder';
 import { DepthPrepass } from './depth';
 import { AirFields } from './fields';
 import { MarchTarget } from './march';
@@ -116,8 +117,8 @@ export function createAir(options: AirOptions): Air {
 	overlay.mesh.renderOrder = 0;
 	smoke.mesh.renderOrder = 1;
 	march.scene.add(overlay.mesh, smoke.mesh);
-	march.composite.renderOrder = 15;
-	streaks.mesh.renderOrder = 17;
+	march.composite.renderOrder = RENDER_ORDER.march;
+	streaks.mesh.renderOrder = RENDER_ORDER.streaks;
 	group.add(march.composite, streaks.mesh);
 
 	let world: World | null = null;
@@ -140,7 +141,7 @@ export function createAir(options: AirOptions): Air {
 		const low = tier === 'low';
 		if (low && !puffs) {
 			puffs = new SmokePuffs(fields, precise);
-			puffs.mesh.renderOrder = 16;
+			puffs.mesh.renderOrder = RENDER_ORDER.puffs;
 			group.add(puffs.mesh);
 			if (fields.newest && world) puffs.births(fields.newest, world.raster);
 		} else if (!low && puffs) {
@@ -238,6 +239,8 @@ export function createAir(options: AirOptions): Air {
 			}
 			const blend = fields.tick(now);
 			pending = Math.min(0.1, pending + Math.max(0, dt));
+			// The smoke's detail rides the air as the streaks do, and holds still with them while the clock is paused.
+			smoke.advance(dt);
 			if (++sinceLights >= LIGHT_REFRESH || (lights.sun && !lights.sun.parent)) {
 				lights = findLights(scene, options.sun);
 				sinceLights = 0;

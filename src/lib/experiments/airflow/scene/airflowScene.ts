@@ -9,7 +9,7 @@ import { chooseBackend } from '../sim/backends';
 import { cellFromSearch, detectSmallDevice } from '../sim/device';
 import { SimulationSession, type SessionParams } from '../sim/session';
 import { effectiveOpenings } from '../sim/world';
-import type { OverlayId, View } from '../state';
+import { MAX_PINS, type OverlayId, type View } from '../state';
 import { createAir } from './air';
 import { FOV, SimsCamera } from './camera/controls';
 import { openingFor } from './camera/opening';
@@ -74,7 +74,9 @@ export interface AirflowSceneParams extends SessionParams, SelectionParams {
 interface House {
 	plan: HomePlan;
 	home: Home;
-	labels: Label[];
+	/** Each Room's name, and the four compass letters round the Home. */
+	rooms: Label[];
+	compass: Label[];
 }
 
 /**
@@ -123,11 +125,12 @@ export function createAirflowScene(host: WorldHost, params: AirflowSceneParams, 
 		const home = new Home(plan, materials, host.assets, { furniture: params.setup.furniture });
 		scene.add(home.group);
 		lighting.fit(home.bounds);
-		const labels: Label[] = home.roomAnchors.map((anchor) => {
+		const rooms: Label[] = home.roomAnchors.map((anchor) => {
 			const label = host.labels.add({ name: anchor.name, tone: 'room', side: 'above' });
 			label.position.copy(anchor.position);
 			return label;
 		});
+		const compass: Label[] = [];
 		const letters: [string, number, number][] = [
 			['N', plan.width / 2, -COMPASS_OFFSET],
 			['E', plan.width + COMPASS_OFFSET, plan.depth / 2],
@@ -137,13 +140,13 @@ export function createAirflowScene(host: WorldHost, params: AirflowSceneParams, 
 		for (const [name, x, z] of letters) {
 			const label = host.labels.add({ name, tone: 'compass', side: 'above' });
 			label.position.set(x, 0, z);
-			labels.push(label);
+			compass.push(label);
 		}
-		return { plan, home, labels };
+		return { plan, home, rooms, compass };
 	}
 
 	function disposeHouse(old: House) {
-		for (const label of old.labels) host.labels.remove(label);
+		for (const label of [...old.rooms, ...old.compass]) host.labels.remove(label);
 		old.home.dispose();
 	}
 
@@ -194,7 +197,7 @@ export function createAirflowScene(host: WorldHost, params: AirflowSceneParams, 
 	});
 	scene.add(editor.group);
 	// The HUD: what a click chooses, the outlines of the chosen and hovered things, the carried ghost, where a menu hangs, and clicks that
-	// follow the tool. A click stops at a wall that stands, and an Opening in a wall that is cut away cannot be chosen.
+	// follow the tool. A click stops at a wall that stands, and an Opening in a wall that is cut away is chosen at its cut.
 	const selection = new Selection({
 		camera,
 		rect: host.rect,
@@ -235,6 +238,7 @@ export function createAirflowScene(host: WorldHost, params: AirflowSceneParams, 
 			readout.hover = reading;
 		},
 		pin: (point) => params.pin(point),
+		full: () => params.probes.length >= MAX_PINS,
 		unpin: (id) => params.unpin(id, true),
 		emit: (point) => {
 			session.setEmitPoint(point);
@@ -319,7 +323,10 @@ export function createAirflowScene(host: WorldHost, params: AirflowSceneParams, 
 			}
 			const easing = home.update(look(), view.walls, dt, reduced);
 			const named = controls.state.zoom > LABEL_ZOOM;
-			for (const label of house.labels) label.enabled = named;
+			// A Room's name gives way to a Probe's label that would sit on it, and a compass letter hides behind a wall that stands.
+			const pins = params.probes.map((p): [number, number, number] => [p.x, p.y + 0.1, p.z]);
+			for (const label of house.rooms) label.enabled = named && !selection.crowded(label.position.toArray(), pins);
+			for (const label of house.compass) label.enabled = named && !selection.walled(label.position);
 
 			// The newest volume, but only once it is of this home. No plane is drawn: the air fills the rooms instead (`air/`). The slice
 			// is still read, for the hover readout and the height a probe or a puff of smoke is placed at.

@@ -265,6 +265,20 @@ test.describe('the controls', () => {
 		expect(sky.flyTo({ x: 0, y: 0.9 }), 'the sky is not a place to go').toBe(false);
 	});
 
+	test('a pinch zooms in fine steps, and one notch of a wheel with Ctrl held does not take the zoom from one end to the other', () => {
+		const { controls } = rig();
+		controls.jumpTo({ zoom: 1 });
+		controls.wheel({ deltaY: -200, deltaMode: 0, ctrlKey: true, metaKey: false });
+		expect(controls.goal.zoom, 'one Ctrl notch of 200 px').toBeGreaterThan(0.8);
+		controls.jumpTo({ zoom: 0.5 });
+		controls.wheel({ deltaY: 6, deltaMode: 0, ctrlKey: true, metaKey: false });
+		expect(controls.goal.zoom, 'a pinch step out').toBeCloseTo(0.5 + 6 * 0.009, 9);
+		// A whole pinch, many small steps, still crosses the range.
+		controls.jumpTo({ zoom: 1 });
+		for (let i = 0; i < 40; i++) controls.wheel({ deltaY: -4, deltaMode: 0, ctrlKey: true, metaKey: false });
+		expect(controls.goal.zoom).toBeLessThan(0.1);
+	});
+
 	test('pan with WASD and the arrows, turn with Q and E, and go back to the default view with Home', () => {
 		const { controls } = rig();
 		settle(controls);
