@@ -18,11 +18,11 @@ const DEG = Math.PI / 180;
 /**
  * Where the drift ends, relative to the living room's middle: the camera south-south-east of it, looking 28 degrees west of north
  * across the room, so the two west windows are on the left with the air coming in through them and spreading across the floor to the
- * right, at zoom 0.6 (a little over half way from eye level to bird's-eye), looking down 2 degrees more than that zoom does, over the
- * tall furniture by the south wall. Picked from screenshots of the Two-bedroom at 1440 by 900
- * (`?camera=2.0,5.0,332,0.6,2`).
+ * right, at zoom 0.6 (a little over half way from eye level to bird's-eye), looking down 12 degrees more than that zoom does, over the
+ * bookcase by the south wall. Picked from screenshots of the Two-bedroom at 1440 by 900 (`?camera=2.0,5.0,332,0.6,12`); at check-in 3
+ * it looked down 2 degrees more, and the bookcase hid twice as much of the south window's air.
  */
-export const OPENING_END = { dx: -0.4, dz: -0.4, heading: 332, zoom: 0.6, tilt: 2 } as const;
+export const OPENING_END = { dx: -0.4, dz: -0.4, heading: 332, zoom: 0.6, tilt: 12 } as const;
 /** On a screen taller than it is wide the room needs a little more distance to fit across. */
 const PORTRAIT_ZOOM = 0.72;
 
