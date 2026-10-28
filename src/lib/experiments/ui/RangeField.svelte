@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { useExperience } from '../engine/experience.svelte';
 
 	let {
@@ -31,6 +32,18 @@
 
 	const experience = useExperience();
 	const fill = $derived(`${((value - min) / (max - min)) * 100}%`);
+	// The number rendered into the server HTML. A change before hydration updates the
+	// control and is not replayed as an input event, so capture it before bind:value adopts it.
+	const rendered = value;
+
+	onMount(() => {
+		const field = document.getElementById(id);
+		const current = field instanceof HTMLInputElement ? field.valueAsNumber : NaN;
+		// Ignore the browser snapping an off-step value. A real change moves by at least one step.
+		if (describe && !Number.isNaN(current) && Math.abs(current - rendered) > step / 2) {
+			experience.announce(describe(current));
+		}
+	});
 </script>
 
 <div class="field">

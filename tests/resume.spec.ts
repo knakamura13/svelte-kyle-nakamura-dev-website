@@ -8,7 +8,7 @@ const progress = (page: Page) =>
 		})
 	);
 const scrollTo = async (page: Page, y: number | 'end') => {
-	await page.evaluate((target) => scrollTo(0, target === 'end' ? document.documentElement.scrollHeight : target), y);
+	await page.evaluate((target) => window.scrollTo(0, target === 'end' ? document.documentElement.scrollHeight : target), y);
 	await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
 };
 const progressAnimations = (page: Page) =>

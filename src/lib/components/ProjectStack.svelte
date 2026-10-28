@@ -38,7 +38,8 @@
 	.stack-foods .stack-face { background:var(--peach); }
 	.stack-foods img { mix-blend-mode:multiply; }
 	.hangul { display:block; font-size:62px; line-height:1.25; color:#31533b; letter-spacing:-.07em; margin:5px 0 9px; }
-	.hangul>span { color:#89a879; }
+	.hangul>span { color:#89a879; transition:color 180ms var(--ease); }
+	:global(a.stack-card[data-active]) .hangul>span { color:#31533b; }
 	@media(min-width:701px) {
 		.project-stack { height:500px; margin-top:12px; }
 		.stack-korean { left:5%; top:15px; width:82%; height:315px; transform:rotate(-3deg); }

@@ -12,6 +12,7 @@
 	stroke-linejoin="round"
 	aria-hidden="true"
 	focusable="false"
+	data-arrow={direction}
 >
 	{#if direction === 'up-right'}
 		<path d="M4.5 15.5 15.5 4.5M5.5 4.5h10v10" />
