@@ -299,6 +299,12 @@ The same burst from check-in 2's pose, measured as the mean brightness change ov
 - **The eye-level streaks show the air across the room again.** Near the eye they fade in from 0.35 to 1.2 m rather than 0.5 to 2 m, reach 140 px on the screen rather than 90, are 75 to 100% strong rather than 55 to 100%, and their soft heads dim by 60% rather than 85%; falling air still makes short flicks of different lengths. About half way back to check-in 2's density, with long diagonal strokes over the TV console the one place that still looks a little like rain.
 - **A phone's smoke puffs read as smoke.** Each billows rather than being a disc, is shaded from above (lighter on top, darker underneath and in its middle) with its own tone, and is lit by the sky and a quarter of the sun rather than half, as the volume's shadowed inside is. They are drawn after the streaks, so the smoke covers the streaks in it (`renderOrder.ts`). From the same view, a cooking burst went from lighter than the floor (143 against 126) to darker (106), with twice the spread of brightness in its middle; it is still warm, as the golden-hour light is.
 
-**Next:**
-1. Kyle's approval of check-in 3, then #82 to #84 closed and the backup branches deleted.
-2. Milestone 5.
+### Milestone 4 done (2026-10-28)
+
+Kyle approved check-in 3 on 2026-10-28, and milestone 4 is closed: #81 to #84 are closed, each against its criteria, and the two backup branches are deleted, their commits merged here.
+- **The blotchy smoke**, the last finding, is fixed (47ad7af): a plume's middle is shaded down to 60% of the sky's light rather than 42%, which with the dark grey had been close to black. Against a frame with no smoke, the plume's pixels darker than 90 fell from 2.3 to 2.6% to 1.3 to 1.4% (furniture shadows alone make 2.1%), and it still darkens the room behind it, by 18.5 on average rather than 20 to 22.
+- **#84's last criterion**, the #68 items, had three that nothing recorded. Each was checked on the page on 2026-10-28 and is fixed: switching Home lands on the new Home's default view with every room's name on the screen, on a desktop and a phone; the default view's walls are cut away, the west wall to a low strip; and a click on a Probe's spot through a standing inside wall pins nothing.
+- **#84's furniture criterion** said the solver's boxes stay the plan's; Kyle's call at check-in 3 changed that, and the boxes are now the models' (8ae252d).
+- **Left as they are:** the phone's smoke is warm under the golden-hour light, and the eye-level streaks are about half way back to check-in 2's density, where long strokes over the TV console begin to look like rain.
+
+**Next:** milestone 5, the performance pass against the budgets, the accessibility floor and the hardening issues (#57, #58 to #65), then the launch (#69), whose merge has to resolve main's changes to `playwright.config.ts` and `RangeField.svelte`. Optional: #66 and #67; a stretch: #85.
