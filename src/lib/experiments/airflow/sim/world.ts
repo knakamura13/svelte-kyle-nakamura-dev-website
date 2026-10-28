@@ -50,6 +50,9 @@ export function effectiveOpenings(plan: Pick<HomePlan, 'openings'>, setup: Setup
 	return amounts;
 }
 
+/** How many worlds have been built, for each one's `id`. */
+let worlds = 0;
+
 /**
  * A plan, a grid and a running backend, kept in step with the visitor's setup. Changes that the solver can take
  * while it runs (opening a window, moving a fan, new weather) are applied in place; changes to what the box is (the
@@ -58,6 +61,13 @@ export function effectiveOpenings(plan: Pick<HomePlan, 'openings'>, setup: Setup
 export class World {
 	readonly raster: Raster;
 	readonly fluid: FluidProperties;
+	/** Which world this is, so another can name it without holding on to it once it is gone. */
+	readonly id = ++worlds;
+	/**
+	 * The world whose air this one took (the session's `carry`: the same Home on another grid), or null for air of its own. What draws the
+	 * air goes on from the picture it had of that one, rather than starting again.
+	 */
+	carriedFrom: number | null = null;
 	/** Bumps whenever the setup is applied, which may open or close faces of `raster.geometry`: what draws from the geometry knows to look again. */
 	revision = 0;
 	private setup: Setup;

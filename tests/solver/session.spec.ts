@@ -184,6 +184,7 @@ test.describe('simulation session', () => {
 		}
 		expect(session.world).not.toBe(world);
 		expect(session.world!.current.furniture).toBe(false);
+		expect(session.world!.carriedFrom, 'a new box has air of its own, drawn afresh').toBeNull();
 		expect(session.simTime).toBeLessThan(1);
 		expect(session.latest.version).toBeGreaterThan(version);
 		session.dispose();
@@ -1334,6 +1335,7 @@ test.describe('simulation session', () => {
 				await pause(5);
 			}
 			expect(session.world!.raster.spec.h, 'to a coarser grid').toBeGreaterThan(shown.raster.spec.h);
+			expect(session.world!.carriedFrom, 'which names the world whose air it took, so the air is drawn on from where it was').toBe(shown.id);
 			expect(session.simTime, 'the run carried on').toBeGreaterThan(5);
 			expect(params.probes.map((p) => p.id)).toEqual(['p1']);
 			expect(session.world!.fanIndexOf('f1'), 'the fan is in the new solver').toBeDefined();

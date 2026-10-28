@@ -375,6 +375,7 @@ export class SimulationSession {
 	private async carry(from: World, to: World, before: Carried): Promise<Carried> {
 		const [shot, fields] = await Promise.all([from.backend.snapshot({}), from.backend.readFields()]);
 		to.backend.writeFields(resampleFields(airOf(from), fields, airOf(to)));
+		to.carriedFrom = from.id;
 		const { time, mass } = shot.diagnostics;
 		return { time: before.time + time, books: before.books ? combineBooks(before.books, mass) : mass };
 	}

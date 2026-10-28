@@ -224,8 +224,12 @@ export function createAir(options: AirOptions): Air {
 	}
 
 	function adoptWorld(next: World | null) {
+		// A world that took this one's air (a retune to another grid) goes on from the same picture: the streaks and the puffs are in metres
+		// and ride on, over the last volume until the new grid's first one comes. Any other world starts the air afresh.
+		const carried = next !== null && world !== null && next.carriedFrom === world.id;
 		world = next;
 		revision = -1;
+		if (carried) return;
 		fields.clear();
 		streaks.reset();
 		puffs?.reset();
@@ -242,8 +246,15 @@ export function createAir(options: AirOptions): Air {
 			if (!world) return false;
 			const { raster } = world;
 			const { spec } = raster;
-			// A volume of another grid (the world before this one) is not drawn over this one.
-			if (!volume || volume.h !== spec.h || volume.nx * volume.sx < spec.nx || volume.ny * volume.sy < spec.ny || volume.nz * volume.sz < spec.nz) return false;
+			// A volume of another grid (the world before this one) is not drawn over this one. While a world that took the last one's air waits
+			// for its first, the air goes on moving through the last picture it has.
+			if (!volume || volume.h !== spec.h || volume.nx * volume.sx < spec.nx || volume.ny * volume.sy < spec.ny || volume.nz * volume.sz < spec.nz) {
+				if (fields.ready) {
+					pending = Math.min(0.1, pending + Math.max(0, dt));
+					smoke.advance(dt);
+				}
+				return false;
+			}
 			if (world.revision !== revision) {
 				revision = world.revision;
 				mask = solidMask(spec, raster.geometry, mask);
