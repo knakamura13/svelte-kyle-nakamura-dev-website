@@ -235,3 +235,64 @@ Kyle paused the project after milestone 4's three agents finished. The loading s
   2. Then merge #83. It conflicts with the current branch in `scene/airflowScene.ts` and `scene/look/stage.ts`, and with #84 in `scene/air/index.ts` and `ui/hud/WeatherWidget.svelte`. Resolve those, run the Node, GPU and three-browser e2e suites, and fix the opening hint's position on a phone, which points between Probe and Smoke.
   3. Send Kyle check-in 3: the first-30-seconds recording and the phone. Then delete the two backup branches.
 - **Interplay to check after the merges:** a step down after the first minute clears the streaks for a moment (`scene/air/index.ts`), and #84's furniture changes the opening's end pose (its bookcase was a plain box).
+
+### Milestone 4 merged, and check-in 3 (2026-10-27)
+
+The merge plan above was carried out on 2026-10-27 and 28. The two backup branches are kept until Kyle approves check-in 3.
+
+**Merged:**
+- #84, the polish (d2729fc), with no conflicts.
+- #83, the phone pass (d9ed32b). Its four conflicts keep both sides: the warm-up and opening hooks beside `cancelTouch` (`scene/airflowScene.ts`, `scene/look/stage.ts`), the low tier's puffs with the render order from `renderOrder.ts` (`scene/air/index.ts`), and `compassWord` from `directionWords.ts`, which #84 renamed from `readout.ts` (`ui/hud/WeatherWidget.svelte`). `Hud.svelte`'s rule that makes room for the hint over a phone's toolbar now matches `OpeningHint`.
+
+**Fixed after the merges:**
+- **The phone hint** points at Build. On #83's branch the tool rail still drew the hint from before #82, centred over the whole toolbar, between Probe and Smoke. The merge replaced it with `OpeningHint`, which measures where Build is. `tests/airflow-phone.spec.ts` holds it (f94aecd).
+- **The phone's framing spec** opens a share link (a19aa12). Since #82 a visit opens at the drift's end, on the living room. The drift's first frame on a phone is the same framed view as the default (zoom 0.88, every room's name in the frame at 390 by 844).
+- **A tuner test that failed on a busy machine** (cdc92db). The warm-up measured the solver as slow and put the studio on the coarsest grid, with nothing coarser to step down to. The test starts the tuner at 20,000 cells now.
+- **The smoke** (8a73795). Kyle saw smoke that had spread for a few seconds as mist, smog or a ghost, and the plume by its source, darker and less see-through, as smoke. `SMOKE_LOOK` now scatters a cool dark grey (0.32 to 0.4, from 0.8 to 0.88), takes out light at 6 per metre with the 1.75 power of the concentration (from 4 with the square), and scatters less forward (0.25, from 0.35). A first pass at a mid grey (0.44 to 0.5) left spread smoke about as bright as the sunlit floor, so it vanished. The phone spec counts smoke as pixels made clearly greyer, darker or lighter, leaving out the air's blue.
+
+The same burst from check-in 2's pose, measured as the mean brightness change over the plume against a frame with no smoke:
+
+| | Before | After |
+| --- | --- | --- |
+| As it is released | lighter by 22 | darker by 20 |
+| 2 s after | lighter by 21 | darker by 7 |
+| 5 s after | lighter by 12.5, the mist | gone |
+| A room a 30 s release has filled | not taken | darker by 12.6, read through a grey haze |
+
+**Checks** on the merged tree:
+- The type check is at its baseline.
+- The Node suite: 531 passed.
+- The GPU suite: 43 passed, 15 skipped. Both five-minute soaks kept one grid at 59.9 fps and 5 times real time.
+- The airflow end-to-end specs, before the smoke change: 147 passed and 18 skipped in Chromium, Firefox and WebKit. The 6 that failed, the phone's framing spec in each browser at both sizes, pass after its fix. After the smoke change, the phone's low-tier smoke spec and the HUD's quality spec pass in the three browsers.
+
+**Measured** for check-in 3 on the M3 Max, on mains power, load 4 to 5, from a fresh browser profile: the first frame in 1.8 to 1.9 s on a desktop and 1.2 s on a phone, faster than the 4.3 s of 2026-10-21, probably because macOS keeps its own shader cache. The drift ran at 60 fps on both, with no frame over 16.8 ms.
+
+**Check-in 3** (1440x900 at device scale 2, 390x844 at 3, in Chromium with real WebGPU, on the Two-bedroom in its cross-ventilation Scenario). The recordings of the first 30 seconds on a desktop and the first 20 on a phone, and the other stills, were sent to Kyle and are not in the repo.
+
+| | |
+| --- | --- |
+| ![The drift's end at the living room's west windows, with the hint at Build](airflow-checkins/2026-10-27-check-in-3/drift-end-hint.jpg) | ![The phone at the drift's end, with the hint over the toolbar](airflow-checkins/2026-10-27-check-in-3/phone-opening-end.jpg) |
+| ![The phone's Build sheet at its peek](airflow-checkins/2026-10-27-check-in-3/phone-build-peek.jpg) | ![The phone's weather sheet at its peek](airflow-checkins/2026-10-27-check-in-3/phone-weather-peek.jpg) |
+| ![The phone's View sheet at its peek, with Air speed on](airflow-checkins/2026-10-27-check-in-3/phone-view-air-speed.jpg) | ![Eye level in the living room, with the streaks by the windows](airflow-checkins/2026-10-27-check-in-3/eye-level-streaks.jpg) |
+| ![The same burst before and after the smoke change, at 0, 2, 5 and 10 s](airflow-checkins/2026-10-27-check-in-3/smoke-before-after.jpg) | ![A room a 30 s release has filled, read through a grey haze](airflow-checkins/2026-10-27-check-in-3/smoke-after-filled-room.jpg) |
+
+**Interplay after the merges:**
+- **A step down still clears the streaks for a moment.** `adoptWorld` (`scene/air/index.ts`) resets the streaks and the puffs for any new world, though a step down's world carries the air on (`SimulationSession.carry`). Particle positions are in metres, so they could ride on through a world of the same Home. The renderer cannot yet tell such a world from a restart.
+- **The opening's end and #84's furniture.** Both west windows stay clear on a desktop and a phone. The bookcase stands centre-left in front, hides about 12% of the south window's air, and draws the eye. A tilt of 12 degrees halves that (`?camera=2.0,5.0,332,0.6,12`). Heading 300 hides nothing, but the air then comes toward the camera and its streaks look shorter (`?camera=2.0,5.2,300,0.6,8`).
+
+**Found at check-in 3:**
+- The eye-level streaks are much sparser and fainter than at check-in 2. They no longer read as rain, but the air at the windows is hard to see (`eye-level-streaks.jpg` against check-in 2's `hud-eye-level.jpg`).
+- From heading 212 the S letter shows through the bathroom window, painted on the south wall.
+- The phone's smoke puffs are a flat, unshaded film under the streaks, still brownish after the smoke change. They read as a film, not as smoke.
+- A few charcoal pockets by the dining chairs make the darker smoke a little blotchy near its source.
+
+**Calls for Kyle:**
+- **The compass letters.** N and E stand 1.8 m out at the floor. In the default view they are behind the far walls, and #84 hides them. The other way is to lift the letters above the walls.
+- **Furniture smaller than its solver box.** The sofa's box is 2.0 by 0.9 by 0.8 m and its model about 1.70 by 0.71 m, so a 19 cm strip in front and 15 cm at each end block air that looks free; a probe over the strip reads nothing. The ways out: shrink each solver box to its model, pad or build more pieces to fill their boxes, or keep it.
+- **The opening's end pose:** keep it, tilt it to 12 degrees, or turn it to heading 300.
+- **How long spread smoke shows.** It now fades out by 5 s instead of lingering as a pale veil. A gentler fade, a power below 1.75, would keep it longer, with a heavier haze in a room a burst has filled.
+
+**Next:**
+1. Kyle's answers to check-in 3, then the backup branches deleted.
+2. The phone's puffs, the eye-level streaks, the S letter through the window, and the step down's streaks.
+3. Milestone 5.
