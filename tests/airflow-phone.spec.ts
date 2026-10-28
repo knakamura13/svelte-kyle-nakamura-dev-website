@@ -1,14 +1,15 @@
 import AxeBuilder from '@axe-core/playwright';
 import { chromium, devices, expect, test, type CDPSession, type Page } from '@playwright/test';
+import { setupToHash } from '../src/lib/experiments/airflow/link';
+import { blankSetup } from '../src/lib/experiments/airflow/state';
 
 /**
  * The airflow page on a phone (#83): the world keeps most of the screen with a sheet at its peek and no panel covers another, every
  * sheet folds to its peek and opens in full, the camera frames the whole home above the sheets, the first frame's hint points at Build
- * from over the toolbar, the weather pill says its readings, the
- * fingers move the camera (one pans, two pinch and twist, a tap opens a window's menu), the low tier's air is clearly visible, axe finds
- * nothing, and the low tier holds 30 frames a second under a phone's processor. Emulated: an iPhone's 390 by 844 and an Android
- * phone's 360 by 800, with a touch screen. Chromium alone can make several fingers touch at once (its DevTools protocol), so the
- * pinch, the twist and the drags run there.
+ * from over the toolbar, the weather pill says its readings, the fingers move the camera (one pans, two pinch and twist, a tap opens a
+ * window's menu), the low tier's air is clearly visible, axe finds nothing, and the low tier holds 30 frames a second under a phone's
+ * processor. Emulated: an iPhone's 390 by 844 and an Android phone's 360 by 800, with a touch screen. Chromium alone can make several
+ * fingers touch at once (its DevTools protocol), so the pinch, the twist and the drags run there.
  */
 
 const PHONES = [
@@ -204,7 +205,8 @@ for (const phone of PHONES) {
 
 		test('the camera frames the whole home above a sheet at its peek, under the top bar', async ({ page }) => {
 			await page.emulateMedia({ reducedMotion: 'reduce' });
-			await openPhone(page);
+			// On the default view, which a share link opens on: a visit without one opens on the opening's view of the living room (#82).
+			await openPhone(page, `${PAGE}${setupToHash(blankSetup('two-bedroom'))}`);
 			await toolbar(page).locator('[data-tool="build"]').tap();
 			await expect(hud(page)).toHaveAttribute('data-sheet-size', 'peek');
 			const top = (await page.locator('.hud-top .topbar').boundingBox())!;
