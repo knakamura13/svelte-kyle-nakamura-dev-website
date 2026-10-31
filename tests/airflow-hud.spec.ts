@@ -269,6 +269,28 @@ test.describe('the HUD', () => {
 		expect(errors).toEqual([]);
 	});
 
+	test('the Scenario menu has the two purifier Scenarios, and each loads its Home, its notice and its weather', async ({ page }) => {
+		await openHud(page);
+		const picker = page.getByRole('button', { name: /^Scenario:/ });
+		const menu = page.locator('#hud-scenarios');
+		for (const { name, home, notice } of [
+			{ name: 'Clearing the smoke', home: 'Two-bedroom', notice: /purifier on High halves the smoke in bedroom 2/ },
+			{ name: 'The smoky day', home: 'Studio', notice: /purifier on High halves the smoke in the main room/ }
+		]) {
+			await picker.click();
+			await menu.getByRole('button', { name: new RegExp(`^${name}`) }).click();
+			await expect(picker).toHaveAttribute('aria-label', `Scenario: ${name}`);
+			await expect(page.getByRole('button', { name: /^Home:/ })).toHaveAttribute('aria-label', `Home: ${home}`);
+			// The menu says what to look at once it runs.
+			await picker.click();
+			await expect(menu.locator('.panel-note')).toContainText(notice);
+			await page.keyboard.press('Escape');
+		}
+		// The smoky day's weather: the Smoky outdoor air.
+		await page.getByRole('button', { name: 'Weather details' }).click();
+		await expect(page.getByRole('button', { name: /^Smoky, 150 micrograms/ })).toHaveAttribute('aria-pressed', 'true');
+	});
+
 	for (const [width, height] of [
 		[1440, 900],
 		[390, 844]

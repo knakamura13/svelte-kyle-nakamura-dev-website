@@ -1,7 +1,9 @@
-import { FAN_MODELS } from './devices/catalog';
-import { newDevice } from './devices/placement';
+import { FAN_MODELS, PURIFIER_MODELS } from './devices/catalog';
+import { deviceDefaults, newDevice } from './devices/placement';
+import type { PurifierModel } from './devices/types';
 import { planById } from './homes/plans';
 import { blankSetup, type Clock, type DeviceState, type Setup, type View } from './state';
+import { ppmFromUgPerM3 } from './units';
 
 /** A prepared Home, Devices, Openings and weather that shows one idea. */
 export interface Scenario {
@@ -26,10 +28,19 @@ function windowFanIn(planId: string): DeviceState {
 	return { ...made.device, id: 'window-fan', power: 1 };
 }
 
-/**
- * The guided scenarios. The two that need an air purifier, clearing the smoke and the smoky day, wait for purifiers in
- * the device catalog. `tests/solver/scenario-presets.spec.ts` runs each one in the solver and checks that what `notice` says happens.
- */
+/** The catalog's purifier of a size, on High: at `spot` (x and z in metres, `yaw` the way its front faces), or where the tray would put it. */
+function purifierOnHigh(planId: string, size: PurifierModel['size'], spot?: { x: number; z: number; yaw: number }): DeviceState {
+	const model = PURIFIER_MODELS.find((m) => m.size === size)!;
+	if (spot) return { ...deviceDefaults(model), ...spot, id: 'purifier', power: 1 };
+	const made = newDevice(planById(planId)!, model, []);
+	if (!('device' in made)) throw new Error(made.reason);
+	return { ...made.device, id: 'purifier', power: 1 };
+}
+
+/** The smoke in the air when the purifier scenarios start, µg/m³: the Smoky outdoor air's level. */
+const SMOKY = 150;
+
+/** The guided scenarios. `tests/solver/scenario-presets.spec.ts` runs each one in the solver and checks that what `notice` says happens. */
 export const SCENARIOS: Scenario[] = [
 	{
 		id: 'cross-ventilation',
@@ -73,5 +84,35 @@ export const SCENARIOS: Scenario[] = [
 		},
 		view: { layer: 'temperature' },
 		clock: { speed: 5 }
+	},
+	{
+		id: 'clearing-smoke',
+		name: 'Clearing the smoke',
+		blurb: 'Smoke from the kitchen fills the home, and a purifier clears a bedroom faster than its open window would.',
+		notice:
+			'With its door shut, the purifier on High halves the smoke in bedroom 2 about every four minutes: the Physics panel gives each room’s PM2.5. Turn it off and open the bedroom window instead, and on this still day the smoke takes about ten and a half minutes to halve. On Low the purifier takes about eight and a half, twice as long as on High, because the model takes Low to clean at half the rate of High: no maker publishes the lower speeds.',
+		setup: {
+			...blankSetup('two-bedroom'),
+			devices: [purifierOnHigh('two-bedroom', 'medium', { x: 10.5, z: 4.8, yaw: 180 })],
+			conditions: { windFrom: 270, windSpeed: 0, outdoorTemp: 18, indoorTemp: 21, outdoorPm25: 0 }
+		},
+		view: { layer: 'particulates' },
+		clock: { speed: 20 },
+		smoke: ppmFromUgPerM3(SMOKY)
+	},
+	{
+		id: 'smoky-day',
+		name: 'The smoky day',
+		blurb: 'Wildfire smoke outside and in: shut the windows and run a purifier, or open them to the breeze.',
+		notice:
+			'The smoke outside has already come in. With every window shut, the purifier on High halves the smoke in the main room about every eight minutes. This model’s home has no leaks; a real one’s would let some smoke back in. Open the windows to the breeze and the main room levels off at about 120 µg/m³, four-fifths of the smoke outside, even with the purifier on High.',
+		setup: {
+			...blankSetup('studio'),
+			devices: [purifierOnHigh('studio', 'large')],
+			conditions: { windFrom: 90, windSpeed: 3, outdoorTemp: 24, indoorTemp: 24, outdoorPm25: SMOKY }
+		},
+		view: { layer: 'particulates' },
+		clock: { speed: 20 },
+		smoke: ppmFromUgPerM3(SMOKY)
 	}
 ];

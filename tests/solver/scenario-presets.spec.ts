@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { DEVICE_MODELS, FAN_MODELS } from '../../src/lib/experiments/airflow/devices/catalog';
+import { PURIFIER_MARKS } from '../../src/lib/experiments/airflow/devices/model';
+import { isFree } from '../../src/lib/experiments/airflow/devices/placement';
 import type { DeviceModel } from '../../src/lib/experiments/airflow/devices/types';
 import { planById } from '../../src/lib/experiments/airflow/homes/plans';
 import { SCENARIOS } from '../../src/lib/experiments/airflow/scenarios';
@@ -8,6 +10,7 @@ import { World, type BackendFactory } from '../../src/lib/experiments/airflow/si
 import { CpuBackend } from '../../src/lib/experiments/airflow/solver/cpu/backend';
 import { AIR } from '../../src/lib/experiments/airflow/solver/types';
 import { LIMITS, MAX_DEVICES, type Setup } from '../../src/lib/experiments/airflow/state';
+import { ppmFromUgPerM3 } from '../../src/lib/experiments/airflow/units';
 
 const make: BackendFactory = (config, initial) => new CpuBackend({ ...config, scalarSubsteps: undefined }, initial);
 const models = new Map<string, DeviceModel>(DEVICE_MODELS.map((m) => [m.id, m]));
@@ -15,11 +18,31 @@ const models = new Map<string, DeviceModel>(DEVICE_MODELS.map((m) => [m.id, m]))
 const H = 0.2;
 
 const scenario = (id: string) => SCENARIOS.find((s) => s.id === id)!;
-const create = (setup: Setup) => World.create(setup, { plans: [planById(setup.plan)!], models, make, h: H });
+/** A world for a setup, with `smoke` ppm in all of its air at the start, as the page starts a scenario's world. */
+const create = (setup: Setup, smoke = 0) =>
+	World.create(setup, { plans: [planById(setup.plan)!], models, make: (config, initial) => make(config, { ...initial, particulates: smoke }), h: H });
 
 const run = (world: World, seconds: number, dt = 0.1) => {
 	for (let t = 0; t < seconds - 1e-9; t += dt) world.backend.step(dt);
 };
+
+/** Each room's PM2.5, µg/m³, by room id. */
+const pm25 = async (world: World) => {
+	const shot = await world.backend.snapshot({ rooms: true });
+	return Object.fromEntries(world.raster.plan.rooms.map((room, n) => [room.id, shot.rooms![n].particulates / ppmFromUgPerM3(1)]));
+};
+
+/**
+ * How long a room's smoke takes to halve, minutes. A purifier in a closed room takes out the same share of it each minute, so the halving
+ * time is the same at any level and a minute and a half of the fall gives it: measured from half a minute in, once the room is stirred.
+ */
+async function halving(world: World, room: string) {
+	run(world, 30);
+	const before = (await pm25(world))[room];
+	run(world, 90);
+	const after = (await pm25(world))[room];
+	return (Math.LN2 * 90) / Math.log(before / after) / 60;
+}
 
 /** Net flow into the home through an exterior opening, m³/s. */
 const inflow = async (world: World, id: string) => {
@@ -61,7 +84,10 @@ test.describe('scenario presets', () => {
 			for (const device of preset.setup.devices) {
 				expect(models.has(device.model), `${preset.id}: model ${device.model}`).toBe(true);
 				if (device.opening) expect(known.has(device.opening), `${preset.id}: window ${device.opening}`).toBe(true);
+				// Any other device stands on free floor, as one carried out of the tray would.
+				else expect(isFree(plan!, device.x, device.z), `${preset.id}: ${device.id} at ${device.x}, ${device.z}`).toBe(true);
 			}
+			expect(preset.smoke ?? 0, `${preset.id}: the smoke at the start`).toBeGreaterThanOrEqual(0);
 		}
 	});
 
@@ -170,5 +196,71 @@ test.describe('scenario presets', () => {
 		for (const [id, speed] of Object.entries(resting)) expect(speed, `${id} a minute after the fan stopped`).toBeLessThan(0.1);
 		expect(average(resting) / average(moving)).toBeLessThan(0.3);
 		world.dispose();
+	});
+
+	test('clearing the smoke: with its door shut, the purifier on High halves the smoke in bedroom 2 about every four minutes, and on Low, which the model takes to clean at half the rate, twice as long', async () => {
+		test.setTimeout(600_000);
+		const preset = scenario('clearing-smoke');
+		const purifier = preset.setup.devices[0];
+		expect(purifier.power, 'it starts on High').toBe(PURIFIER_MARKS.high);
+		expect(preset.setup.openings['bedroom-2-door'] ?? 0, 'with the bedroom door shut').toBe(0);
+		const high = await create(preset.setup, preset.smoke);
+		const onHigh = await halving(high, 'bedroom-2');
+		high.dispose();
+		const low = await create({ ...preset.setup, devices: [{ ...purifier, power: PURIFIER_MARKS.low }] }, preset.smoke);
+		const onLow = await halving(low, 'bedroom-2');
+		low.dispose();
+		console.log(`clearing the smoke: bedroom 2 halves every ${onHigh.toFixed(2)} min on High and ${onLow.toFixed(2)} on Low, ${(onLow / onHigh).toFixed(2)} times as long`);
+		expect(onHigh).toBeGreaterThan(3.5);
+		expect(onHigh).toBeLessThan(4.5);
+		expect(onLow).toBeGreaterThan(7.5);
+		expect(onLow).toBeLessThan(9.5);
+		expect(onLow / onHigh).toBeGreaterThan(1.8);
+		expect(onLow / onHigh).toBeLessThan(2.2);
+	});
+
+	test('clearing the smoke: with the purifier off and the bedroom window open instead, on a still day, the smoke in bedroom 2 takes about ten and a half minutes to halve', async () => {
+		test.setTimeout(600_000);
+		const preset = scenario('clearing-smoke');
+		expect(preset.setup.conditions.windSpeed, 'a still day').toBe(0);
+		const instead = { ...preset.setup, devices: [{ ...preset.setup.devices[0], power: 0 }], openings: { ...preset.setup.openings, 'bedroom-2-window': 1 } };
+		const world = await create(instead, preset.smoke);
+		const minutes = await halving(world, 'bedroom-2');
+		world.dispose();
+		console.log(`clearing the smoke, the window open instead: bedroom 2 halves every ${minutes.toFixed(2)} min`);
+		expect(minutes).toBeGreaterThan(9.5);
+		expect(minutes).toBeLessThan(11.5);
+	});
+
+	test('the smoky day: with every window shut, the purifier on High halves the smoke in the main room about every eight minutes', async () => {
+		const preset = scenario('smoky-day');
+		expect(Object.values(preset.setup.openings).every((amount) => amount === 0), 'every opening shut').toBe(true);
+		expect(preset.setup.devices[0].power, 'the purifier on High').toBe(PURIFIER_MARKS.high);
+		const world = await create(preset.setup, preset.smoke);
+		const minutes = await halving(world, 'main');
+		world.dispose();
+		console.log(`the smoky day, windows shut: the main room halves every ${minutes.toFixed(2)} min`);
+		expect(minutes).toBeGreaterThan(7);
+		expect(minutes).toBeLessThan(9.5);
+	});
+
+	test('the smoky day: with the windows open to the breeze, the main room levels off at about 120 µg/m³, four-fifths of the smoke outside, even with the purifier on High', async () => {
+		test.setTimeout(600_000);
+		const preset = scenario('smoky-day');
+		const outdoors = preset.setup.conditions.outdoorPm25;
+		expect(outdoors, 'the Smoky outdoor air').toBe(150);
+		const open = { 'main-east-window-1': 1, 'main-east-window-2': 1, 'main-south-window': 1 };
+		const world = await create({ ...preset.setup, openings: { ...preset.setup.openings, ...open } }, preset.smoke);
+		run(world, 240);
+		const earlier = (await pm25(world)).main;
+		run(world, 60);
+		const level = (await pm25(world)).main;
+		world.dispose();
+		console.log(`the smoky day, windows open: the main room is at ${earlier.toFixed(1)} µg/m³ after four minutes and ${level.toFixed(1)} after five, ${(level / outdoors).toFixed(2)} of the smoke outside`);
+		expect(level).toBeGreaterThan(110);
+		expect(level).toBeLessThan(130);
+		expect(level / outdoors).toBeGreaterThan(0.73);
+		expect(level / outdoors).toBeLessThan(0.87);
+		expect(Math.abs(earlier - level), 'levelled off: under 3 µg/m³ of change in its fifth minute').toBeLessThan(3);
 	});
 });
