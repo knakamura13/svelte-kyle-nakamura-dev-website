@@ -1,4 +1,4 @@
-import { BufferGeometry, CircleGeometry, ConeGeometry, CylinderGeometry, DoubleSide, Float32BufferAttribute, Group, Mesh, MeshBasicMaterial, RingGeometry, Vector3, type MeshStandardMaterial, type Object3D } from 'three';
+import { BufferGeometry, CircleGeometry, ConeGeometry, CylinderGeometry, DoubleSide, ExtrudeGeometry, Float32BufferAttribute, Group, Mesh, MeshBasicMaterial, RingGeometry, Shape, Vector3, type MeshStandardMaterial, type Object3D } from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { clay, disposeTree } from '$lib/experiments/engine/kit';
 import { aimVector, oscillatedYaw } from '../devices/model';
@@ -10,6 +10,8 @@ import { RENDER_ORDER } from './renderOrder';
 const BODY = 0x4a5651;
 const FACE_ON = 0xe9eee7;
 const FACE_OFF = 0xaeb6ae;
+/** How far a purifier's intake grille stands out from its body, m, so the two never fight for depth. */
+const GRILLE_PROUD = 0.003;
 const FLOW = 0xd9822b;
 const INK = 0x202a24;
 const IDLE = 0x8a948f;
@@ -27,6 +29,23 @@ const DEGREES = Math.PI / 180;
 
 /** How thick a pedestal fan's head is, m. The catalog's body size for a pedestal fan is the whole product, so its depth is no help here. */
 const PEDESTAL_HEAD = 0.14;
+
+/**
+ * A band `height` tall wrapped round a body `width` by `depth` whose upright edges are rounded to `corner`, standing `proud`
+ * of it, centred on the origin. Its sides are flat over its whole height, where a rounded box would round its top and
+ * bottom edges away and look shorter than it is.
+ */
+function sleeve(width: number, depth: number, height: number, corner: number, proud: number): ExtrudeGeometry {
+	const [x, z, r] = [width / 2 + proud, depth / 2 + proud, corner + proud];
+	// The outline in the plan, its corners round the same centres as the body's; each arc joins the last with a straight side.
+	const outline = new Shape();
+	outline.absarc(x - r, z - r, r, 0, Math.PI / 2, false);
+	outline.absarc(r - x, z - r, r, Math.PI / 2, Math.PI, false);
+	outline.absarc(r - x, r - z, r, Math.PI, (3 * Math.PI) / 2, false);
+	outline.absarc(x - r, r - z, r, (3 * Math.PI) / 2, 2 * Math.PI, false);
+	// Pushed out along its own z, which is turned to stand up.
+	return new ExtrudeGeometry(outline, { depth: height, bevelEnabled: false, curveSegments: 4 }).rotateX(-Math.PI / 2).translate(0, -height / 2, 0);
+}
 
 /** How the pieces of one device are held, so a frame can move them without rebuilding. */
 interface Item {
@@ -99,11 +118,18 @@ export class DeviceMeshes {
 		let front = depth / 2;
 
 		if (model.kind === 'air-purifier') {
-			head.add(new Mesh(new RoundedBoxGeometry(width, height, depth, 2, Math.min(0.05, width / 4)), body));
-			// The clean air leaves by a round outlet on top.
+			const corner = Math.min(0.05, width / 4);
+			head.add(new Mesh(new RoundedBoxGeometry(width, height, depth, 2, corner), body));
+			// It breathes in through a grille round its body, over the band of its height where the solver cleans the air
+			// (`devices/solver.ts`), and the clean air leaves by a round outlet on top, as wide as the solver's jet.
+			const band = model.inlet.to - model.inlet.from;
+			const inlet = new Mesh(sleeve(width, depth, band, corner, GRILLE_PROUD), clay(FACE_OFF));
+			inlet.name = 'purifier-inlet';
+			inlet.position.y = model.inlet.from + band / 2 - height / 2;
 			const outlet = new Mesh(new CylinderGeometry(model.outletDiameter / 2, model.outletDiameter / 2, 0.012, 24), clay(FACE_OFF));
+			outlet.name = 'purifier-outlet';
 			outlet.position.y = height / 2 + 0.006;
-			head.add(outlet);
+			head.add(inlet, outlet);
 		} else if (model.kind === 'pedestal-fan') {
 			rise = device.height;
 			front = PEDESTAL_HEAD / 2;

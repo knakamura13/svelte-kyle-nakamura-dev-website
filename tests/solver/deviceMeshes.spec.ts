@@ -1,18 +1,23 @@
 import { expect, test } from '@playwright/test';
-import { Vector3, type Object3D } from 'three';
-import { DEVICE_MODELS, FAN_MODELS } from '../../src/lib/experiments/airflow/devices/catalog';
+import { Box3, Vector3, type CylinderGeometry, type Mesh, type Object3D } from 'three';
+import { DEVICE_MODELS, FAN_MODELS, PURIFIER_MODELS } from '../../src/lib/experiments/airflow/devices/catalog';
 import { aimVector, headPosition, oscillatedYaw } from '../../src/lib/experiments/airflow/devices/model';
 import { newDevice } from '../../src/lib/experiments/airflow/devices/placement';
+import { deviceInputs } from '../../src/lib/experiments/airflow/devices/solver';
 import type { DeviceModel } from '../../src/lib/experiments/airflow/devices/types';
 import { planById } from '../../src/lib/experiments/airflow/homes/plans';
+import { rasterizePlan } from '../../src/lib/experiments/airflow/homes/rasterize';
 import { DeviceMeshes } from '../../src/lib/experiments/airflow/scene/deviceMeshes';
 import { windowSeat } from '../../src/lib/experiments/airflow/scene/deviceMath';
+import { Grid } from '../../src/lib/experiments/airflow/solver/grid';
+import { AIR } from '../../src/lib/experiments/airflow/solver/types';
 import type { DeviceState } from '../../src/lib/experiments/airflow/state';
 
 /**
  * The devices the world draws must point and sit where the solver's fans do: a fan the page draws facing
  * east but pushing north would be a lie. These compare what is drawn (`headPose`) with what `devices/solver.ts` reads
- * (`aimVector`, `headPosition`, `oscillatedYaw`).
+ * (`aimVector`, `headPosition`, `oscillatedYaw`), and a purifier's drawn intake and outlet with the cells the solver
+ * cleans and blows through.
  */
 
 const models = new Map<string, DeviceModel>(DEVICE_MODELS.map((m) => [m.id, m]));
@@ -71,6 +76,67 @@ test.describe('a fan stand-in', () => {
 		close(meshes.headPose(device.id)!.position.toArray(), headPosition(model, device));
 		meshes.dispose();
 	});
+});
+
+test.describe('a purifier stand-in', () => {
+	const raster = rasterizePlan(plan, 0.05, { furniture: false });
+	const { h, sx, sxy } = new Grid(raster.spec);
+	/** The centre of a cell, in the scene's axes. */
+	const centreOf = (cell: number) => new Vector3(((cell % sx) + 0.5) * h, (Math.floor((cell % sxy) / sx) + 0.5) * h, (Math.floor(cell / sxy) + 0.5) * h);
+
+	for (const model of PURIFIER_MODELS) {
+		test(`${model.name} draws its intake where the solver cleans the air and its outlet where the solver's jet leaves, at every yaw`, () => {
+			const meshes = new DeviceMeshes(models);
+			for (const yaw of [0, 90, 37.5, 200]) {
+				const device = placed(model.id, { yaw });
+				meshes.update([device], 0);
+				const item = meshes.group.children.find((c) => c.userData.deviceId === device.id)!;
+				item.updateMatrixWorld(true);
+				const inlet = item.getObjectByName('purifier-inlet') as Mesh;
+				const outlet = item.getObjectByName('purifier-outlet') as Mesh<CylinderGeometry>;
+				const { sinks, fans, fanIndex } = deviceInputs({ devices: [device], models, raster, fluid: AIR, time: 0 });
+
+				// The intake: drawn over the solver's band of the body's height, and filled by the cells it cleans, in the band's
+				// own frame, which turns with the body. A cell counts when its centre is within half a cell of the body.
+				const drawn = new Box3().setFromObject(inlet);
+				expect(drawn.min.y, `the band's foot at yaw ${yaw}`).toBeCloseTo(device.y + model.inlet.from, 6);
+				expect(drawn.max.y, `the band's top at yaw ${yaw}`).toBeCloseTo(device.y + model.inlet.to, 6);
+				inlet.geometry.computeBoundingBox();
+				const band = inlet.geometry.boundingBox!;
+				const cells = [...sinks[0].cells].map((cell) => inlet.worldToLocal(centreOf(cell)));
+				expect(cells.length, 'more than the one cell a band thinner than a cell falls back to').toBeGreaterThan(1);
+				const margin = { x: h / 2, y: 0, z: h / 2 };
+				for (const axis of ['x', 'y', 'z'] as const) {
+					const along = cells.map((p) => p[axis]);
+					expect(Math.max(...along), `inside the band on +${axis} at yaw ${yaw}`).toBeLessThanOrEqual(band.max[axis] + margin[axis] + 1e-6);
+					expect(Math.min(...along), `inside the band on -${axis} at yaw ${yaw}`).toBeGreaterThanOrEqual(band.min[axis] - margin[axis] - 1e-6);
+					expect(Math.max(...along), `reaching the band's +${axis} side at yaw ${yaw}`).toBeGreaterThan(band.max[axis] - h);
+					expect(Math.min(...along), `reaching the band's -${axis} side at yaw ${yaw}`).toBeLessThan(band.min[axis] + h);
+				}
+
+				// The outlet: the solver's jet blows straight up out of the drawn outlet, as wide as it, whatever the yaw.
+				const jet = fans[fanIndex.get(device.id)!];
+				const radius = outlet.geometry.parameters.radiusTop;
+				const axis = outlet.getWorldPosition(new Vector3());
+				const face = new Box3().setFromObject(outlet).max.y;
+				expect(jet.normal).toEqual([0, 1, 0]);
+				expect(jet.area, `as wide as the drawn outlet at yaw ${yaw}`).toBeCloseTo(Math.PI * radius ** 2, 9);
+				const centroid = new Vector3();
+				let weight = 0;
+				jet.cells.forEach((cell, n) => {
+					const p = centreOf(cell);
+					expect(Math.hypot(p.x - axis.x, p.z - axis.z), 'within the outlet and its one-cell soft edge').toBeLessThan(radius + h / 2);
+					centroid.addScaledVector(p, jet.cellWeight[n]);
+					weight += jet.cellWeight[n];
+				});
+				centroid.divideScalar(weight);
+				expect(Math.hypot(centroid.x - axis.x, centroid.z - axis.z), `centred on the outlet at yaw ${yaw}`).toBeLessThan(h / 2);
+				expect(centroid.y, 'leaving from the outlet’s face').toBeGreaterThan(face);
+				expect(centroid.y, 'within a disc’s thickness of it').toBeLessThan(face + 0.1);
+			}
+			meshes.dispose();
+		});
+	}
 });
 
 test.describe('the set of stand-ins', () => {

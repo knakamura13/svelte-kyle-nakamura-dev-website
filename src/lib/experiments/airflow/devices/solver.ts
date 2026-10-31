@@ -95,20 +95,28 @@ export function deviceInputs(args: { devices: DeviceState[]; models: ReadonlyMap
 	return { fans, sinks, windowFans, fanIndex };
 }
 
-/** The cells of the band of air around a purifier's body where it breathes in, sharing its cleaning equally. */
+/**
+ * The cells of the band of air around a purifier's body where it breathes in, sharing its cleaning equally. The body turns with the
+ * purifier's yaw, as it is drawn (`scene/deviceMeshes.ts`) and picked, so a cell is in the band when its centre, turned into the
+ * body's own axes, is within the body's footprint.
+ */
 function purifierSink(grid: Grid, raster: Raster, device: DeviceState, model: Extract<DeviceModel, { kind: 'air-purifier' }>, cadr: number): Sink {
 	const { nx, ny, nz, sx, sxy, h } = grid;
 	const half = [model.body.width / 2 + h / 2, model.body.depth / 2 + h / 2];
 	const low = device.y + model.inlet.from;
 	const high = device.y + model.inlet.to;
+	const turn = (device.yaw * Math.PI) / 180;
+	const [cos, sin] = [Math.cos(turn), Math.sin(turn)];
 	const cells: number[] = [];
 	for (let k = 0; k < nz; k++)
 		for (let j = 0; j < ny; j++)
 			for (let i = 0; i < nx; i++) {
-				const x = (i + 0.5) * h;
+				const dx = (i + 0.5) * h - device.x;
 				const y = (j + 0.5) * h;
-				const z = (k + 0.5) * h;
-				if (Math.abs(x - device.x) <= half[0] && Math.abs(z - device.z) <= half[1] && y >= low && y <= high && raster.geometry.fluid[i + sx * j + sxy * k]) cells.push(i + sx * j + sxy * k);
+				const dz = (k + 0.5) * h - device.z;
+				const across = dx * cos + dz * sin;
+				const along = dz * cos - dx * sin;
+				if (Math.abs(across) <= half[0] && Math.abs(along) <= half[1] && y >= low && y <= high && raster.geometry.fluid[i + sx * j + sxy * k]) cells.push(i + sx * j + sxy * k);
 			}
 	// A band narrower than a cell still cleans: take the cell nearest its centre.
 	if (!cells.length) {
