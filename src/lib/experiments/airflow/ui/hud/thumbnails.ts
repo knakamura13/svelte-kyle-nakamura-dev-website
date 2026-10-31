@@ -1,4 +1,4 @@
-import { Box3, DirectionalLight, HemisphereLight, PerspectiveCamera, Scene, Vector3, WebGLRenderer, type Mesh, type MeshBasicMaterial } from 'three';
+import { Box3, DirectionalLight, HemisphereLight, PerspectiveCamera, Scene, Vector3, WebGLRenderer, type Mesh } from 'three';
 import { deviceDefaults } from '../../devices/placement';
 import type { DeviceModel } from '../../devices/types';
 import type { DeviceState } from '../../state';
@@ -39,11 +39,9 @@ export function renderThumbnails(models: readonly DeviceModel[], size = 224): Ma
 		for (const model of models) {
 			const device: DeviceState = { ...deviceDefaults(model), id: 'thumbnail', x: 0, z: 0, y: 0, yaw: 0, power: 2 / 3 };
 			meshes.update([device], 0, -40, null);
-			// The device only: not its symbol on the slice, nor the cone that shows its flow.
+			// The device only, not its symbol on the slice.
 			meshes.group.traverse((object) => {
 				if (object.userData.symbol) object.visible = false;
-				const mesh = object as Mesh;
-				if (mesh.isMesh && (mesh.material as MeshBasicMaterial).isMeshBasicMaterial) mesh.visible = false;
 			});
 			meshes.group.updateMatrixWorld(true);
 			box.makeEmpty();

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { Box3, Vector3, type CylinderGeometry, type Mesh, type Object3D } from 'three';
+import { Box3, Vector3, type CylinderGeometry, type Mesh, type MeshStandardMaterial, type Object3D } from 'three';
 import { DEVICE_MODELS, FAN_MODELS, PURIFIER_MODELS } from '../../src/lib/experiments/airflow/devices/catalog';
 import { aimVector, headPosition, oscillatedYaw } from '../../src/lib/experiments/airflow/devices/model';
 import { newDevice } from '../../src/lib/experiments/airflow/devices/placement';
@@ -171,20 +171,28 @@ test.describe('the set of stand-ins', () => {
 		expect(meshes.group.children).toHaveLength(0);
 	});
 
-	test('a fan that is off shows no airflow cone, and one that is on shows a longer cone the harder it runs', () => {
+	test('a device shows that it runs as a real one does: a fan’s blades turn light, and a purifier’s outlet turns light and its lamp lights up; nothing is drawn for the air', () => {
 		const meshes = new DeviceMeshes(models);
-		const device = placed('air-king-9723', { power: 0 });
-		const cone = () => {
-			const head = meshes.group.children[0].children[0];
-			return head.children.find((c) => (c as { geometry?: { type?: string } }).geometry?.type === 'ConeGeometry')!;
+		const material = (id: string, part: string) => {
+			const item = meshes.group.children.find((c) => c.userData.deviceId === id)!;
+			return (item.getObjectByName(part) as Mesh<CylinderGeometry, MeshStandardMaterial>).material;
 		};
-		meshes.update([device], 0);
-		expect(cone().visible).toBe(false);
-		meshes.update([{ ...device, power: 1 / 3 }], 0);
-		const low = cone().scale.y;
-		expect(cone().visible).toBe(true);
-		meshes.update([{ ...device, power: 1 }], 0);
-		expect(cone().scale.y).toBeGreaterThan(low);
+		const lightness = (id: string, part: string) => material(id, part).color.getHSL({ h: 0, s: 0, l: 0 }).l;
+		const fan = placed('air-king-9723', { id: 'fan', power: 0 });
+		const purifier = placed(PURIFIER_MODELS[0].id, { id: 'purifier', x: 3, z: 3, power: 0 });
+		meshes.update([fan, purifier], 0);
+		const off = { blades: lightness('fan', 'fan-blades'), outlet: lightness('purifier', 'purifier-outlet') };
+		expect(material('purifier', 'purifier-lamp').emissive.getHex(), 'the lamp of a purifier that is off').toBe(0);
+		expect(material('purifier', 'purifier-lamp').color.getHex(), 'is the outlet’s grey, so it shows nothing').toBe(material('purifier', 'purifier-outlet').color.getHex());
+		meshes.update([{ ...fan, power: 1 / 3 }, { ...purifier, power: 0.25 }], 0);
+		expect(lightness('fan', 'fan-blades'), 'the blades of a fan that runs').toBeGreaterThan(off.blades);
+		expect(lightness('purifier', 'purifier-outlet'), 'the outlet of a purifier that runs').toBeGreaterThan(off.outlet);
+		expect(material('purifier', 'purifier-lamp').emissive.getHex(), 'and its lamp is lit').not.toBe(0);
+		expect(material('fan', 'fan-blades').emissive.getHex(), 'a fan has no lamp: its blades give no light').toBe(0);
+		// The air a device moves is the streaks' and the smoke's to show: no cone over a running one.
+		const geometries = new Set<string>();
+		meshes.group.traverse((object) => geometries.add((object as Mesh).geometry?.type ?? ''));
+		expect(geometries.has('ConeGeometry')).toBe(false);
 		meshes.dispose();
 		expect(meshes.group.children).toHaveLength(0);
 	});

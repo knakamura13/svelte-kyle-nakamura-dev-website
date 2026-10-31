@@ -1,17 +1,22 @@
-import { BufferGeometry, CircleGeometry, ConeGeometry, CylinderGeometry, DoubleSide, ExtrudeGeometry, Float32BufferAttribute, Group, Mesh, MeshBasicMaterial, RingGeometry, Shape, Vector3, type MeshStandardMaterial, type Object3D } from 'three';
+import { BufferGeometry, CircleGeometry, CylinderGeometry, DoubleSide, ExtrudeGeometry, Float32BufferAttribute, Group, Mesh, MeshBasicMaterial, RingGeometry, Shape, Vector3, type MeshStandardMaterial, type Object3D } from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { clay, disposeTree } from '$lib/experiments/engine/kit';
 import { aimVector, oscillatedYaw } from '../devices/model';
-import type { DeviceModel, FanModel } from '../devices/types';
+import type { DeviceModel } from '../devices/types';
 import type { DeviceState } from '../state';
 import { RENDER_ORDER } from './renderOrder';
 
-/** The body's colors, and the cue that a fan is running. */
+/** The body's colors, and the cue that a device is running: its face (a fan's blades, a purifier's outlet) turns light. */
 const BODY = 0x4a5651;
 const FACE_ON = 0xe9eee7;
 const FACE_OFF = 0xaeb6ae;
-/** How far a purifier's intake grille stands out from its body, m, so the two never fight for depth. */
-const GRILLE_PROUD = 0.003;
+/**
+ * A purifier's lamp, as a real one's display or air quality light. Off, it is the outlet's grey and shows nothing; lit, it is a
+ * blue light on a dark lens, kept short of white so its colour comes through the tone mapping and the warm grade (`look/post.ts`).
+ */
+const LAMP_LENS = 0x0d1418;
+const LAMP_ON = 0x2a7bff;
+const LAMP_INTENSITY = 2;
 const FLOW = 0xd9822b;
 const INK = 0x202a24;
 const IDLE = 0x8a948f;
@@ -29,6 +34,8 @@ const DEGREES = Math.PI / 180;
 
 /** How thick a pedestal fan's head is, m. The catalog's body size for a pedestal fan is the whole product, so its depth is no help here. */
 const PEDESTAL_HEAD = 0.14;
+/** How far a purifier's intake grille stands out from its body, m, so the two never fight for depth. */
+const GRILLE_PROUD = 0.003;
 
 /**
  * A band `height` tall wrapped round a body `width` by `depth` whose upright edges are rounded to `corner`, standing `proud`
@@ -64,26 +71,28 @@ interface Item {
 	group: Group;
 	/** Everything that changes what the device is built from. */
 	shape: string;
-	/** The part that turns to face the airflow (the whole body of a box fan, the head of a pedestal fan), and what on it shows power. */
+	/** The part that turns to face the airflow (the whole body of a box fan, the head of a pedestal fan), and what on it shows power: a fan's blades, or a purifier's outlet. */
 	head: Group;
-	face: Mesh<CylinderGeometry, MeshStandardMaterial> | null;
-	flow: Mesh<ConeGeometry, MeshBasicMaterial> | null;
+	face: Mesh<CylinderGeometry, MeshStandardMaterial>;
+	/** A purifier stands upright and blows up, whatever its yaw, and has a lamp on top that is lit while it runs. */
+	upright: boolean;
+	lamp: Mesh<CylinderGeometry, MeshStandardMaterial> | null;
 	/** Where the device is, drawn on the slice plane, because the plane (82% opaque) hides a fan that stands below it: a ring, and an arrow the way it blows. */
 	symbol: Group;
 	ring: Mesh<RingGeometry, MeshBasicMaterial>;
 	arrow: Mesh<BufferGeometry, MeshBasicMaterial>;
-	/** Where the head's centre is above the device's base, m, and how far its front (where the air leaves) is from that centre. */
+	/** Where the head's centre is above the device's base, m. */
 	rise: number;
-	front: number;
 }
 
 /**
  * Plain stand-ins for the fans and purifiers of a setup, in the solver's axes (metres; x east, y up, z south). They are
  * not the product shots: a body of the model's real outside size, a disc where the blades are, a pole under a pedestal
- * fan's head, and a cone that points the way a running fan blows. Everything faces down the device's heading, which is
- * its local -z: `yaw` is degrees clockwise from north seen from above, `tilt` degrees up, and a pedestal fan's head
- * swings with its sweep. Matched to the setup by device id each frame; nothing is rebuilt unless the model or a pedestal
- * fan's height changed.
+ * fan's head, and a purifier's intake band, outlet and lamp. A running device shows it as a real one does: a fan's blades
+ * turn light, and a purifier's lamp lights up. The air it moves is left to the streaks and the smoke to show. Everything
+ * faces down the device's heading, which is its local -z: `yaw` is degrees clockwise from north seen from above, `tilt`
+ * degrees up, and a pedestal fan's head swings with its sweep. Matched to the setup by device id each frame; nothing is
+ * rebuilt unless the model or a pedestal fan's height changed.
  */
 export class DeviceMeshes {
 	readonly group = new Group();
@@ -124,10 +133,9 @@ export class DeviceMeshes {
 		group.add(head);
 		const body = clay(BODY);
 		const { width, depth, height } = model.body;
-		let face: Item['face'] = null;
-		let flow: Item['flow'] = null;
+		let face: Item['face'];
+		let lamp: Item['lamp'] = null;
 		let rise = height / 2;
-		let front = depth / 2;
 
 		if (model.kind === 'air-purifier') {
 			const corner = Math.min(0.05, width / 4);
@@ -141,40 +149,39 @@ export class DeviceMeshes {
 			const outlet = new Mesh(new CylinderGeometry(model.outletDiameter / 2, model.outletDiameter / 2, 0.012, 24), clay(FACE_OFF));
 			outlet.name = 'purifier-outlet';
 			outlet.position.y = height / 2 + 0.006;
-			head.add(inlet, outlet);
-		} else if (model.kind === 'pedestal-fan') {
-			rise = device.height;
-			front = PEDESTAL_HEAD / 2;
-			const base = new Mesh(new CylinderGeometry(0.2, 0.22, 0.035, 28), body);
-			base.position.y = 0.0175;
-			const pole = new Mesh(new CylinderGeometry(0.018, 0.018, Math.max(0.1, device.height), 10), body);
-			pole.position.y = Math.max(0.1, device.height) / 2;
-			group.add(base, pole);
-			// The head is a short drum whose axis is the airflow: the cylinder's own axis turned to lie along local z.
-			const drum = new Mesh(new CylinderGeometry(model.diameter / 2 + 0.02, model.diameter / 2 + 0.02, PEDESTAL_HEAD, 32), body);
-			drum.rotation.x = Math.PI / 2;
-			head.add(drum);
+			// The lamp sits in the middle of the outlet, where the real ones have their controls, a millimetre proud of it: an edge
+			// any taller catches the light and marks a purifier that is off.
+			const size = Math.min(0.025, model.outletDiameter * 0.15);
+			lamp = new Mesh(new CylinderGeometry(size, size, 0.002, 20), clay(FACE_OFF, { emissiveIntensity: LAMP_INTENSITY }));
+			lamp.name = 'purifier-lamp';
+			lamp.position.y = height / 2 + 0.012;
+			head.add(inlet, outlet, lamp);
+			face = outlet;
 		} else {
-			// A box fan, or a window fan, a box of the model's real size with its blades on the front.
-			head.add(new Mesh(new RoundedBoxGeometry(width, height, depth, 2, Math.min(0.04, depth / 3)), body));
-		}
-
-		if (model.kind !== 'air-purifier') {
-			const fan = model as FanModel;
-			face = new Mesh(new CylinderGeometry(fan.diameter / 2, fan.diameter / 2, 0.012, 32), clay(FACE_ON));
+			// How far the front, where the blades are, is from the head's centre.
+			let front = depth / 2;
+			if (model.kind === 'pedestal-fan') {
+				rise = device.height;
+				front = PEDESTAL_HEAD / 2;
+				const base = new Mesh(new CylinderGeometry(0.2, 0.22, 0.035, 28), body);
+				base.position.y = 0.0175;
+				const pole = new Mesh(new CylinderGeometry(0.018, 0.018, Math.max(0.1, device.height), 10), body);
+				pole.position.y = Math.max(0.1, device.height) / 2;
+				group.add(base, pole);
+				// The head is a short drum whose axis is the airflow: the cylinder's own axis turned to lie along local z.
+				const drum = new Mesh(new CylinderGeometry(model.diameter / 2 + 0.02, model.diameter / 2 + 0.02, PEDESTAL_HEAD, 32), body);
+				drum.rotation.x = Math.PI / 2;
+				head.add(drum);
+			} else {
+				// A box fan, or a window fan, a box of the model's real size with its blades on the front.
+				head.add(new Mesh(new RoundedBoxGeometry(width, height, depth, 2, Math.min(0.04, depth / 3)), body));
+			}
+			face = new Mesh(new CylinderGeometry(model.diameter / 2, model.diameter / 2, 0.012, 32), clay(FACE_ON));
+			face.name = 'fan-blades';
 			face.rotation.x = Math.PI / 2;
 			face.position.z = -(front + 0.004);
 			head.add(face);
 		}
-		// What a running fan or purifier blows: a cone that leaves the front (the top, for a purifier) and grows with power.
-		flow = new Mesh(new ConeGeometry(0.07, 1, 20), new MeshBasicMaterial({ color: FLOW, transparent: true, opacity: 0.85, depthWrite: false }));
-		flow.renderOrder = RENDER_ORDER.markers;
-		flow.rotation.x = -Math.PI / 2;
-		if (model.kind === 'air-purifier') {
-			flow.rotation.x = 0;
-			flow.position.y = height / 2;
-		} else flow.position.z = -front;
-		head.add(flow);
 
 		// The symbol on the slice: a ring round the device with a white halo, and an arrow that points the way it blows.
 		const symbol = new Group();
@@ -193,11 +200,11 @@ export class DeviceMeshes {
 		target.rotation.x = -Math.PI / 2;
 		symbol.add(halo, ring, arrow, target);
 		group.add(symbol);
-		return { group, shape, head, face, flow, rise, front, symbol, ring, arrow };
+		return { group, shape, head, face, upright: model.kind === 'air-purifier', lamp, rise, symbol, ring, arrow };
 	}
 
 	private pose(item: Item, device: DeviceState, model: DeviceModel, time: number, planeY: number, selected: boolean) {
-		const { group, head, face, flow, symbol } = item;
+		const { group, head, face, symbol } = item;
 		group.position.set(device.x, device.y, device.z);
 		head.position.y = item.rise;
 		const on = device.power > 0.005;
@@ -225,16 +232,9 @@ export class DeviceMeshes {
 			symbol.rotation.y = -yaw * DEGREES;
 			item.arrow.visible = on;
 		}
-		face?.material.color.set(on ? FACE_ON : FACE_OFF);
-		if (flow) {
-			flow.visible = on;
-			// A cone's origin is its middle, so it is moved half its length out and turned so its tip leads.
-			const length = 0.12 + 0.4 * Math.min(1, device.power);
-			flow.scale.set(1 + 0.4 * device.power, length, 1 + 0.4 * device.power);
-			const reach = length / 2 + 0.03;
-			if (model.kind === 'air-purifier') flow.position.y = model.body.height / 2 + reach;
-			else flow.position.z = -(item.front + reach);
-		}
+		face.material.color.set(on ? FACE_ON : FACE_OFF);
+		item.lamp?.material.color.set(on ? LAMP_LENS : FACE_OFF);
+		item.lamp?.material.emissive.set(on ? LAMP_ON : 0x000000);
 	}
 
 	/**
@@ -246,8 +246,7 @@ export class DeviceMeshes {
 		if (!item) return null;
 		item.group.updateMatrixWorld(true);
 		const position = item.head.getWorldPosition(new Vector3());
-		const purifier = item.flow !== null && item.face === null;
-		const forward = purifier ? new Vector3(0, 1, 0) : new Vector3(0, 0, -1).transformDirection(item.head.matrixWorld);
+		const forward = item.upright ? new Vector3(0, 1, 0) : new Vector3(0, 0, -1).transformDirection(item.head.matrixWorld);
 		return { position, forward };
 	}
 
