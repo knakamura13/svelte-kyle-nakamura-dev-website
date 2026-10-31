@@ -550,8 +550,9 @@ export class AirflowExperience extends Experience {
 		this.setup = clone(scenario.setup);
 		this.starting = clone(scenario.setup);
 		Object.assign(this.view, scenario.view ?? {});
-		// The HUD's overlay shows the Layer the scenario asks for, unless the visitor turned the overlays off.
-		if (scenario.view?.layer && this.view.overlay !== 'off') this.view.overlay = overlayOfLayer(scenario.view.layer);
+		// The HUD's overlay shows the Layer the scenario asks for, unless the visitor turned the overlays off. One that starts with smoke shows
+		// its Layer either way: smoke spread through a room is too thin to see, as a room's PM2.5 is, so without the overlay there is nothing to watch.
+		if (scenario.view?.layer && (this.view.overlay !== 'off' || scenario.smoke)) this.view.overlay = overlayOfLayer(scenario.view.layer);
 		Object.assign(this.clock, { ...DEFAULT_CLOCK, ...scenario.clock });
 		if (this.reducedMotion) this.clock.paused = true;
 		this.startingSmoke = scenario.smoke ?? 0;
