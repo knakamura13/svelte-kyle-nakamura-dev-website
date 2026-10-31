@@ -255,6 +255,16 @@ export const DEFAULT_PRESSURE: PressureSettings = { cycles: 3, pre: 2, post: 2, 
  */
 export const ADVECTION_LIMIT = 0.6;
 
+/**
+ * About how long a fan takes to change how hard it pushes, s: each step its push eases toward what its curve asks for at the flow it
+ * is delivering, rather than jumping there. Read off the flow at the start of a step alone, a small, fast disk on fine cells overshoots
+ * its curve: the Airmega Mighty's outlet, 0.14 m across at 7 m/s, takes most of its push on a few faces of 0.075 m cells, the next push
+ * read off that overshoot overshoots the other way, and in a few steps the air is not a number. A fan running steadily pushes exactly
+ * as its curve says, so delivered flows are unchanged, and a real fan takes a second or more to spin up. Both backends read this:
+ * `cpu/forces.ts` and `gpu/shaders/flow.ts`.
+ */
+export const FAN_SPIN_UP = 1;
+
 /** Fills in the sides a caller left out: still, no-slip, adiabatic. */
 export function sideConditions(partial: (SideCondition | undefined)[] = []): SideConditions {
 	return [0, 1, 2, 3, 4, 5].map((s): SideCondition => ({ slip: 'no-slip', ...partial[s] })) as SideConditions;

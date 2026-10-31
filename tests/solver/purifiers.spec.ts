@@ -214,3 +214,27 @@ test.describe('smoke in a sealed room with a catalog purifier', () => {
 		expect(results[bySize('medium').id]).toBeGreaterThan(results[bySize('small').id]);
 	});
 });
+
+test.describe('a catalog purifier on the finest grid', () => {
+	test('stays finite at the warm-up’s 0.05 s step and settles to a steady flow: the Mighty’s small, fast outlet on 0.075 m cells once overshot its fan curve until the air was not a number', async () => {
+		const h = 0.075;
+		const [nx, ny, nz] = [40, 32, 40];
+		const raster = rasterizePlan(room, h, { furniture: false });
+		for (const model of PURIFIER_MODELS) {
+			const device: DeviceState = { id: 'p', model: model.id, x: 1.5, z: 1.5, y: 0, yaw: 0, tilt: 0, power: 1, height: 0, oscillation: { on: false, sweep: 90, period: 8 } };
+			const inputs = deviceInputs({ devices: [device], models, raster, fluid: AIR, time: 0 });
+			const solver = new CpuSolver({ grid: { nx, ny, nz, h }, fluid: AIR, geometry: boxGeometry({ nx, ny, nz, h }) });
+			solver.setFans(inputs.fans);
+			const flows: number[] = [];
+			advance(solver, 4, 0.05, () => flows.push(solver.fanFlow[0]));
+			const last = flows.slice(-20);
+			const mean = last.reduce((a, b) => a + b, 0) / last.length;
+			const rated = purifierCadr(model, 1);
+			console.log(`${model.id} on 0.075 m cells: ${mean.toFixed(4)} m³/s through its outlet over the fourth second, ${(mean / rated).toFixed(2)} of its rated ${rated.toFixed(4)}`);
+			expect(flows.every(Number.isFinite), `${model.id}: every step finite`).toBe(true);
+			expect(Math.max(...last.map((q) => Math.abs(q - mean))) / mean, `${model.id}: steady over the fourth second`).toBeLessThan(0.1);
+			expect(mean / rated, model.id).toBeGreaterThan(0.6);
+			expect(mean / rated, model.id).toBeLessThan(1.4);
+		}
+	});
+});

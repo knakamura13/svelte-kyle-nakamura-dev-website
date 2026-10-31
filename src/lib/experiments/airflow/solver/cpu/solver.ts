@@ -176,9 +176,12 @@ export class CpuSolver {
 	}
 
 	setFans(fans: FanDisk[]) {
+		// The same fans placed again (an oscillating head, a new aim or power) keep the push they had built up; another set starts from rest.
+		if (fans.length !== this.fans.length) {
+			this.fanFlow = new Float64Array(fans.length);
+			this.fanPush = new Float64Array(fans.length);
+		}
 		this.fans = fans;
-		this.fanFlow = new Float64Array(fans.length);
-		this.fanPush = new Float64Array(fans.length);
 	}
 
 	/** Replaces every emitter. The solver turns each into a per-cell rate in ppm per second. */
@@ -223,7 +226,7 @@ export class CpuSolver {
 		applyPressureGradient(grid, geometry, this.startPressure, quantity, half / (fluid.rho * grid.h));
 		applyBuoyancy(grid, geometry, this.theta, quantity.v, half, fluid.g, fluid.beta);
 		if (this.fans.length) {
-			fanAcceleration(grid, this.fans, this.vel, fluid.rho, this.fanFlow, this.fanPush);
+			fanAcceleration(grid, this.fans, this.vel, fluid.rho, this.fanFlow, this.fanPush, dt);
 			applyFans(this.fans, this.fanPush, quantity, half);
 		}
 		advectVelocity(grid, dt, this.vel, quantity, this.pred, this.next, geometry, this.advection === 'maccormack');

@@ -1,5 +1,5 @@
 import type { Grid } from '../grid';
-import type { FanDisk, Geometry } from '../types';
+import { FAN_SPIN_UP, type FanDisk, type Geometry } from '../types';
 import type { Velocity } from './advect';
 
 /**
@@ -43,11 +43,12 @@ export function applyPressureGradient(grid: Grid, geometry: Geometry, p: Float32
  * applied by `applyFans`). The push follows the fan curve for the flow the fan is delivering: Δp = Δp_max·(1 − (Q/Q_max)²),
  * so it shrinks as the room pushes back and the fan delivers its rated flow in open air. The push is the pressure
  * rise times the swept area, spread over the disk's cells by their weights, which works the same whether the disk
- * spans many cells or is smaller than one.
+ * spans many cells or is smaller than one. `accelerations` holds each fan's push from the step before, which eases toward
+ * the curve's over `FAN_SPIN_UP` (`dt` the step's length, s), so a small fast disk cannot overshoot its curve.
  *
  * Records each fan's flow in `flows`, m³/s.
  */
-export function fanAcceleration(grid: Grid, fans: FanDisk[], vel: Velocity, rho: number, flows: Float64Array, accelerations: Float64Array) {
+export function fanAcceleration(grid: Grid, fans: FanDisk[], vel: Velocity, rho: number, flows: Float64Array, accelerations: Float64Array, dt: number) {
 	const { sx, sxy } = grid;
 	const volume = grid.cellVolume;
 	for (let n = 0; n < fans.length; n++) {
@@ -71,7 +72,8 @@ export function fanAcceleration(grid: Grid, fans: FanDisk[], vel: Velocity, rho:
 			continue;
 		}
 		const ratio = flow / fan.qMax;
-		accelerations[n] = (fan.dpMax * (1 - ratio * ratio) * fan.area) / (weights * volume * rho);
+		const curve = (fan.dpMax * (1 - ratio * ratio) * fan.area) / (weights * volume * rho);
+		accelerations[n] += (curve - accelerations[n]) * (dt / (dt + FAN_SPIN_UP));
 	}
 }
 

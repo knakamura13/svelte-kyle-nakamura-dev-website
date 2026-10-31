@@ -1,4 +1,4 @@
-import { ADVECTION_LIMIT } from '../../types';
+import { ADVECTION_LIMIT, FAN_SPIN_UP } from '../../types';
 import { AXIS, DECODE, ENTRY, F32, LIMITS, LINEAR, U32, VEC4, read, sampler, treeReduce, uniform, write, type KernelSource } from './common';
 
 /** Kernels for steps 1 to 4 of cpu/solver.ts: eddy viscosity, the force half-steps, advection and diffusion. */
@@ -97,13 +97,14 @@ ${ENTRY} {
 };
 
 /**
- * cpu/forces.ts `fanAcceleration`: one workgroup per fan reduces the flow through its disk, then works out its push
- * from the fan curve. `fanCells` holds (cell, weight bits) for every fan back to back; `fanInfo` two vec4 per fan:
- * (normal, area) and (qMax, dpMax, first entry, entry count). `fanState` per fan: (flow, acceleration, Σweight, Σweight·axial).
+ * cpu/forces.ts `fanAcceleration`: one workgroup per fan reduces the flow through its disk, then eases its push toward
+ * the fan curve's (`FAN_SPIN_UP`). `fanCells` holds (cell, weight bits) for every fan back to back; `fanInfo` two vec4 per fan:
+ * (normal, area) and (qMax, dpMax, first entry, entry count). `fanState` per fan: (flow, acceleration, Σweight, Σweight·axial),
+ * whose acceleration is the push of the step before until it is replaced.
  */
 export const fanFlow: KernelSource = {
 	name: 'fanFlow',
-	bindings: [uniform('C', 'Consts'), read('vel', VEC4), read('fanCells', 'array<vec2<u32>>'), read('fanInfo', VEC4), write('fanState', VEC4)],
+	bindings: [uniform('C', 'Consts'), uniform('S', 'Step'), read('vel', VEC4), read('fanCells', 'array<vec2<u32>>'), read('fanInfo', VEC4), write('fanState', VEC4)],
 	code: `var<workgroup> axial: array<f32, 256>;
 var<workgroup> weights: array<f32, 256>;
 @compute @workgroup_size(256)
@@ -146,7 +147,9 @@ fn main(@builtin(local_invocation_index) lid: u32, @builtin(workgroup_id) wid: v
 		var acceleration = 0.0;
 		if (curve.x > 0.0 && curve.y > 0.0 && total > 0.0) {
 			let ratio = flow / curve.x;
-			acceleration = (curve.y * (1.0 - ratio * ratio) * shape.w) / (total * (C.h * C.h * C.h) * C.rho);
+			let asked = (curve.y * (1.0 - ratio * ratio) * shape.w) / (total * (C.h * C.h * C.h) * C.rho);
+			let before = fanState[n].y;
+			acceleration = before + (asked - before) * (S.dt / (S.dt + ${FAN_SPIN_UP.toFixed(6)}));
 		}
 		fanState[n] = vec4<f32>(flow, acceleration, total, sum);
 	}

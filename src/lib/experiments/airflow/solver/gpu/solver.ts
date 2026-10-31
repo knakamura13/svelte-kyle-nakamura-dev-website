@@ -667,7 +667,7 @@ export class GpuSolver {
 
 	/** 2a. The carried quantity: velocity plus half a step of the pressure gradient, buoyancy and fans. */
 	forcesBefore(pass: GpuComputePassEncoder) {
-		if (this.fanCount) this.run(pass, 'fanFlow', { C: this.consts, vel: this.vel, fanCells: this.fanCells.buffer, fanInfo: this.fanInfo.buffer, fanState: this.fanState.buffer }, [this.fanCount, 1]);
+		if (this.fanCount) this.run(pass, 'fanFlow', { C: this.consts, S: this.step, vel: this.vel, fanCells: this.fanCells.buffer, fanInfo: this.fanInfo.buffer, fanState: this.fanState.buffer }, [this.fanCount, 1]);
 		// The first half-step applies the mean of the last two solves (cpu/solver.ts `step`).
 		this.run(pass, 'pressureMean', { C: this.consts, p: this.levels[0].p, prev: this.prevP, start: this.startP }, this.cellGroups);
 		this.run(pass, 'quantity', { C: this.consts, S: this.step, vel: this.vel, geo: this.geo, p: this.startP, scal: this.scal, out: this.quantity }, this.cellGroups);
@@ -862,6 +862,7 @@ export class GpuSolver {
 
 	/** The fans' disks: cells to measure each fan's flow, and the faces it pushes, merged per index so no two threads push one face. */
 	setFans(fans: FanDisk[]) {
+		const before = this.fanCount;
 		this.fanCount = fans.length;
 		if (!fans.length) {
 			this.fanUnique = 0;
@@ -911,7 +912,9 @@ export class GpuSolver {
 		const queue = this.device.queue;
 		queue.writeBuffer(this.fanCells.fit(cells.byteLength), 0, cells);
 		queue.writeBuffer(this.fanInfo.fit(info.byteLength), 0, info);
-		this.fanState.fit(16 * fans.length);
+		// The same fans placed again keep the push they had built up (cpu/solver.ts `setFans`); another set starts from rest.
+		const state = this.fanState.fit(16 * fans.length);
+		if (fans.length !== before) queue.writeBuffer(state, 0, new Float32Array(4 * fans.length));
 		queue.writeBuffer(this.fanIndex.fit(index.byteLength), 0, index);
 		queue.writeBuffer(this.fanStart.fit(start.byteLength), 0, start);
 		queue.writeBuffer(this.fanEntries.fit(entries.byteLength), 0, entries);
