@@ -198,7 +198,7 @@ test.describe('the set of stand-ins', () => {
 	});
 });
 
-test.describe('a device’s symbol on the slice', () => {
+test.describe('a device’s symbol', () => {
 	/** The symbol group of a device and its arrow, as drawn. */
 	const symbolOf = (meshes: DeviceMeshes, id: string) => {
 		const item = meshes.group.children.find((c) => c.userData.deviceId === id)!;
@@ -208,16 +208,16 @@ test.describe('a device’s symbol on the slice', () => {
 		return { symbol, arrow };
 	};
 
-	test('rides the slice plane wherever the plane is, whatever the device stands on', () => {
+	test('lies at the height it is drawn at, whatever the device stands on, and on the floor unless asked', () => {
 		const meshes = new DeviceMeshes(models);
 		const fan = placed('air-king-9723', { y: 0.4 });
-		for (const plane of [0.3, 1.1, 2.0]) {
-			meshes.update([fan], 0, plane);
+		for (const height of [0.02, 1.1, 2.0]) {
+			meshes.update([fan], 0, height);
 			const { symbol } = symbolOf(meshes, fan.id);
-			expect(symbol.getWorldPosition(new Vector3()).y, `plane at ${plane} m`).toBeCloseTo(plane + 0.03, 6);
+			expect(symbol.getWorldPosition(new Vector3()).y, `drawn at ${height} m`).toBeCloseTo(height + 0.03, 6);
 		}
 		meshes.update([fan], 0);
-		expect(symbolOf(meshes, fan.id).symbol.getWorldPosition(new Vector3()).y, 'the plane defaults to 1.1 m').toBeCloseTo(1.13, 6);
+		expect(symbolOf(meshes, fan.id).symbol.getWorldPosition(new Vector3()).y, 'the floor, unless asked').toBeCloseTo(0.03, 6);
 	});
 
 	test('sits inside the home for a window fan, which stands on the wall line where the wall would hide the ring, and on the fan for every other', () => {

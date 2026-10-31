@@ -39,7 +39,7 @@ export function renderThumbnails(models: readonly DeviceModel[], size = 224): Ma
 		for (const model of models) {
 			const device: DeviceState = { ...deviceDefaults(model), id: 'thumbnail', x: 0, z: 0, y: 0, yaw: 0, power: 2 / 3 };
 			meshes.update([device], 0, -40, null);
-			// The device only, not its symbol on the slice.
+			// The device only, not its symbol.
 			meshes.group.traverse((object) => {
 				if (object.userData.symbol) object.visible = false;
 			});

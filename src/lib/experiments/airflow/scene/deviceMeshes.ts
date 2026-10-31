@@ -22,10 +22,9 @@ const INK = 0x202a24;
 const IDLE = 0x8a948f;
 /** The ring of the device the visitor has chosen: the site's accent green. */
 const SELECTED = 0x276b42;
-/** How far from a device's centre a click still takes it, m: the symbol on the slice is a ring with a hole, and the whole disc is the target. */
+/** How far from a device's centre a click still takes it, m: its symbol is a ring with a hole, and the whole disc is the target. */
 export const GRAB_RADIUS = 0.34;
-/** The slice plane's default height, m, and how far its symbols float above the plane so they never fight it for depth. */
-const PLANE = 1.1;
+/** How far a symbol floats above the height it is drawn at, m, so it never fights the floor there for depth. */
 const SYMBOL_LIFT = 0.03;
 /** How far inside the home a window fan's symbol sits, m: the fan stands on the wall line, where the wall would hide most of its ring. */
 const SYMBOL_INSET = 0.32;
@@ -77,7 +76,7 @@ interface Item {
 	/** A purifier stands upright and blows up, whatever its yaw, and has a lamp on top that is lit while it runs. */
 	upright: boolean;
 	lamp: Mesh<CylinderGeometry, MeshStandardMaterial> | null;
-	/** Where the device is, drawn on the slice plane, because the plane (82% opaque) hides a fan that stands below it: a ring, and an arrow the way it blows. */
+	/** Where the device is, drawn round its feet: a ring that says whether it runs or is chosen, and an arrow the way it blows. */
 	symbol: Group;
 	ring: Mesh<RingGeometry, MeshBasicMaterial>;
 	arrow: Mesh<BufferGeometry, MeshBasicMaterial>;
@@ -102,9 +101,10 @@ export class DeviceMeshes {
 
 	/**
 	 * Adds, removes and moves the meshes to match `devices`, with `time` the simulated seconds that oscillating fans turn
-	 * by, and `planeY` the height of the slice plane, m, where each device's symbol is drawn.
+	 * by, and `symbolY` the height each device's symbol is drawn at, m: the floor unless asked (the scene draws them just
+	 * over it, `scene/airflowScene.ts`).
 	 */
-	update(devices: readonly DeviceState[], time: number, planeY = PLANE, selected: string | null = null) {
+	update(devices: readonly DeviceState[], time: number, symbolY = 0, selected: string | null = null) {
 		const present = new Set<string>();
 		for (const device of devices) {
 			const model = this.models.get(device.model);
@@ -121,7 +121,7 @@ export class DeviceMeshes {
 				this.items.set(device.id, item);
 				this.group.add(item.group);
 			}
-			this.pose(item, device, model, time, planeY, device.id === selected);
+			this.pose(item, device, model, time, symbolY, device.id === selected);
 		}
 		for (const id of [...this.items.keys()]) if (!present.has(id)) this.drop(id);
 	}
@@ -183,7 +183,7 @@ export class DeviceMeshes {
 			head.add(face);
 		}
 
-		// The symbol on the slice: a ring round the device with a white halo, and an arrow that points the way it blows.
+		// The symbol: a ring round the device with a white halo, and an arrow that points the way it blows.
 		const symbol = new Group();
 		symbol.userData.symbol = true;
 		const translucent = (color: number, opacity: number) => new MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, side: DoubleSide });
@@ -203,13 +203,13 @@ export class DeviceMeshes {
 		return { group, shape, head, face, upright: model.kind === 'air-purifier', lamp, rise, symbol, ring, arrow };
 	}
 
-	private pose(item: Item, device: DeviceState, model: DeviceModel, time: number, planeY: number, selected: boolean) {
+	private pose(item: Item, device: DeviceState, model: DeviceModel, time: number, symbolY: number, selected: boolean) {
 		const { group, head, face, symbol } = item;
 		group.position.set(device.x, device.y, device.z);
 		head.position.y = item.rise;
 		const on = device.power > 0.005;
-		// The symbol rides the slice plane, whatever the device stands on.
-		symbol.position.y = planeY - device.y + SYMBOL_LIFT;
+		// The symbol lies at its height, whatever the device stands on.
+		symbol.position.y = symbolY - device.y + SYMBOL_LIFT;
 		if (model.kind === 'window-fan') {
 			// A window fan's yaw faces into the home, so inward is where that points.
 			const inward = aimVector(device.yaw, 0);

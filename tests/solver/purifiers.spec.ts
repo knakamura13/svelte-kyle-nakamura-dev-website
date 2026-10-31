@@ -69,7 +69,7 @@ test.describe('the purifiers in the catalog', () => {
 		}
 	});
 
-	test('its stand-in is a body of the model’s size with an outlet of its diameter on top, and the symbol on the slice has no arrow', () => {
+	test('its stand-in is a body of the model’s size with an outlet of its diameter on top, and its symbol has no arrow', () => {
 		for (const model of PURIFIER_MODELS) {
 			const device: DeviceState = { id: 'p', model: model.id, x: 3, z: 3, y: 0, yaw: 0, tilt: 0, power: 1, height: 0, oscillation: { on: false, sweep: 90, period: 8 } };
 			const meshes = new DeviceMeshes(models);

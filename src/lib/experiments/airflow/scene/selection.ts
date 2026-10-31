@@ -421,7 +421,7 @@ class Ghost {
 			let material = mesh.material as MeshBasicMaterial;
 			if (!this.tinted.has(material)) {
 				(mesh.material as Material).dispose();
-				// Drawn over everything, as a hologram: the slice plane and the walls would hide most of a device standing below them.
+				// Drawn over everything, as a hologram: a wall or the furniture would hide most of a device behind it.
 				material = new MeshBasicMaterial({ color, transparent: true, opacity: 0.55, depthWrite: false, depthTest: false });
 				mesh.material = material;
 				mesh.renderOrder = ON_TOP - 1;
