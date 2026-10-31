@@ -74,8 +74,11 @@
 			</li>
 			<li>Turbulence is modelled, not resolved. Swirls smaller than a few centimetres, and the thin layers of air at walls, are approximated.</li>
 			<li>
-				Fans and purifiers are idealised: a disc that pushes by the model’s rated flow, and a region that cleans at its rated rate. Real ones vary with age, filters and where
-				they stand. The flows are the makers’ ratings, and none of the sheets read names the test behind its rating.
+				Fans and purifiers are idealised: a disc that pushes by the model’s rated flow, and a band round a purifier’s body that cleans at its rated rate, with the clean air
+				blown out of the top. Real ones vary with age, filters and where they stand. A fan’s flow is the maker’s rating, and none of the fan sheets read names the test behind
+				it. A purifier’s rate is its clean air delivery rate for smoke, which is published for the top speed only. Sleep, Low and Medium are derived, not published: the top
+				rate times 0.25, 0.5 and 0.75, which assumes the rate follows the fan’s speed. Real purifiers will differ. No maker gives the size of a purifier’s openings, so those
+				are estimated from the makers’ drawings.
 			</li>
 			<li>
 				Particulates are PM2.5 only, as a mass in the air. Bigger particles, gases, and anything that changes the particles (such as moisture) are left out. Their
@@ -247,9 +250,30 @@
 			</li>
 			<li>Lasko, product page for the Pro Power 20-inch box fan, B20548: 2,000 cubic feet per minute at high speed. Lasko gives no other speed.</li>
 			<li>Lasko, product description for the Cool Colors 20-inch box fan, B20301, B20308 and B20312: 1,725 cubic feet per minute at high speed. The other speeds were not read.</li>
+			<li>
+				Levoit, <a href="https://levoit.com/cdn/shop/files/HEAPAPLVNUS0161Y_Core_300-p_Air_Purifier_manual_US_A2-241204_1.pdf" target="_blank" rel="noopener noreferrer"
+					>owner’s manual for the Core 300-P air purifier</a
+				>: a clean air delivery rate for smoke of 143 cubic feet per minute at the highest speed, the purifier’s size, and where air goes in and out.
+			</li>
+			<li>
+				Coway, <a href="https://cowaymega.com/products/mighty-air-purifier-ap-1512hh" target="_blank" rel="noopener noreferrer">product page</a> and
+				<a href="https://cdn.shopify.com/s/files/1/0351/1864/5383/files/9240281_AP-1512HH__Manual_US__25.11.13.pdf" target="_blank" rel="noopener noreferrer">owner’s manual</a>
+				for the Airmega Mighty AP-1512HH: 233 for smoke at the highest speed, with no unit on the page (the Association of Home Appliance Manufacturers’ directory prints the
+				same figure in cubic feet per minute), the size, and where air leaves. Neither says where air comes in, so the front is assumed.
+			</li>
+			<li>
+				ENERGY STAR, <a href="https://data.energystar.gov/resource/gaa3-swy6.json?pd_id=4512742" target="_blank" rel="noopener noreferrer"
+					>certified-product record for the Coway Airmega 400, AP-2015F</a
+				>: 376 cubic feet per minute for smoke at the highest speed. Coway’s own page prints 328, with no unit and no certified record behind it, and nothing read explains the
+				difference. The size and openings are from Coway’s
+				<a href="https://original.accentuate.io/4791712645255/1590201445072/Coway-Airmega-300-400-Series-Manual.pdf" target="_blank" rel="noopener noreferrer"
+					>owner’s manual</a
+				>.
+			</li>
 		</ul>
 		<p class="scale-note">
-			None of these names the test its rating follows. No purifier’s clean air delivery rate has been confirmed from a source yet, so none is listed.
+			None of the fan sheets names the test its rating follows. Clean air delivery rate is the rating ANSI/AHAM AC-1 defines (above), and it tests the highest speed only, so a
+			purifier’s lower speeds are derived from it. No source gives the size of any purifier’s inlet or outlet.
 		</p>
 	</div>
 </section>

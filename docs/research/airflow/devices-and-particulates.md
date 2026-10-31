@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-07, with sections 6 and 7 researched on 2026-10-14 (issue 48)
 - **Verification method:** each value below was read directly from the cited manufacturer page or the PDF's text layer in this session. Search-engine snippets and retailer listings were not accepted as confirmation. Values marked **derived** are arithmetic on confirmed values, and the working is shown.
-- **Status:** the session ended part-way through. Sections 1 (partial), 3 (partial) and the fan-face velocity in 5 are confirmed. Everything else is marked **UNCONFIRMED**, with the reason, except sections 6 and 7, which were completed on 2026-10-14: each number the simulation uses for smoke and for particle settling and deposition has its source, its working and its uncertainty there, and what could not be read is listed under it.
+- **Status:** the session ended part-way through. Sections 1 (partial), 3 (partial) and the fan-face velocity in 5 are confirmed. Everything else is marked **UNCONFIRMED**, with the reason, except sections 6 and 7, which were completed on 2026-10-14: each number the simulation uses for smoke and for particle settling and deposition has its source, its working and its uncertainty there, and what could not be read is listed under it. The passes at the end of the note add the device ratings the catalog uses (2026-10-09) and the three purifiers (2026-10-14, issue 57).
 - **Units:** inches and CFM as published, with SI beside them (1 in = 0.0254 m; 1 CFM = 0.000471947 m³/s).
 
 ## 1. Box fans, 20 inch, 3 speeds
@@ -282,7 +282,7 @@ For the explainer check (issue 65). `src/lib/experiments/airflow/ui/Explainer.sv
 - **Box fans:** only the Air King 9723 has manufacturer CFM at all three speeds. Lasko publishes a single maximum CFM per model (B20548 at 2,000; B20301 at 1,725), so their Low and Medium values are UNCONFIRMED. No sheet names a test standard, so it is not known whether the ratings follow ANSI/AMCA 230.
 - **Lasko and Hydrofarm pages:** Lasko's older product URLs (3733, 2155A, 2138) return 404, and hydrofarm.com failed TLS verification. Figures for those models exist only in retailer listings and were not used.
 - **Window fans:** Air King publishes one CFM per speed for both directions, so intake and exhaust are not distinguished. The 9166 sheet's text and drawing give different window-width ranges.
-- **Pedestal fans (2), purifiers (4), shut-off pressure and curve form (5), AQI and WHO values (8):** none were verified before the session ended. Each needs a fresh pass against the sources named in its section. The particle constants (6) and the emission rates (7) were done on 2026-10-14, and their open items are listed in sections 6.3 and 7.4.
+- **Shut-off pressure and curve form (5), AQI and WHO values (8):** none were verified before the session ended. Each needs a fresh pass against the sources named in its section. The particle constants (6) and the emission rates (7) were done on 2026-10-14, and their open items are listed in sections 6.3 and 7.4. The pedestal fans (2) were done in the second pass (2026-10-09) and the purifiers (4) in the third (2026-10-14), at the end of this note, each with what could not be confirmed.
 - **Face velocities:** these use the full disk area including the hub, so they underestimate the velocity through the blade annulus.
 
 ## Device ratings (second pass, 2026-10-09)
