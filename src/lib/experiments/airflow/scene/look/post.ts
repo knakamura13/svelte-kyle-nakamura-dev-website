@@ -115,7 +115,10 @@ export class Post {
 		this.composer.addPass(new RenderPass(scene, camera));
 		if (quality.ao) {
 			const gtao = new ScaledGTAOPass(scene, camera, width, height, quality.ao.scale);
-			gtao.updateGtaoMaterial({ radius: 0.4, distanceExponent: 1, thickness: 0.35, scale: 1.4, samples: quality.ao.samples, distanceFallOff: 1, screenSpaceRadius: false });
+			// The thickness is how far in front of a surface, in depth, a thing may stand and still shade it, m. At 0.35 a coffee table 20 cm
+			// before a purifier's pale band drew dark streaks along its edge across the band, which crawled as the camera turned; at 0.2 they
+			// are gone, the shading under and beside furniture stays a little lighter, and open shelves look a little flatter.
+			gtao.updateGtaoMaterial({ radius: 0.4, distanceExponent: 1, thickness: 0.2, scale: 1.4, samples: quality.ao.samples, distanceFallOff: 1, screenSpaceRadius: false });
 			gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 12 });
 			gtao.blendIntensity = 1;
 			this.composer.addPass(gtao);
