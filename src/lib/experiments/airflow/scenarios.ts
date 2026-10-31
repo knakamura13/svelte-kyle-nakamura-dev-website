@@ -90,7 +90,7 @@ export const SCENARIOS: Scenario[] = [
 		name: 'Clearing the smoke',
 		blurb: 'Smoke from the kitchen fills the home, and a purifier clears a bedroom faster than its open window would.',
 		notice:
-			'With its door shut, the purifier on High halves the smoke in bedroom 2 about every four minutes: the Physics panel gives each room’s PM2.5. Turn it off and open the bedroom window instead, and on this still day the smoke takes about ten and a half minutes to halve. On Low the purifier takes about eight and a half, twice as long as on High, because the model takes Low to clean at half the rate of High: no maker publishes the lower speeds.',
+			'With its door shut, the purifier on High halves the smoke in bedroom 2 every four to seven minutes, the longer the finer the grid your device runs: the Physics panel gives the grid and each room’s PM2.5. Turn it off and open the bedroom window instead, and on this still day the smoke takes about ten and a half minutes to halve on any grid. On Low the purifier takes about twice as long as on High, because the model takes Low to clean at half the rate of High: no maker publishes the lower speeds.',
 		setup: {
 			...blankSetup('two-bedroom'),
 			devices: [purifierOnHigh('two-bedroom', 'medium', { x: 10.5, z: 4.8, yaw: 180 })],
@@ -105,7 +105,7 @@ export const SCENARIOS: Scenario[] = [
 		name: 'The smoky day',
 		blurb: 'Wildfire smoke outside and in: shut the windows and run a purifier, or open them to the breeze.',
 		notice:
-			'The smoke outside has already come in. With every window shut, the purifier on High halves the smoke in the main room about every eight minutes. This model’s home has no leaks; a real one’s would let some smoke back in. Open the windows to the breeze and the main room levels off at about 120 µg/m³, four-fifths of the smoke outside, even with the purifier on High.',
+			'The smoke outside has already come in. With every window shut, the purifier on High halves the smoke in the main room every eight to twelve minutes, the longer the finer the grid your device runs. This model’s home has no leaks; a real one’s would let some smoke back in. Open the windows to the breeze and the main room levels off at about 85 % of the smoke outside, even with the purifier on High.',
 		setup: {
 			...blankSetup('studio'),
 			devices: [purifierOnHigh('studio', 'large')],

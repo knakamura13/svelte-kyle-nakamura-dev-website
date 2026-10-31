@@ -281,6 +281,8 @@ test.describe('the HUD', () => {
 			await menu.getByRole('button', { name: new RegExp(`^${name}`) }).click();
 			await expect(picker).toHaveAttribute('aria-label', `Scenario: ${name}`);
 			await expect(page.getByRole('button', { name: /^Home:/ })).toHaveAttribute('aria-label', `Home: ${home}`);
+			// The smoke is too thin to see, so the Smoke overlay comes on with it, though the overlays started off.
+			await expect(page.getByRole('group', { name: 'Overlay' }).getByRole('button', { name: 'Smoke', exact: true })).toHaveAttribute('aria-pressed', 'true');
 			// The menu says what to look at once it runs.
 			await picker.click();
 			await expect(menu.locator('.panel-note')).toContainText(notice);
