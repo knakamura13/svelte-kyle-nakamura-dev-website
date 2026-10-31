@@ -14,8 +14,8 @@ import {
 } from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { palette } from '../palette';
-import { Fader, Tubes, blobShadow, clay, disposeTree, shade, studio } from '../engine/kit';
-import type { SceneFactory } from '../engine/types';
+import { Fader, Tubes, blobShadow, clay, disposeTree, shade, studio } from '$lib/experiments/engine/kit';
+import type { SceneFactory } from '$lib/experiments/engine/types';
 
 export interface FramesParams {
 	/** Which frame the camera rides in. */

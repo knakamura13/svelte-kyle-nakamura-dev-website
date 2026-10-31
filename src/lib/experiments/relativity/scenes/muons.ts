@@ -19,8 +19,8 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import { formatMicroseconds } from '../format';
 import { MUON_COUNT, MUON_HEIGHT_M, gamma, muonDecayLength, muonTrip, seededRandom } from '../physics';
 import { palette } from '../palette';
-import { Fader, Tubes, blobShadow, clay, disposeTree, flat, glow, shade, studio } from '../engine/kit';
-import type { SceneFactory } from '../engine/types';
+import { Fader, Tubes, blobShadow, clay, disposeTree, flat, glow, shade, studio } from '$lib/experiments/engine/kit';
+import type { SceneFactory } from '$lib/experiments/engine/types';
 
 export interface MuonsParams {
 	/** Muon speed as a fraction of c. */

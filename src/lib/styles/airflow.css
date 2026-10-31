@@ -1,0 +1,33 @@
+/* Airflow: the full-screen world and what floats over it, loaded after experiments.css by routes/experiments/airflow/+layout.svelte. The page stands
+   outside the site's shell (routes/+layout.svelte), so the window is the world: nothing scrolls, and the controls float over it. */
+html:has(.airflow-immersive),body:has(.airflow-immersive) { height:100%; overflow:hidden; overscroll-behavior:none; }
+.airflow-immersive { position:fixed; inset:0; overflow:hidden; background:#cbd3cf; }
+.experiment.airflow { --tint:#cbd3cf; }
+.airflow-world { position:absolute; inset:0; }
+
+/* The world fills the window. */
+.airflow-figure { position:absolute; inset:0; margin:0; }
+.airflow-world .stage-view { position:absolute; inset:0; height:auto; aspect-ratio:auto; background-color:var(--tint); }
+.airflow-world .stage-view canvas { cursor:default; touch-action:none; }
+.airflow-world .stage-view:focus-visible::after { border-radius:0; }
+.airflow-world .stage-note { color:var(--ink); font-size:14px; }
+
+/* The cursor says what a click on the world does: choose the thing under it, pin a probe or release smoke, or put a carried device down. */
+.airflow-world[data-hovering] .stage-view canvas { cursor:pointer; }
+.airflow-world:is([data-tool="probe"],[data-tool="smoke"]) .stage-view canvas { cursor:crosshair; }
+.airflow-world[data-carrying] .stage-view canvas { cursor:copy; }
+.airflow-world .stage-view[data-dragging] canvas { cursor:grabbing; }
+
+/* Room names and compass letters are plain text over the picture, so they carry no dot; a probe's label keeps one. */
+.airflow .stage-label[data-tone="room"],.airflow .stage-label[data-tone="compass"] { padding:3px 9px; background:#fffdf8cc; border-color:transparent; box-shadow:0 2px 10px #0000001a; font-weight:650; -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); }
+.airflow .stage-label[data-tone="room"]::before,.airflow .stage-label[data-tone="compass"]::before { display:none; }
+.airflow .stage-label[data-tone="compass"] { padding:1px 7px; color:var(--muted); font-size:10px; letter-spacing:.06em; }
+.airflow .stage-label[data-tone="probe"] { --tone:var(--ink); }
+
+/* Labels and notes inside the HUD's panels (the Physics panel). */
+.dock-label { margin:0; font-size:12px; font-weight:650; }
+.dock-notice { margin:0; font-size:12px; line-height:1.7; color:var(--muted); }
+.dock-notice strong { font-weight:650; color:var(--ink); }
+
+/* Where the simulation is: the status line's words. */
+.sim-status { margin:0; font-size:12px; line-height:1.6; color:var(--muted); font-variant-numeric:tabular-nums; }
