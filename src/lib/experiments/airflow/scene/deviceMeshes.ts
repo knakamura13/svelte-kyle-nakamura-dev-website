@@ -44,7 +44,19 @@ function sleeve(width: number, depth: number, height: number, corner: number, pr
 	outline.absarc(r - x, r - z, r, Math.PI, (3 * Math.PI) / 2, false);
 	outline.absarc(x - r, r - z, r, (3 * Math.PI) / 2, 2 * Math.PI, false);
 	// Pushed out along its own z, which is turned to stand up.
-	return new ExtrudeGeometry(outline, { depth: height, bevelEnabled: false, curveSegments: 4 }).rotateX(-Math.PI / 2).translate(0, -height / 2, 0);
+	const geometry = new ExtrudeGeometry(outline, { depth: height, bevelEnabled: false, curveSegments: 4 }).rotateX(-Math.PI / 2).translate(0, -height / 2, 0);
+	// An extrusion shades each flat of its corners on its own. Its sides are shaded smooth instead, as the body's are: each side
+	// point faces away from the nearest point of the rectangle its corners turn round. The top and bottom keep theirs.
+	const position = geometry.getAttribute('position');
+	const normal = geometry.getAttribute('normal');
+	for (let n = 0; n < normal.count; n++) {
+		if (Math.abs(normal.getY(n)) > 0.5) continue;
+		const dx = position.getX(n) - Math.max(r - x, Math.min(x - r, position.getX(n)));
+		const dz = position.getZ(n) - Math.max(r - z, Math.min(z - r, position.getZ(n)));
+		const length = Math.hypot(dx, dz);
+		normal.setXYZ(n, dx / length, 0, dz / length);
+	}
+	return geometry;
 }
 
 /** How the pieces of one device are held, so a frame can move them without rebuilding. */
