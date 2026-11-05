@@ -58,7 +58,8 @@ export interface PhysicsReading {
 	reducedDetail: boolean;
 }
 
-export type RunStatus = 'idle' | 'loading' | 'running' | 'paused' | 'unsupported' | 'error';
+/** `runaway`: the solver's air stopped being finite or passed 40 m/s (sim/runaway.ts), so the run stopped until a restart or a reset. */
+export type RunStatus = 'idle' | 'loading' | 'running' | 'paused' | 'unsupported' | 'error' | 'runaway';
 
 /** Everything the scene and the simulation write for the page to show. */
 export interface AirflowReadout {
