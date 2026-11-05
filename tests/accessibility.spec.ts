@@ -24,7 +24,18 @@ for (const path of pages) {
 					(selectors) => selectors.filter((s) => !document.querySelector(s)?.closest('[aria-hidden="true"]')),
 					unmeasured
 				);
-				expect(notDecorative).toEqual([]);
+				if (notDecorative.length === 0) return;
+				// axe can't see through any SVG over text. Hide aria-hidden SVGs drawn only as outlines, then the text must pass.
+				await page.evaluate(() => {
+					for (const svg of document.querySelectorAll('svg[aria-hidden="true"]')) {
+						const shapes = [...svg.querySelectorAll('path, rect, circle, ellipse, polygon, polyline, line, use, text, image')];
+						if (shapes.length > 0 && shapes.every((s) => getComputedStyle(s).fill === 'none')) (svg as SVGElement).style.visibility = 'hidden';
+					}
+				});
+				const builder = new AxeBuilder({ page }).withRules(['color-contrast']);
+				for (const selector of notDecorative) builder.include(selector);
+				const recheck = await builder.analyze();
+				expect([...recheck.violations, ...recheck.incomplete].flatMap((v) => v.nodes.map((n) => n.target.join(' ')))).toEqual([]);
 			});
 		}
 
