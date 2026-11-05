@@ -109,6 +109,8 @@ export class CpuSolver {
 	private lastCfl = 0;
 	private lastDivergence = 0;
 	private lastMaxSpeed = 0;
+	/** The last step's length, s. */
+	private lastStep = 0;
 	private substeps = 1;
 
 	constructor(config: SolverConfig) {
@@ -307,8 +309,14 @@ export class CpuSolver {
 		}
 	}
 
+	/** Measures the fields as they stand, for `diagnostics`: after they were written in rather than stepped. The cell-crossing count keeps the last step's length. */
+	remeasure() {
+		this.measure(this.lastStep);
+	}
+
 	/** Diagnostics that need a pass over the field: speed, divergence, and the cell-crossing count. */
 	private measure(dt: number) {
+		this.lastStep = dt;
 		const { nx, ny, nz, sx, sxy, h } = this.grid;
 		const { u, v, w } = this.vel;
 		const { fluid, au, av, aw } = this.geometry;

@@ -1,4 +1,5 @@
 import type { BackendFailure, BackendUpdate, FieldState, FlowBackend, Snapshot, SnapshotRequest } from '../backend';
+import { maxCflSpeed } from '../cpu/scalars';
 import { POINT_FIELDS, type Diagnostics, type RoomStats, type Slice, type SolverConfig } from '../types';
 import { volumeCells, type Volume } from '../volume';
 import { GpuContext } from './context';
@@ -27,6 +28,8 @@ interface Pending {
 interface Moment {
 	time: number;
 	steps: number;
+	/** How many times the fields had been written in (`GpuBackend.writes`): a reading of the air from before a write is not of the air now. */
+	writes: number;
 	/** The last step's length, s, for the CFL number. */
 	dt: number;
 	/** Fans whose flows the snapshot copied. */
@@ -40,7 +43,8 @@ interface Moment {
  * finished here in double.
  *
  * The scalar substep count comes from the largest CFL speed read back lately (`GpuSolver.scalarSubsteps`), refreshed
- * by a small read after a step whenever none is in flight, and by every snapshot.
+ * by a small read after a step whenever none is in flight, and by every snapshot. Fields written in (`writeFields`) are
+ * their own reading, taken here from the arrays.
  *
  * A step is submitted at once, so a device that cannot keep up would be given work faster than it finishes it. Each submit is
  * followed by a wait for the queue (`onSubmittedWorkDone`), and `stepsInFlight` counts the steps still waiting: the page sends no
@@ -50,8 +54,8 @@ export class GpuBackend implements FlowBackend {
 	readonly kind = 'webgpu';
 	time = 0;
 	steps = 0;
-	/** The most unfinished steps the page leaves on the device. A field, so a measurement can try another. */
-	maxInFlight = GPU_MAX_IN_FLIGHT;
+	/** The most unfinished steps the page leaves on the device once there is a CFL reading (`maxInFlight`). A field, so a measurement can try another. */
+	limit = GPU_MAX_IN_FLIGHT;
 	/** Steps submitted that the device has not finished. */
 	private unfinished = 0;
 	private lastDt = 0;
@@ -59,6 +63,8 @@ export class GpuBackend implements FlowBackend {
 	/** The step the CFL speed in `cflSpeed` was measured at; −∞ until the first reading arrives. */
 	private cflMeasuredAt = -Infinity;
 	private cflPending = false;
+	/** Times the fields were written in. A reading encoded before a write is of air that is gone, and is dropped when it arrives. */
+	private writes = 0;
 	private readonly cflStaging: GpuBuffer;
 	/** Steps whose tally slots have been read back and added to `tally`. */
 	private logged = 0;
@@ -109,6 +115,18 @@ export class GpuBackend implements FlowBackend {
 		return this.unfinished;
 	}
 
+	/**
+	 * The most unfinished steps the page leaves on the device (`FlowBackend.maxInFlight`): `limit`, but one while there is no CFL reading
+	 * at all. That is a world built from still air before its first step is read back, and a step with no reading takes the substep cap
+	 * (`step`), so the page sends that one alone and sizes the steps after it from what it read back, instead of a frame of them at the cap.
+	 */
+	get maxInFlight() {
+		return Number.isFinite(this.cflMeasuredAt) ? this.limit : 1;
+	}
+	set maxInFlight(limit: number) {
+		this.limit = limit;
+	}
+
 	/** Reports the loss of the graphics device (`GpuContext.onLost`), which ends every backend built on it. A device that is already gone reports at once. */
 	onFailure(listener: (failure: BackendFailure) => void) {
 		const { context } = this.solver;
@@ -136,6 +154,7 @@ export class GpuBackend implements FlowBackend {
 		s.encodeStep(encoder, dt, substeps, slot, s.querySet ? this.steps % PROFILE_STEPS : -1);
 		const readCfl = !this.cflPending;
 		const measuredAt = this.steps + 1;
+		const writes = this.writes;
 		if (readCfl) {
 			const pass = encoder.beginComputePass({ label: 'cfl' });
 			s.measure(pass);
@@ -157,7 +176,7 @@ export class GpuBackend implements FlowBackend {
 					const speed = new Float32Array(this.cflStaging.getMappedRange())[0];
 					this.cflStaging.unmap();
 					this.cflPending = false;
-					if (measuredAt > this.cflMeasuredAt) {
+					if (writes === this.writes && measuredAt > this.cflMeasuredAt) {
 						this.cflSpeed = speed;
 						this.cflMeasuredAt = measuredAt;
 					}
@@ -208,7 +227,7 @@ export class GpuBackend implements FlowBackend {
 	async snapshot(request: SnapshotRequest): Promise<Snapshot> {
 		const s = this.solver;
 		const { grid } = s;
-		const moment: Moment = { time: this.time, steps: this.steps, dt: this.lastDt, fans: s.fanCount };
+		const moment: Moment = { time: this.time, steps: this.steps, writes: this.writes, dt: this.lastDt, fans: s.fanCount };
 		const encoder = s.device.createCommandEncoder({ label: 'snapshot' });
 		const pass = encoder.beginComputePass({ label: 'snapshot' });
 		s.measure(pass);
@@ -365,6 +384,11 @@ export class GpuBackend implements FlowBackend {
 		queue.writeBuffer(s.next, 0, packed);
 		queue.writeBuffer(s.levels[0].p, 0, fields.p);
 		queue.writeBuffer(s.scal, 0, packPair(fields.theta, fields.particulates));
+		// The air written in is known here, so it is the CFL reading, as the measure kernel would read it: a world that carries another's air
+		// on (a step down, the warm-up's air moved to the grid it picked) sizes its first steps from that air, not from the substep cap.
+		this.cflSpeed = maxCflSpeed(s.grid, s.geometry, fields, s.fluid.settling);
+		this.cflMeasuredAt = this.steps;
+		this.writes++;
 	}
 
 	dispose() {
@@ -412,7 +436,7 @@ export class GpuBackend implements FlowBackend {
 		}
 		// The reading is of the fields as they stood when the snapshot was encoded, so it is as old as that, and it replaces only an older
 		// one: steps sent while it was on its way back have made it stale, and a step's own CFL read may have come back fresher.
-		if (moment.steps >= this.cflMeasuredAt) {
+		if (moment.writes === this.writes && moment.steps >= this.cflMeasuredAt) {
 			this.cflSpeed = cflSpeed;
 			this.cflMeasuredAt = moment.steps;
 		}

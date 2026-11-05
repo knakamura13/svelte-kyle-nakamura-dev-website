@@ -61,7 +61,12 @@ export function returnDrawn(purifiers: readonly Purifier[], next: Float32Array, 
  * advection scheme has to keep below about a half.
  */
 export function maxCfl(grid: Grid, geometry: Geometry, vel: Velocity, dt: number, settling = 0) {
-	const { nx, ny, nz, sx, sxy, h } = grid;
+	return (maxCflSpeed(grid, geometry, vel, settling) * dt) / grid.h;
+}
+
+/** `maxCfl`'s speed, m/s: the largest sum over a cell's three axes of the faster face's speed, plus the settling speed. The GPU reads the same back. */
+export function maxCflSpeed(grid: Grid, geometry: Geometry, vel: Velocity, settling = 0) {
+	const { nx, ny, nz, sx, sxy } = grid;
 	const { u, v, w } = vel;
 	const { fluid } = geometry;
 	let worst = 0;
@@ -76,7 +81,7 @@ export function maxCfl(grid: Grid, geometry: Geometry, vel: Velocity, dt: number
 				if (sum > worst) worst = sum;
 			}
 		}
-	return (worst * dt) / h;
+	return worst;
 }
 
 /** Cell diffusivities, written into `diffusivity`. */

@@ -97,6 +97,30 @@ test('steps of a room with windows, a window fan, a fan, a source and a purifier
 	for (const [name, comparison] of Object.entries(c)) if (name.startsWith('tally')) expect((comparison as Comparison).rel, name).toBeLessThan(1e-4);
 });
 
+/**
+ * Known issue 10 of the status doc: the room above with only its window fan differed from the CPU by 1.5e-4 in pressure after 10 steps,
+ * against the 1e-4 tolerance. That was the solver of 2026-10-09 (2bf7877; 1.53e-4 reproduced there by this room); it fell to 2.0e-5 with
+ * the mean of the last two pressure solves (37b53a5, 14c1298), and is 2.6e-5 now. Two checks. After 10 steps the room is inside the
+ * tolerance (it fails on 2bf7877's solver). And from the CPU's state before each of 12 steps, one GPU step against one CPU step: they
+ * agree to rounding, the velocity to a few f32 units in its last place (7e-7 of the fastest air) and the pressure to about 1e-5 Pa, whose
+ * gradient over a cell moves the air by about one such unit in a step. A kernel that computed something else would show in a single step
+ * from the same state, so the 10-step gap is that rounding, carried from step to step; the pressure's share of it reads larger as the
+ * room's pressures settle from 5.7 Pa to 0.46 Pa.
+ */
+test('the window-fan-only room matches CpuSolver within 1e-4 after 10 steps, and each step from the same state agrees to rounding', async () => {
+	const off = ['fan', 'emitter', 'sink', 'outdoors'];
+	const c = await call<Record<'velocity' | 'pressure' | 'particulates', Comparison>>(page, 'devicesParity', 10, off);
+	for (const name of ['velocity', 'pressure', 'particulates'] as const) report(`window-fan-only room ${name}`, c[name]);
+	expect(c.velocity.rel).toBeLessThan(1e-4);
+	expect(c.pressure.rel).toBeLessThan(1e-4);
+	const steps = await call<{ step: number; velocity: Comparison; pressure: Comparison }[]>(page, 'lockstepParity', 12, off);
+	for (const s of steps) {
+		console.log(`window-fan-only room, one step from the CPU's state before step ${s.step}: velocity ${s.velocity.rel.toExponential(2)} of ${s.velocity.scale.toFixed(3)} m/s, pressure ${s.pressure.maxAbs.toExponential(2)} Pa of ${s.pressure.scale.toFixed(3)} Pa`);
+		expect(s.velocity.rel, `step ${s.step}: velocity`).toBeLessThan(4e-6);
+		expect(s.pressure.maxAbs, `step ${s.step}: pressure, Pa`).toBeLessThan(5e-5);
+	}
+});
+
 test('the point sampler and the slice match cpu/readouts.ts on the same state', async () => {
 	const c = await call<Record<'sample' | 'slice', Comparison>>(page, 'readoutParity', 9);
 	report('readout sample', c.sample);

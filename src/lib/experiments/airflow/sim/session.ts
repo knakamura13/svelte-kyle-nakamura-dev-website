@@ -9,6 +9,7 @@ import type { Clock, Pin, Setup, View } from '../state';
 import { WARMUP_STEP, measureSteps, type Measured } from './calibrate';
 import { RollingMean, SliceHistory } from './history';
 import { resampleFields, type GridAir } from './resample';
+import { RUNAWAY_ANNOUNCEMENT, runawayNote, runawayOf, type Runaway } from './runaway';
 import type { Tuning } from './tuner';
 import { World, type BackendFactory } from './world';
 
@@ -211,7 +212,7 @@ export class SimulationSession {
 		const { status } = this.options.readout;
 		const measuring = this.measuring !== null;
 		let share: number;
-		if (status === 'unsupported' || status === 'error') share = 1;
+		if (status === 'unsupported' || status === 'error' || status === 'runaway') share = 1;
 		else if (measuring) share = 0.1 + 0.7 * this.measuring!;
 		else if (!this.world) share = this.building ? 0.05 : 0;
 		else share = (this.options.volume ? this.latest.volume !== null : this.latest.slice !== null || this.latest.tracers !== null) ? 1 : 0.9;
@@ -462,6 +463,38 @@ export class SimulationSession {
 		this.options.invalidate();
 	}
 
+	/**
+	 * The running world's air ran away (runaway.ts): a number in it stopped being finite, or the air passed 40 m/s. The world is dropped at
+	 * once and its picture with it, so nothing draws the broken air (the scene's air renderers clear for a world that is gone) and no probe,
+	 * room or hover reading shows its numbers. It is not built again until the visitor restarts or resets, since the same setup would most
+	 * likely run away again: its key is the failed one. The status line says what happened, and a screen reader is told once, politely.
+	 */
+	private halt(world: World, runaway: Runaway) {
+		const { readout } = this.options;
+		console.warn(`The simulation ran away (${runaway.kind}, the fastest air read ${runaway.speed} m/s), so it stopped.`);
+		this.generation++;
+		this.unwatch?.();
+		this.unwatch = null;
+		this.world = null;
+		this.retuning = '';
+		this.retuned = '';
+		this.carried = FRESH;
+		this.failedKey = this.worldKey;
+		world.dispose();
+		this.history.clear();
+		this.probeHistory.clear();
+		this.latest = { slice: null, tracers: null, smoke: null, volume: null, volumeAt: 0, version: this.latest.version + 1 };
+		readout.probes = [];
+		readout.rooms = [];
+		readout.hover = null;
+		readout.deviceFlow = {};
+		readout.physics = { ...readout.physics, backend: null, rate: null };
+		readout.status = 'runaway';
+		readout.note = runawayNote(runaway);
+		this.options.announce?.(RUNAWAY_ANNOUNCEMENT);
+		this.options.invalidate();
+	}
+
 	/** The point on the Slice where smoke is being released, or null. Set by the scene from the pointer. */
 	setEmitPoint(point: { x: number; y: number; z: number } | null) {
 		this.emitPoint = point;
@@ -626,6 +659,12 @@ export class SimulationSession {
 		void Promise.all([snapshot, sampled])
 			.then(([shot, values]) => {
 				if (this.disposed || generation !== this.generation || world !== this.world) return;
+				// Air that is no longer a number, or faster than any room's, is not drawn or shown: the run stops here (`halt`).
+				const runaway = runawayOf(shot.diagnostics);
+				if (runaway) {
+					this.halt(world, runaway);
+					return;
+				}
 				// A backend still reading the last volume back leaves this one out: ask again with the next snapshot.
 				if (volume && !shot.volume && this.volumeKey === moment) this.volumeKey = '';
 				// Readouts are throttled while frames come; a paused page asks for few reads, so each one is shown. The fan flows are in the

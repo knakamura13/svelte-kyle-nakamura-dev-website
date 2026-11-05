@@ -87,7 +87,8 @@ export async function measureSteps(backend: Steppable, options: MeasureOptions):
 	const pause = options.pause ?? wait;
 	const alive = options.alive ?? (() => true);
 	const background = backend.stepsInFlight !== undefined;
-	const room = Math.max(1, Math.min(MEASURE_DEPTH, backend.maxInFlight ?? 2));
+	// Asked at every look: a GPU leaves room for one step until its first reading of the air's speed is back (`GpuBackend.maxInFlight`).
+	const depth = () => Math.max(1, Math.min(MEASURE_DEPTH, backend.maxInFlight ?? 2));
 	const start = now();
 	let sent = 0;
 	// In the page, each step is timed by itself; in the background, the clock runs from a mark once the first steps are done.
@@ -108,7 +109,7 @@ export async function measureSteps(backend: Steppable, options: MeasureOptions):
 	for (;;) {
 		if (!alive()) throw new Error('The warm-up was stopped.');
 		const before = now();
-		if (background) while ((backend.stepsInFlight ?? 0) < room) send();
+		if (background) while ((backend.stepsInFlight ?? 0) < depth()) send();
 		else {
 			send();
 			if ((before - start) / 1000 >= discard) {
@@ -130,7 +131,7 @@ export async function measureSteps(backend: Steppable, options: MeasureOptions):
 			stretch = null;
 			spent = 0;
 			timed = 0;
-		} else if (background && !mark && elapsed >= discard && done >= room) {
+		} else if (background && !mark && elapsed >= discard && done >= depth()) {
 			mark = { at, done };
 		} else if (mark && !stretch && done > mark.done) {
 			// Stretches start as a step finishes, so each one's time is whole steps.

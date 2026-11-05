@@ -17,7 +17,7 @@
 	const solver = $derived(solverReadings(readout.physics, readout.status, units));
 	const smoke = $derived(smokeReadings(readout.physics.mass));
 	const rows = $derived(roomRows(readout.rooms, experience.plan.rooms, units));
-	const stopped = $derived(readout.status === 'unsupported' || readout.status === 'error');
+	const stopped = $derived(readout.status === 'unsupported' || readout.status === 'error' || readout.status === 'runaway');
 
 	// The verdict remembers where it was, so a number on the line does not flip it back and forth, and says so when the books change state.
 	let verdict: BalanceVerdict = $state.raw(balanceVerdict(null));
