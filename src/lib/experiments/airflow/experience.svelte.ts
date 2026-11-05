@@ -305,24 +305,27 @@ export class AirflowExperience extends Experience {
 		return device ? this.moveDevice(id, device.x + dx, device.z + dz) : null;
 	}
 
-	/** Turns a device to face `yaw` degrees clockwise from north, and says which way that is once the visitor stops. */
-	turnDevice(id: string, yaw: number) {
+	/**
+	 * Turns a device to face `yaw` degrees clockwise from north, and says which way that is once the visitor stops. `say` is false for a
+	 * slider, which says its own value as it moves: said again, it was heard twice.
+	 */
+	turnDevice(id: string, yaw: number, say = true) {
 		const device = this.setup.devices.find((d) => d.id === id);
 		if (!device) return;
 		const wrapped = ((Math.round(yaw) % 360) + 360) % 360;
 		device.yaw = wrapped;
 		this.scenario = null;
-		this.announce(`${this.nameOf(device)} faces ${describeBearing(wrapped).spoken}.`);
+		if (say) this.announce(`${this.nameOf(device)} faces ${describeBearing(wrapped).spoken}.`);
 		this.wake();
 	}
 
-	/** Aims a device up (positive) or down, degrees, within the limits, and says so once the visitor stops. */
-	aimDevice(id: string, tilt: number) {
+	/** Aims a device up (positive) or down, degrees, within the limits, and says so once the visitor stops (not for a slider: see `turnDevice`). */
+	aimDevice(id: string, tilt: number, say = true) {
 		const device = this.setup.devices.find((d) => d.id === id);
 		if (!device) return;
 		device.tilt = Math.max(LIMITS.tilt.min, Math.min(LIMITS.tilt.max, Math.round(tilt)));
 		this.scenario = null;
-		this.announce(`${this.nameOf(device)} aimed ${device.tilt === 0 ? 'level' : `${Math.abs(device.tilt)} degrees ${device.tilt > 0 ? 'up' : 'down'}`}.`);
+		if (say) this.announce(`${this.nameOf(device)} aimed ${device.tilt === 0 ? 'level' : `${Math.abs(device.tilt)} degrees ${device.tilt > 0 ? 'up' : 'down'}`}.`);
 		this.wake();
 	}
 
@@ -364,9 +367,9 @@ export class AirflowExperience extends Experience {
 		this.wake();
 	}
 
+	/** Stops or starts the clock. Nothing is announced here: the status line, a polite live region, says "Paused on …" or "Running on …" as the simulation stops or goes on, and an announcement as well was heard twice. */
 	togglePause() {
 		this.clock.paused = !this.clock.paused;
-		this.announce(this.clock.paused ? 'Paused.' : 'Running.');
 		this.wake();
 	}
 

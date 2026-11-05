@@ -224,7 +224,6 @@ export function createAirflowScene(host: WorldHost, params: AirflowSceneParams, 
 		return point && !selection.walled(point) ? point : null;
 	};
 	let openings = '';
-	let mode = params.view.mode;
 	let lastUpdate = 0;
 
 	/** The height the pointer reads the air at, pins a probe and releases smoke: the cell layer the slice snapped to, or the height asked for before the first slice. Nothing is drawn there. */
@@ -306,10 +305,8 @@ export function createAirflowScene(host: WorldHost, params: AirflowSceneParams, 
 				house.home.update(look(), view.walls, 0, true);
 				openings = '';
 			}
-			if (view.mode !== mode) {
-				mode = view.mode;
-				input.reset();
-			}
+			// A new tool forgets what the last one was doing, unless a key or a press since has already done so.
+			input.syncMode();
 			const reduced = host.reducedMotion();
 			// The host caps the `dt` it hands over at 50 ms so that an animation never jumps. The session and the tuner want how long the frame really
 			// took: a page drawing at 8 frames a second is not at 20, and a tab that was hidden for a minute is not one slow frame.

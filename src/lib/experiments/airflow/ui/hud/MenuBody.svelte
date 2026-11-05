@@ -30,10 +30,10 @@
 		}
 	}
 
+	/** The fine control: a slider, which says its own value as it moves, so nothing more is announced (the presets, buttons, say what they did). */
 	function fine(travel: number) {
 		if (!opening) return;
 		experience.setOpening(opening.id, travel / 100);
-		experience.announce(openingAnnouncement(opening.name, openingReading(opening, travel / 100)));
 	}
 
 	function act(id: MenuActionId, event: MouseEvent) {

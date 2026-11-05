@@ -361,7 +361,7 @@ for (const phone of PHONES) {
 			await openPhone(page, `${PAGE}&quality=low`);
 			await expect(view(page)).toHaveAttribute('data-quality', 'low');
 			await expect(page.locator('.sim-status')).toHaveAttribute('data-status', 'running', { timeout: 60_000 });
-			const pause = toolbar(page).getByRole('button', { name: /^(Pause|Resume)$/ });
+			const pause = toolbar(page).getByRole('button', { name: /^(Pause|Play)$/ });
 			// The cross-ventilation Scenario, a few seconds in, held still.
 			await page.waitForTimeout(8000);
 			await pause.tap();

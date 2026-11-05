@@ -88,6 +88,8 @@ export class AirflowInput implements SceneInput {
 	private lastPin: { id: string | null; at: number; x: number; y: number } | null = null;
 	/** A tap a full home refused, to be told so in `tick` once it is too late to be the first click of a double click. */
 	private refused: { point: Point3; at: number } | null = null;
+	/** The mode the input last acted in, so a new tool forgets what the last one was doing (`syncMode`). */
+	private acted: PointerMode | null = null;
 
 	constructor(private readonly host: InputHost) {}
 
@@ -128,7 +130,19 @@ export class AirflowInput implements SceneInput {
 		return false;
 	}
 
+	/**
+	 * Forgets what was in progress (`reset`) once the mode has changed since the input last acted: a new tool. The scene calls it once a
+	 * frame, and the input itself before it takes a key or a press, so a key pressed between choosing a tool and the next frame (the Smoke
+	 * tool, then Enter at once) is not undone when that frame comes.
+	 */
+	syncMode() {
+		const mode = this.host.mode();
+		if (this.acted !== null && mode !== this.acted) this.reset();
+		this.acted = mode;
+	}
+
 	private down(event: PointerEvent, ndc: { x: number; y: number }, touch: boolean) {
+		this.syncMode();
 		if (this.held) this.letGo();
 		// A device or one of its handles comes first, in every mode and for a finger as for a mouse.
 		const grab = this.host.grab?.(ndc);
@@ -228,6 +242,7 @@ export class AirflowInput implements SceneInput {
 	}
 
 	key(event: KeyboardEvent): boolean {
+		this.syncMode();
 		const mode = this.host.mode();
 		if (mode === 'look' || event.altKey || event.ctrlKey || event.metaKey) return false;
 		const down = event.type === 'keydown';

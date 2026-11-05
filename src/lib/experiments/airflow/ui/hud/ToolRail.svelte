@@ -50,15 +50,10 @@
 	{/each}
 	{#if ui.phone}
 		<span class="divider" aria-hidden="true"></span>
-		<button
-			type="button"
-			class="tool"
-			tabindex="-1"
-			aria-label={experience.clock.paused ? 'Resume' : 'Pause'}
-			onclick={() => experience.togglePause()}
-		>
+		<!-- Its name is the word under it ("Play" or "Pause"), so a visitor who speaks to the phone can say what they see. -->
+		<button type="button" class="tool" tabindex="-1" onclick={() => experience.togglePause()}>
 			<Icon name={experience.clock.paused ? 'play' : 'pause'} size={22} />
-			<span class="tool-label" aria-hidden="true">{experience.clock.paused ? 'Play' : 'Pause'}</span>
+			<span class="tool-label">{experience.clock.paused ? 'Play' : 'Pause'}</span>
 		</button>
 		<button type="button" class="tool" tabindex="-1" aria-expanded={ui.popover === 'view'} aria-controls="hud-view-sheet" onclick={() => ui.toggle('view')}>
 			<Icon name="more" size={22} />
