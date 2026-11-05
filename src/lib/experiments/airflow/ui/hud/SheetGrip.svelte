@@ -149,7 +149,7 @@
 		width: 44px;
 		background: rgb(255 255 255 / 0.46);
 	}
-	/* The ring goes round the bar, inside the sheet's glass, not round the target, which reaches over the world. */
+	/* The ring goes round the bar, inside the sheet's glass, rather than round the whole target at the sheet's edge. */
 	.grip:focus-visible {
 		outline: none;
 	}
