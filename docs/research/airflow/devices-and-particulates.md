@@ -269,7 +269,9 @@ Conversions: He as printed in mg/min; Fortmann 201.5 ÷ 60 = 3.36, 175.1 ÷ 60 =
 
 ## 9. Explainer wording that depends on sections 6 and 7
 
-For the explainer check (issue 65). `src/lib/experiments/airflow/ui/Explainer.svelte` says the following today, and each statement changes with these numbers:
+Applied on 2026-11-04 (issue 65, commit d027530): items 1, 2, 3 and 5 as written below, and item 4 takes the 5 %. The explainer also cites Riley and others 2002 for item 5 and Dacunto and others 2013 (abstract only) for the 9 to 16 mg/min of item 1, and every source below is checked in `explainer-sources-check.md` (sections 1, 3 and 6). The list is kept as it was written.
+
+For the explainer check (issue 65). `src/lib/experiments/airflow/ui/Explainer.svelte` said the following on 2026-10-14, and each statement changed with these numbers:
 
 1. "The smoke amounts marked on the smoke slider (a candle, incense, frying and a cooking burst) are placeholders, not measurements." They are now figures from published measurements, one to a few studies each. The sentence should say that, that real sources differ from them by factors of several (a candle's flame, an incense type, the food and the heat), and that the top mark, 10 mg/min, is about the 95th percentile of the 836 emission events (cooking and other activities) logged in 18 apartments in one study (Chan and others 2018), and sits where the calibrated measurements of hot or burned cooking cluster (9 to 16 mg/min).
 2. "Their settling and deposition speeds are rough: published loss rates for one size of particle differ by several times between a quiet room, a test chamber and an occupied house, and no source gives these speeds directly." No source gives the speeds directly, which is still true, but they are now derived: the settling speed (3e-5 m/s) from a settling-speed calculation averaged over a published particle size distribution, and the deposition speed (5e-5 m/s) from the loss rate measured in occupied homes (about 0.4 per hour, a factor of 2.5 either way) with settling taken out. The sentence can say so.
@@ -279,7 +281,7 @@ For the explainer check (issue 65). `src/lib/experiments/airflow/ui/Explainer.sv
 
 ## Gaps and uncertainty
 
-- **Box fans:** only the Air King 9723 has manufacturer CFM at all three speeds. Lasko publishes a single maximum CFM per model (B20548 at 2,000; B20301 at 1,725), so their Low and Medium values are UNCONFIRMED. No sheet names a test standard, so it is not known whether the ratings follow ANSI/AMCA 230.
+- **Box fans:** only the Air King 9723 has manufacturer CFM at all three speeds. Lasko publishes a single maximum CFM per model (B20548 at 2,000; B20301 at 1,725), so their Low and Medium values are UNCONFIRMED. No sheet names a test standard. Air King's window-fan page does (read 2026-11-04, https://www.airkinglimited.com/product/window-fan/): "All fans are tested in accordance with AMCA standard 230-99." Its box-fan and pedestal-fan pages name none, so for the 9723, 9119 and 9126 it is not known whether the ratings follow ANSI/AMCA 230.
 - **Lasko and Hydrofarm pages:** Lasko's older product URLs (3733, 2155A, 2138) return 404, and hydrofarm.com failed TLS verification. Figures for those models exist only in retailer listings and were not used.
 - **Window fans:** Air King publishes one CFM per speed for both directions, so intake and exhaust are not distinguished. The 9166 sheet's text and drawing give different window-width ranges.
 - **Shut-off pressure and curve form (5), AQI and WHO values (8):** none were verified before the session ended. Each needs a fresh pass against the sources named in its section. The particle constants (6) and the emission rates (7) were done on 2026-10-14, and their open items are listed in sections 6.3 and 7.4. The pedestal fans (2) were done in the second pass (2026-10-09) and the purifiers (4) in the third (2026-10-14), at the end of this note, each with what could not be confirmed.
@@ -291,7 +293,8 @@ This section adds to the sections above and replaces none of them. It records wh
 
 - **Method:** each Air King spec sheet was downloaded and its text layer extracted with PyMuPDF, and the values were read from that text. Product web pages were read through a page fetch. A value that appeared only in a search-engine summary is listed as a lead and is not used.
 - **Units:** as printed (inches, CFM). The catalog converts with 1 in = 0.0254 m and 1 CFM = 0.000471947443 m³/s.
-- **Test standard:** none of the Air King sheets names the standard its CFM was measured to.
+- **Test standard:** none of the Air King sheets names the standard its CFM was measured to. Air King's window-fan page says "All fans are tested in accordance with AMCA standard 230-99" (read 2026-11-04); its box-fan and pedestal-fan pages name no test.
+- **Checked again on 2026-11-04** for the explainer: the four sheets in the table below match it, each "Updated 3-23" (`explainer-sources-check.md` section 6, P1 to P5).
 
 ### Confirmed and in the catalog
 
@@ -333,7 +336,7 @@ A web search also returned retailer listings (Comfort Zone CZ319WT, Black+Decker
 
 ### Room air purifiers (third pass, 2026-10-14, issue 57): three in the catalog, top-speed CADR only
 
-Each page, manual and record below was read on 2026-10-14. Everything printed below is as the source prints it. The catalog (`src/lib/experiments/airflow/devices/catalog.ts`) lists the three models, and `tests/solver/purifiers.spec.ts` holds each top-speed figure to the number in the "Used" column.
+Each page, manual and record below was read on 2026-10-14, and read again on 2026-11-04 for the explainer (`explainer-sources-check.md` section 6, P6 to P14): every figure matches. That pass adds three things. The Mighty's page has moved to https://cowaymega.com/products/mighty-ap-1512hh (the old address redirects). The AHAM directory read for the Mighty is the January 2018 edition, "2018 Directory of Certified Portable Electric Room Air Cleaners, Edition No. 1 – January", printed p. 5, read on the Wayback Machine's capture https://web.archive.org/web/20180219113032/http://www.ahamdir.com/aham_cm/ahampdf/AirCleanerFullDir.pdf; it prints the 233 with no unit, and its room size (361 sq ft = 233 × 1.55) holds for cubic feet per minute. The AHAM record for the Core 300 is in the live directory, https://www.ahamdir.com/room-air-cleaners/. The three manuals print no date (their PDFs were made on 2024-11-26, 2025-11-12 and 2018-05-25) and are titled "User Manual". Everything printed below is as the source prints it. The catalog (`src/lib/experiments/airflow/devices/catalog.ts`) lists the three models, and `tests/solver/purifiers.spec.ts` holds each top-speed figure to the number in the "Used" column.
 
 **What is published and what is not.** CADR (clean air delivery rate, the ANSI/AHAM AC-1 rating) is published for the highest fan speed only. No manual, maker page, AHAM listing or ENERGY STAR record gives CADR or airflow at any lower speed for any of the three models, and AHAM's own FAQ ("Frequently Asked Questions about Testing of Portable Air Cleaners", June 2020) says AC-1 tests the highest speed setting. So **CADR at Sleep, Low and Medium is derived, not published**: the top figure times the speed's power mark (0.25, 0.5 and 0.75 for Sleep, Low and Medium; High is 1), which takes CADR as proportional to fan speed. Real units will differ. This is the decision of 2026-10-14 (issue 57), and each model's `source` line and the explainer say so.
 
