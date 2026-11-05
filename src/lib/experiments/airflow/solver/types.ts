@@ -124,7 +124,10 @@ export interface FanDisk {
 	normal: [number, number, number];
 	/** Swept area, m². */
 	area: number;
-	/** Flow with no back-pressure, m³/s, and pressure rise with no flow, Pa. Both are zero when the fan is off. */
+	/**
+	 * Flow with no back-pressure, m³/s, and pressure rise with no flow, Pa. `dpMax` is zero when the fan is off. A `qMax` of zero is a
+	 * push that does not fall as the flow rises: a purifier's outlet, whose flow the pressure solve sets (`Sink`), not a curve.
+	 */
 	qMax: number;
 	dpMax: number;
 }
@@ -137,11 +140,20 @@ export interface Emitter {
 	rate: number;
 }
 
-/** Removes particulates at a place, like an air purifier's inlet: `cadr` m³/s of air is cleaned, spread over cells by share. */
+/**
+ * An air purifier, as the solver sees it: it draws `cadr` m³/s of air in over the cells of its intake (`cells`, each taking its `share`
+ * of the flow, the shares adding up to 1) and blows the same air back out over the cells of its outlet. The pressure solve makes the air
+ * vanish into the one and appear out of the other, so the purifier moves its flow on every grid and the air it draws in is the room's,
+ * never air it has already cleaned. The air takes its particulates and its heat in with it: the purifier keeps every particle (the flow is
+ * its clean air delivery rate) and gives the heat back at the outlet, so it neither warms nor cools the room. The push that makes the
+ * outlet a jet is a fan disk with a steady push (`FanDisk.qMax` 0). No cell may be in both an intake and an outlet.
+ */
 export interface Sink {
 	cells: Uint32Array;
 	share: Float32Array;
 	cadr: number;
+	/** The outlet's cells, and each one's share of the flow, the shares adding up to 1. */
+	outlet: { cells: Uint32Array; share: Float32Array };
 }
 
 export interface MassBalance {

@@ -145,8 +145,12 @@ fn main(@builtin(local_invocation_index) lid: u32, @builtin(workgroup_id) wid: v
 			flow = (shape.w * sum) / total;
 		}
 		var acceleration = 0.0;
-		if (curve.x > 0.0 && curve.y > 0.0 && total > 0.0) {
-			let ratio = flow / curve.x;
+		if (curve.y > 0.0 && total > 0.0) {
+			// With no qMax the push is steady (a purifier's outlet).
+			var ratio = 0.0;
+			if (curve.x > 0.0) {
+				ratio = flow / curve.x;
+			}
 			let asked = (curve.y * (1.0 - ratio * ratio) * shape.w) / (total * (C.h * C.h * C.h) * C.rho);
 			let before = fanState[n].y;
 			acceleration = before + (asked - before) * (S.dt / (S.dt + ${FAN_SPIN_UP.toFixed(6)}));

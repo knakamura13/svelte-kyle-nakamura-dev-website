@@ -13,7 +13,8 @@ import { UNIFORM_STRUCTS } from '../layout';
  *   geo                         vec4: (au, av, aw, cell) where cell is room + 1 for air and −(room + 1) for solid,
  *                                so `w > 0` is the fluid mask and |w| − 1 the room.
  *   scal, scalNext              vec2: (θ, particulates).
- *   srcsink                     vec2: (release rate, ppm/s; purifier removal rate, 1/s).
+ *   srcsink                     vec2: (release rate, ppm/s; the air a purifier draws in per second per unit of volume,
+ *                                1/s, negative where it blows the air back out).
  *   coef (one per level)        vec4: (cx, cy, cz, rhs). The diagonal is the sum of the six conductances, recomputed
  *                                where it is needed rather than stored: those six values are read anyway.
  *   p (one per level), nut      f32.

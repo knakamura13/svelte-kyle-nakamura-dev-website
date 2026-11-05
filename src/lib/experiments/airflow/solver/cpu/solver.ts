@@ -21,7 +21,7 @@ import { advectVelocity, type Velocity } from './advect';
 import { diffuseVelocity } from './diffuse';
 import { applyBuoyancy, applyFans, applyPressureGradient, fanAcceleration } from './forces';
 import { PressureSolver } from './pressure';
-import { diffusivities, emptyTally, maxCfl, stepScalar, type ScalarSpec } from './scalars';
+import { diffusivities, emptyTally, maxCfl, returnDrawn, stepScalar, type Purifier, type ScalarSpec } from './scalars';
 import { Particles } from './particles';
 import { extractSlice, roomStats, samplePoints } from './readouts';
 import { eddyViscosity } from './turbulence';
@@ -54,7 +54,7 @@ export function emptyExterior(grid: Grid): Exterior {
  *   3. adds buoyancy and fan forces,
  *   4. diffuses it (viscosity plus eddy viscosity),
  *   5. projects it to be divergence-free, solving for pressure with multigrid, with exterior openings as
- *      pressure-driven boundaries,
+ *      pressure-driven boundaries, but for the air purifiers draw in and blow out (`setSinks`),
  *   6. transports temperature and particulates through the new flow in conservative substeps.
  *
  * Every kernel works on typed arrays in one shared layout (see grid.ts), so the WebGPU solver can mirror them.
@@ -98,7 +98,9 @@ export class CpuSolver {
 	private readonly diffusivity: Float32Array;
 	private readonly heatDiffusivity: Float32Array;
 	private readonly source: Float32Array;
-	private readonly sink: Float32Array;
+	/** The air purifiers draw in per second per unit of volume, 1/s: positive in an intake, negative in an outlet. */
+	private readonly air: Float32Array;
+	private purifiers: Purifier[] = [];
 	/** The pressure the previous step started from, and the mean of it and this step's, which the first half-step applies (see `step`). */
 	private readonly previousPressure: Float32Array;
 	private readonly startPressure: Float32Array;
@@ -136,7 +138,7 @@ export class CpuSolver {
 		this.diffusivity = array();
 		this.heatDiffusivity = array();
 		this.source = array();
-		this.sink = array();
+		this.air = array();
 		this.previousPressure = array();
 		this.startPressure = array();
 		this.pressure = new PressureSolver(this.grid, this.pressureSettings);
@@ -192,11 +194,16 @@ export class CpuSolver {
 			for (let n = 0; n < emitter.cells.length; n++) this.source[emitter.cells[n]] += (emitter.rate * emitter.share[n]) / air;
 	}
 
-	/** Replaces every sink. */
+	/** Replaces every purifier: the air each draws in at its intake and blows out of its outlet, per cell. */
 	setSinks(sinks: Sink[]) {
-		this.sink.fill(0);
+		this.air.fill(0);
 		const volume = this.grid.cellVolume;
-		for (const sink of sinks) for (let n = 0; n < sink.cells.length; n++) this.sink[sink.cells[n]] += (sink.cadr * sink.share[n]) / volume;
+		this.purifiers = sinks.map((sink) => {
+			const drawn = Float32Array.from(sink.share, (share) => (sink.cadr * share) / volume);
+			for (let n = 0; n < sink.cells.length; n++) this.air[sink.cells[n]] += drawn[n];
+			for (let n = 0; n < sink.outlet.cells.length; n++) this.air[sink.outlet.cells[n]] -= (sink.cadr * sink.outlet.share[n]) / volume;
+			return { intake: sink.cells, drawn, outlet: sink.outlet.cells, share: sink.outlet.share };
+		});
 	}
 
 	/** Advances the flow, temperature and particulates by `dt` seconds. */
@@ -243,9 +250,9 @@ export class CpuSolver {
 			[this.vel, this.next] = [this.next, this.vel];
 		}
 
-		// 5. Projection.
+		// 5. Projection, which also makes the air a purifier draws in vanish and the air it blows out appear.
 		// The pressure takes the second half of the step (the first half was applied before advection).
-		this.pressure.assemble(half, fluid.rho, fluid.cd, geometry, this.exterior, this.vel);
+		this.pressure.assemble(half, fluid.rho, fluid.cd, geometry, this.exterior, this.vel, this.purifiers.length ? this.air : undefined);
 		this.pressure.solve();
 		this.pressure.project(half, fluid.rho, geometry, this.vel);
 
@@ -263,6 +270,8 @@ export class CpuSolver {
 
 	private transport(dt: number) {
 		const { grid, fluid, geometry, exterior } = this;
+		// A purifier's air takes both into its intake. It keeps the particulates and blows the heat back out of its outlet.
+		const purifiers = this.purifiers.length ? this.air : undefined;
 		const heat: ScalarSpec = {
 			molecular: fluid.alpha,
 			turbulent: fluid.prT,
@@ -270,7 +279,8 @@ export class CpuSolver {
 			inflow: exterior.theta,
 			settling: 0,
 			deposition: 0,
-			wall: this.sides.map((side) => side.theta)
+			wall: this.sides.map((side) => side.theta),
+			sink: purifiers
 		};
 		const smoke: ScalarSpec = {
 			molecular: fluid.particleDiffusivity,
@@ -280,7 +290,7 @@ export class CpuSolver {
 			settling: fluid.settling,
 			deposition: fluid.deposition,
 			source: this.source,
-			sink: this.sink
+			sink: purifiers
 		};
 		const cfl = maxCfl(grid, geometry, this.vel, dt, fluid.settling);
 		const diffusive = (6 * (Math.max(fluid.alpha, fluid.particleDiffusivity, this.nuMax() / Math.min(fluid.prT, fluid.scT)) + fluid.mixing) * dt) / (grid.h * grid.h);
@@ -290,6 +300,7 @@ export class CpuSolver {
 		diffusivities(grid, geometry, this.nut, smoke, this.diffusivity);
 		for (let s = 0; s < this.substeps; s++) {
 			stepScalar(grid, geometry, this.vel, this.heatDiffusivity, heat, this.theta, this.thetaNext, dtau);
+			returnDrawn(this.purifiers, this.thetaNext, dtau);
 			[this.theta, this.thetaNext] = [this.thetaNext, this.theta];
 			stepScalar(grid, geometry, this.vel, this.diffusivity, smoke, this.c, this.cNext, dtau, this.tally);
 			[this.c, this.cNext] = [this.cNext, this.c];
@@ -301,6 +312,7 @@ export class CpuSolver {
 		const { nx, ny, nz, sx, sxy, h } = this.grid;
 		const { u, v, w } = this.vel;
 		const { fluid, au, av, aw } = this.geometry;
+		const { air } = this;
 		let fastest = 0;
 		let squares = 0;
 		let sumSquares = 0;
@@ -310,7 +322,8 @@ export class CpuSolver {
 				for (let i = 0; i < nx; i++) {
 					const c = i + sx * j + sxy * k;
 					if (!fluid[c]) continue;
-					const net = au[c + 1] * u[c + 1] - au[c] * u[c] + av[c + sx] * v[c + sx] - av[c] * v[c] + aw[c + sxy] * w[c + sxy] - aw[c] * w[c];
+					// Less the net outflow a purifier makes there: minus the air it draws in, times h.
+					const net = au[c + 1] * u[c + 1] - au[c] * u[c] + av[c + sx] * v[c + sx] - av[c] * v[c] + aw[c + sxy] * w[c + sxy] - aw[c] * w[c] + air[c] * h;
 					sumSquares += net * net;
 					cells++;
 					const fast = Math.max(Math.abs(u[c]), Math.abs(u[c + 1]), Math.abs(v[c]), Math.abs(v[c + sx]), Math.abs(w[c]), Math.abs(w[c + sxy]));

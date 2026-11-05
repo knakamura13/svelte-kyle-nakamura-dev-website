@@ -244,7 +244,11 @@ ${ENTRY} {
 				let added = rates.x * S.dtau;
 				result.y = result.y + added;
 				tally.z = added * volume;
-				let purifier = rates.y;
+				// The air a purifier's intake draws in takes its heat (\`returnDrawn\` gives it back at the outlet) and its particulates.
+				let purifier = max(rates.y, 0.0);
+				if (purifier > 0.0) {
+					result.x = result.x / (1.0 + purifier * S.dtau);
+				}
 				let deposit = C.deposition / h;
 				var surfaces = 0.0;
 				if (deposit > 0.0 || C.settling > 0.0) {
@@ -318,5 +322,45 @@ fn main(@builtin(local_invocation_index) lid: u32) {
 }`
 };
 
-export const SCALAR_KERNELS = [scalars, tally];
+/**
+ * cpu/scalars.ts `returnDrawn`, after each substep of \`scalars\`: each purifier's outlet gets the heat its intake took in with the air,
+ * which the substep removed implicitly, so a cell gave its new value times its rate times dτ. One workgroup takes the purifiers in turn
+ * (two outlets may share a cell). \`purifierInfo\` per purifier: (first intake entry, intake entries, first outlet entry, outlet entries);
+ * \`purifierCells\` (cell, bits of the air drawn in per second per unit of volume) for an intake's entries and (cell, bits of the share)
+ * for an outlet's. \`N.a\` purifiers.
+ */
+export const returnDrawn: KernelSource = {
+	name: 'returnDrawn',
+	bindings: [uniform('S', 'Step'), uniform('N', 'Counts'), read('purifierInfo', 'array<vec4<u32>>'), read('purifierCells', 'array<vec2<u32>>'), write('next', VEC2)],
+	code: `var<workgroup> sums: array<f32, 256>;
+@compute @workgroup_size(256)
+fn main(@builtin(local_invocation_index) lid: u32) {
+	for (var p = 0; p < N.a; p = p + 1) {
+		let info = purifierInfo[p];
+		var drawn = 0.0;
+		for (var e = lid; e < info.y; e = e + 256u) {
+			let entry = purifierCells[info.x + e];
+			drawn = drawn + next[entry.x].x * bitcast<f32>(entry.y);
+		}
+		sums[lid] = drawn;
+		workgroupBarrier();
+		for (var s = 128u; s > 0u; s = s >> 1u) {
+			if (lid < s) {
+				sums[lid] = sums[lid] + sums[lid + s];
+			}
+			workgroupBarrier();
+		}
+		let back = sums[0] * S.dtau;
+		for (var e = lid; e < info.w; e = e + 256u) {
+			let entry = purifierCells[info.z + e];
+			next[entry.x].x = next[entry.x].x + back * bitcast<f32>(entry.y);
+		}
+		// The next purifier's sums and outlet start once this one's are done.
+		storageBarrier();
+		workgroupBarrier();
+	}
+}`
+};
+
+export const SCALAR_KERNELS = [scalars, tally, returnDrawn];
 void F32;

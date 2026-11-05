@@ -142,9 +142,10 @@ export class PressureSolver {
 	/**
 	 * Builds the system for this step: conductances, diagonal and right-hand side on the fine level, and the
 	 * coarse operators. `vel` holds the velocity after advection, diffusion and forces, which the projection
-	 * makes divergence-free.
+	 * makes divergence-free, except where `air` (per cell, 1/s) says a purifier draws air in (positive) or blows
+	 * it out (negative): there the cell's net outflow becomes minus `air` times its volume.
 	 */
-	assemble(dt: number, rho: number, cd: number, geometry: Geometry, exterior: Exterior, vel: Velocity) {
+	assemble(dt: number, rho: number, cd: number, geometry: Geometry, exterior: Exterior, vel: Velocity, air?: Float32Array) {
 		const { nx, ny, nz, sx, sxy, h } = this.grid;
 		const fine = this.levels[0];
 		const { au, av, aw, fluid } = geometry;
@@ -152,6 +153,7 @@ export class PressureSolver {
 		const { cx, cy, cz, dg, rhs, p } = fine;
 		const k = (h * dt) / rho;
 		const area = h * h;
+		const volume = area * h;
 
 		cx.fill(0);
 		cy.fill(0);
@@ -180,7 +182,7 @@ export class PressureSolver {
 					if (j < ny - 1) divergence += av[c + sx] * v[c + sx];
 					if (kk > 0) divergence -= aw[c] * w[c];
 					if (kk < nz - 1) divergence += aw[c + sxy] * w[c + sxy];
-					rhs[c] = -area * divergence;
+					rhs[c] = -area * divergence - (air ? air[c] * volume : 0);
 				}
 			}
 

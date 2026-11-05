@@ -81,9 +81,9 @@
 				approximated.
 			</li>
 			<li>
-				Fans and purifiers are idealised: a disc that pushes by the model’s rated flow, and a band round a purifier’s body that cleans at its rated rate, with the clean air
-				blown out of the top. The band draws no air in, so the air it has cleaned lingers round it, and a purifier clears a closed room at a half to nine-tenths of the
-				rate its rating implies: the finer the grid, the slower. Real ones vary with age, filters and where they stand. A fan’s flow is the maker’s rating, and none of the fan sheets read names the test behind
+				Fans and purifiers are idealised: a disc that pushes by the model’s rated flow, and a purifier that draws its rated rate of air in through a band of its body and
+				blows it out of the top, clean. On every grid it clears a closed room at about the rate its rating implies, a little slower where its own clean air comes back to it.
+				Its body is not solid, so about as much air again rises through it into the jet. Real ones vary with age, filters and where they stand. A fan’s flow is the maker’s rating, and none of the fan sheets read names the test behind
 				it. A purifier’s rate is its clean air delivery rate for smoke, which is published for the top speed only. Sleep, Low and Medium are derived, not published: the top
 				rate times 0.25, 0.5 and 0.75, which assumes the rate follows the fan’s speed. Real purifiers will differ. No maker gives the size of a purifier’s openings, so those
 				are estimated from the makers’ drawings.

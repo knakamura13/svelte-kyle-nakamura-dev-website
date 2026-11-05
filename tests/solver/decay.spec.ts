@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { FAN_MODELS } from '../../src/lib/experiments/airflow/devices/catalog';
+import { FAN_MODELS, PURIFIER_MODELS } from '../../src/lib/experiments/airflow/devices/catalog';
 import { newDevice } from '../../src/lib/experiments/airflow/devices/placement';
 import type { DeviceModel } from '../../src/lib/experiments/airflow/devices/types';
 import { planById } from '../../src/lib/experiments/airflow/homes/plans';
@@ -17,7 +17,8 @@ import { blankSetup } from '../../src/lib/experiments/airflow/state';
 
 const make: BackendFactory = (config, initial) => new CpuBackend({ ...config, scalarSubsteps: undefined }, initial);
 const box = FAN_MODELS.find((m) => m.kind === 'box-fan')!;
-const models = new Map<string, DeviceModel>([[box.id, box]]);
+const purifier = PURIFIER_MODELS.find((m) => m.size === 'large')!;
+const models = new Map<string, DeviceModel>([[box.id, box], [purifier.id, purifier]]);
 const plan = planById('studio')!;
 const DT = 0.05;
 
@@ -36,8 +37,10 @@ async function faceEnergy(world: World) {
 test.describe('a closed room at rest', () => {
 	test.describe.configure({ timeout: 240000 });
 
-	test('settles after its fan stops: the kinetic energy never grows again, and is nearly gone a minute later', async () => {
-		const made = newDevice(plan, box, []);
+	// A purifier draws its air in and blows it out (the pressure solve's sources), and must leave the room to come to rest as a fan does.
+	for (const model of [box, purifier])
+		test(`settles after its ${model === box ? 'fan' : 'purifier'} stops: the kinetic energy never grows again, and is nearly gone a minute later`, async () => {
+		const made = newDevice(plan, model, []);
 		if (!('device' in made)) throw new Error(made.reason);
 		const fan = { ...made.device, power: 1 };
 		// Every opening shut, the same temperature inside and out, no wind: the fan is the only thing that ever moves the air.
@@ -60,7 +63,7 @@ test.describe('a closed room at rest', () => {
 				samples.push(await faceEnergy(world));
 			}
 			const worst = samples.slice(5).reduce((growth, e, n) => Math.max(growth, e / samples[n + 4]), 0);
-			console.log(`energy with the fan on ${running.toExponential(2)}; 1 s after ${samples[0].toExponential(2)}; 40 s ${samples[39].toExponential(2)}; 80 s ${samples[79].toExponential(2)}; largest one-second growth after 5 s: ${((worst - 1) * 100).toFixed(2)} %`);
+			console.log(`${model.id}: energy while it runs ${running.toExponential(2)}; 1 s after ${samples[0].toExponential(2)}; 40 s ${samples[39].toExponential(2)}; 80 s ${samples[79].toExponential(2)}; largest one-second growth after 5 s: ${((worst - 1) * 100).toFixed(2)} %`);
 			expect(worst, 'no second of the decay is a second of growth').toBeLessThan(1.02);
 			expect(samples[59], 'a minute after the fan stopped').toBeLessThan(0.1 * samples[4]);
 		} finally {

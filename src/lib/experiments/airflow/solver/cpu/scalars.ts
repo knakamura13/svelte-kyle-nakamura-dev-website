@@ -25,9 +25,35 @@ export interface ScalarSpec {
 	deposition: number;
 	/** Fixed wall value per box side (-x, +x, -y, +y, -z, +z); undefined for an adiabatic wall. */
 	wall?: (number | undefined)[];
-	/** Per cell: release rate in scalar units per second, and first-order removal rate per second (a purifier's inlet). */
+	/**
+	 * Per cell: release rate in scalar units per second; and the air a purifier draws in per second per unit of volume (positive in
+	 * its intake, where the air takes the scalar with it, and negative in its outlet, where the air comes back: `returnDrawn`).
+	 */
 	source?: Float32Array;
 	sink?: Float32Array;
+}
+
+/** A purifier's intake and outlet, for `returnDrawn`. */
+export interface Purifier {
+	/** The intake's cells, and the air this purifier draws in at each, per second per unit of volume. */
+	intake: Uint32Array;
+	drawn: Float32Array;
+	/** The outlet's cells, and each one's share of the air that comes back out. */
+	outlet: Uint32Array;
+	share: Float32Array;
+}
+
+/**
+ * Hands each purifier's outlet what its intake took in with the air in the substep just taken: `stepScalar` removed it at the intake's
+ * rate, implicitly, so what it took from a cell is the value it left (`next`) times the rate times `dtau`. For heat, which the air
+ * brings back out as it went in, so a purifier neither warms nor cools the room.
+ */
+export function returnDrawn(purifiers: readonly Purifier[], next: Float32Array, dtau: number) {
+	for (const purifier of purifiers) {
+		let drawn = 0;
+		for (let n = 0; n < purifier.intake.length; n++) drawn += next[purifier.intake[n]] * purifier.drawn[n];
+		for (let n = 0; n < purifier.outlet.length; n++) next[purifier.outlet[n]] += drawn * dtau * purifier.share[n];
+	}
 }
 
 /**
@@ -100,8 +126,9 @@ function advective(phi: Float32Array, speed: number, cm: number, cp: number, fm:
  * what leaves one cell through a face enters its neighbour, so the only gains and losses are the box's openings,
  * sources, sinks and surfaces, and the `tally` can account for every bit of it.
  *
- * Removal (purifier inlets, deposition on every wall, settling onto floors) is applied implicitly, so a very
- * strong sink in a few cells cannot go unstable.
+ * Removal (the air a purifier draws in, deposition on every wall, settling onto floors) is applied implicitly, so a
+ * very strong sink in a few cells cannot go unstable. A purifier's outlet adds nothing here: the air it blows out
+ * carries what `returnDrawn` gives it, and none of the particulates.
  */
 export function stepScalar(
 	grid: Grid,
@@ -252,7 +279,7 @@ export function stepScalar(
 				const added = source ? source[c] * dtau : 0;
 				value += added;
 				emitted += added * volume;
-				const purifier = sink ? sink[c] : 0;
+				const purifier = sink && sink[c] > 0 ? sink[c] : 0;
 				let surfaces = 0;
 				if (deposit > 0 || settle > 0) {
 					surfaces = deposit * (6 - au[c] - au[c + 1] - av[c] - av[c + sx] - aw[c] - aw[c + sxy]);
