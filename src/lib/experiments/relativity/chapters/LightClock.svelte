@@ -1,14 +1,14 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { formatBeta, formatGamma, formatSpeedKmS } from '../format';
-	import { prefersReducedMotion, useExperience } from '../experience.svelte';
+	import { prefersReducedMotion, useExperience } from '$lib/experiments/engine/experience.svelte';
 	import { gamma } from '../physics';
 	import type { LightClockParams, LightClockReadout } from '../scenes/lightClock';
 	import Chapter from '../ui/Chapter.svelte';
 	import GammaChart from '../ui/GammaChart.svelte';
-	import PlayControls from '../ui/PlayControls.svelte';
-	import RangeField from '../ui/RangeField.svelte';
-	import Switch from '../ui/Switch.svelte';
+	import PlayControls from '$lib/experiments/ui/PlayControls.svelte';
+	import RangeField from '$lib/experiments/ui/RangeField.svelte';
+	import Switch from '$lib/experiments/ui/Switch.svelte';
 
 	const experience = useExperience();
 	const params: LightClockParams = $state({ beta: 0.8, playing: false, geometry: true, restart: 0 });

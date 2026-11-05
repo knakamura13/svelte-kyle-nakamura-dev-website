@@ -1,12 +1,12 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { formatBeta } from '../format';
-	import { prefersReducedMotion } from '../experience.svelte';
+	import { prefersReducedMotion } from '$lib/experiments/engine/experience.svelte';
 	import type { LightSpeedParams, LightSpeedReadout } from '../scenes/lightSpeed';
 	import Chapter from '../ui/Chapter.svelte';
-	import PlayControls from '../ui/PlayControls.svelte';
-	import RangeField from '../ui/RangeField.svelte';
-	import Switch from '../ui/Switch.svelte';
+	import PlayControls from '$lib/experiments/ui/PlayControls.svelte';
+	import RangeField from '$lib/experiments/ui/RangeField.svelte';
+	import Switch from '$lib/experiments/ui/Switch.svelte';
 
 	const params: LightSpeedParams = $state({ beta: 0.8, ghost: true, playing: false, restart: 0 });
 	const readout: LightSpeedReadout = $state({});

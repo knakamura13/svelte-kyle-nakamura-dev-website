@@ -1,5 +1,9 @@
 import { defineConfig, devices } from '@playwright/test';
 
+// Checkouts that run side by side (git worktrees) each set their own PW_PORT, so one never reuses another's build.
+const port = Number(process.env.PW_PORT ?? 4173);
+const origin = `http://127.0.0.1:${port}`;
+
 const nodeOptions = [process.env.NODE_OPTIONS, '--require ./tests/stub-github-fetch.cjs']
 	.filter((value) => value)
 	.join(' ');
@@ -13,14 +17,16 @@ function webServerEnv(): Record<string, string> {
 
 export default defineConfig({
 	testDir: 'tests',
+	// The solver benchmarks run in Node with their own config (playwright.solver.config.ts).
+	testIgnore: 'solver/**',
 	fullyParallel: true,
 	forbidOnly: !!process.env.CI,
 	retries: process.env.CI ? 1 : 0,
 	reporter: 'list',
-	use: { baseURL: 'http://127.0.0.1:4173' },
+	use: { baseURL: origin },
 	webServer: {
-		command: 'yarn build && yarn preview --port 4173 --strictPort --host 127.0.0.1',
-		url: 'http://127.0.0.1:4173',
+		command: `yarn build && yarn preview --port ${port} --strictPort --host 127.0.0.1`,
+		url: origin,
 		reuseExistingServer: !process.env.CI,
 		timeout: 120_000,
 		// The repositories route calls GitHub. Stub that host so the suite does not spend the unauthenticated rate limit.

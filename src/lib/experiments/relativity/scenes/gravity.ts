@@ -20,8 +20,8 @@ import {
 } from 'three';
 import { gravityRate } from '../physics';
 import { palette } from '../palette';
-import { blobShadow, clay, disposeTree, flat, shade, studio } from '../engine/kit';
-import type { SceneFactory } from '../engine/types';
+import { blobShadow, clay, disposeTree, flat, shade, studio } from '$lib/experiments/engine/kit';
+import type { SceneFactory } from '$lib/experiments/engine/types';
 
 export interface GravityParams {
 	/** Distance of the probe clock from the mass, in Schwarzschild radii. */

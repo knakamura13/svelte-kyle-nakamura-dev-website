@@ -1,0 +1,440 @@
+# Airflow: the immersive redesign (decided 2026-10-16)
+
+The airflow page was built as an article: a 3D view in a card, a column of slider groups (the Dock) beside it, and an explainer under it. On 2026-10-16 Kyle saw it for the first time and rejected the design, the controls, the layout, the options and the performance. What he wants is an immersive, full-screen 3D experience in the manner of The Sims 4, with the polish of a big-studio game. This doc records what was decided in that interview and the plan to get there. It replaces the Dock-based page; the solver, the session, the state, the Homes, the Devices and the Scenarios stay.
+
+The lesson from the misalignment: show the look early and often. Every milestone below ends with a check-in of screenshots (eye level, side view, bird's-eye) and a short recording, before the next milestone starts.
+
+## Decisions
+
+| # | Question | Decision |
+| --- | --- | --- |
+| 1 | Camera | One continuous Sims-style orbit camera: scroll in to stand at eye height inside a room and look around, scroll out to a bird's-eye view. Walls cut away as the camera moves. |
+| 2 | Framing | Its own full-screen route. The whole window is the 3D world with the HUD over it; the site's nav is hidden behind a small exit button; the explainer becomes an "About this simulation" panel. |
+| 3 | Art style | Sims-like stylized realism: warm, clean, slightly toy-like, soft lighting, real furniture, readable at every zoom. |
+| 4 | Devices | Desktop first. Phones and tablets get a lighter version that still works. |
+| 5 | Air | Particles and overlays, polished. Air and smoke are visible from every angle: no opaque plane cuts the room, and particles fill the whole volume of the room (today's slice plane hid everything below 1.1 m and nothing showed from the side). |
+| 6 | Controls | Sims build/buy style: a side catalog of fans and purifiers with thumbnails to drag into rooms, a context menu on a clicked window, door or device, a bottom time bar, a weather widget with a compass dial. Sliders only where nothing better fits. |
+| 7 | Assets | Free CC0 packs (Poly Haven, Kenney, Quaternius, KayKit) plus procedural detail; the first download near 20 to 30 MB. |
+| 8 | Accuracy | The solver drives everything that moves: particles ride the simulated air, smoke is the simulated PM2.5. Decorative touches only if the simulation drives them. |
+| 9 | Audience | A portfolio showpiece for engineers and hiring managers. The first frame is cinematic and already alive (a Scenario playing), with one obvious invitation ("Drop a fan") instead of a wall of controls. The science stays one click away. |
+| 10 | Performance | Measured, not guessed: load time to the first frame, frame rate, how blocky the air looks, the restarts while the grid tunes, control latency. The worst today: the restarts while the grid tunes and the coarse look without WebGPU. |
+| 11 | Options | Keep: Homes, Scenarios, time controls, weather, Openings (adjusted by clicking the window or door itself), fans and purifiers (dragged from the catalog), smoke and Probes. Advanced panel: sensitivity, units, the Physics panel and the smoke books. Cut: the top-down toggle (the camera does it), the Look/Probe/Emit toggle (tools in a toolbar instead), the furniture toggle. |
+| 12 | References | The Sims 4 for the camera, the build/buy catalog and the time bar; Cities: Skylines for the data overlays ("info views"); Two Point Hospital for friendly context menus. |
+
+Decided by the agent from those answers (Kyle asked for no more questions, and to be checked in with): the HUD layout, the camera's input scheme, the wall modes, the overlay set, the loading screen and the fate of the existing work, all below. Each is shown at a check-in and can be changed there.
+
+## The experience
+
+**First 30 seconds.** A short loading screen (the title, a progress bar, one line of what is about to happen) while the page fetches the assets and measures the device to pick the grid. Then the Two-bedroom fades in at golden hour with the cross-breeze Scenario already running: the camera drifts from a three-quarter view toward the living room while streaks of air pour through the open windows. A single hint bubble points at the Build tool: "Drop a fan and watch the air change." Nothing else asks for attention.
+
+**Camera.**
+- It orbits a focus point on the floor. Zoom runs continuously from eye level (the camera at 1.6 m, looking nearly level, inside a room) to bird's-eye (the whole home from above at about 75°). The pitch follows the zoom by default, as in The Sims 4; dragging up or down tilts it within limits.
+- Mouse: wheel to zoom, right-drag (or Alt+left-drag) to rotate and tilt, middle-drag to pan, double-click the floor to fly the focus there. Keys: WASD or the arrows pan, Q and E rotate, + and − zoom, Home resets. Touch: one finger pans, pinch zooms, two-finger twist rotates.
+- Motion is damped (critically damped springs, no overshoot) and respects reduced motion.
+- The camera never shows the inside of a wall: below roof height it stays inside the home, and the walls cut away.
+
+**Walls.** The default is cutaway: walls between the camera and the room it looks into drop to a low cut (about 0.4 m) with a clean cap on top, and the others stand full height. Walls up and walls down are a toggle in the bottom bar, as in The Sims. The roof is never drawn.
+
+**The world.**
+- Lighting: physically based materials, an HDRI sky for ambient light and reflections, a low sun with soft shadows, ambient occlusion (three.js `GTAOPass`), gentle bloom, AgX tone mapping and a warm grade.
+- Surfaces: wood or tile floors, painted plaster walls with skirting, windows with frames and glass, doors that swing on their hinges, grass and a few trees outside.
+- Furniture: models from CC0 packs fitted to each piece's solid box in the plan. The solver keeps the boxes.
+
+**The air.** All of it is driven by the solver.
+- **Streaks.** Thousands of velocity-aligned streaks (about 15,000 on a desktop, 3,000 on a phone) are carried through the whole 3D field. They are stretched by speed and fade in and out. They are born where the air moves and at the openings.
+- **Smoke.** Smoke is a ray-marched volume of the PM2.5 field, lit by the sun, visible from every side. Phones draw it as puffs instead.
+- **Overlays.** The overlays are Off, Air speed, Temperature and Smoke. With one on, the streaks take that quantity's colour and a faint see-through haze shows it through the rooms, with a legend at the bottom. The world keeps its own colours, at most lightly desaturated.
+- **No plane anywhere.** There is no slice plane, by default or under an overlay. Decided 2026-10-20, when Kyle asked why a nearly opaque horizontal plane was needed. What it showed (one quantity across the whole home at one height) is carried by the coloured streaks, the haze and the Probes. The hover reading and the Probes still read the solver's slice and probe data; only the drawn plane is gone.
+- **Probes.** A Probe is a glowing pin with a floating card (speed and direction, temperature, PM2.5).
+
+**HUD.** Dark glass panels with rounded corners, icon buttons of at least 44 px, tooltips on everything, one accent colour, and the site's type.
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│ [← Exit] [Two-bedroom ▾] [Scenario ▾]                  [wind dial · 18°C · air] │
+│ ┌──────┐                                                       ┌────────┐ │
+│ │Select│                                                       │Inspector│ │
+│ │Build │──▶ catalog drawer: Fans | Purifiers (thumbnail cards) │(object) │ │
+│ │Probe │                                                       └────────┘ │
+│ │Smoke │                     3D world, full screen                         │
+│ └──────┘                                                                   │
+│ [⏸ ▶ ▶▶ ▶▶▶  sim 00:04:12]  [Off · Speed · Temperature · Smoke]  [walls] [ⓘ] [⚙] │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+- **Tools (left rail).** Select (click things), Build (opens the catalog), Probe (click air to pin), Smoke (hold to release, strength chips from candle to cooking burst).
+- **Catalog.** Category tabs, cards with a rendered thumbnail, the name and the rated flow. Drag a card into the world: a ghost shows green or red with the reason, R rotates, click places.
+- **Context menus.** A compact card anchored to the clicked thing.
+  - Window: Closed, Cracked, Half and Wide presets, plus a fine slider up to the window's limit.
+  - Door: open or closed.
+  - Fan: Off, Low, Medium and High, oscillate, rotate, move, remove.
+  - Purifier: Sleep, Low, Medium and High, move, remove.
+  - Probe: its reading, remove.
+- **Inspector (right).** The selected object's details and every setting, for the keyboard.
+- **Weather widget (top right).** A compass dial (drag the arrow to set the wind's direction, a speed chip beside it), outdoor and indoor temperature steppers, and outdoor air presets (Clean, Hazy, Smoky, Wildfire, with µg/m³ in the tooltip).
+- **Bottom bar.** Pause, 1×, 5× and 20×, the simulated clock, the overlay switcher, walls up/cutaway/down, About (the explainer in a panel) and Advanced (Physics panel, sensitivity, units, graphics quality, copy link, restart and reset).
+- **Phones.** The rail becomes a bottom toolbar, panels become bottom sheets, and quality drops (fewer streaks, puff smoke, no ambient occlusion).
+
+**Accessibility, kept at a sensible floor.** Every HUD control works by keyboard with a visible focus ring and a name; readings exist as text (probe cards, the inspector); reduced motion turns off camera inertia and the intro move; HUD text meets contrast. The 3D world itself is described by the status line and the probe cards, not navigated by a screen reader.
+
+## Performance budgets
+
+- Desktop (an M-series MacBook or an RTX laptop): 60 fps at 1440p with ambient occlusion on. Phones: 30 fps at reduced quality.
+- The first interactive frame within 8 s on a first visit over broadband, within 4 s on a cached reload.
+- Assets at most 30 MB, fetched in priority order (the Home being shown first).
+- No visible restarts after the loading screen. The grid is picked during loading from a measured warm-up. A device that later falls behind steps down once, with a resample rather than a restart where possible, and says so once.
+
+## Architecture
+
+**Stays:** the CPU and WebGPU solvers, `World`, the session, `state.ts` and the share link, the Homes and plans, the Devices and catalog, placement (`devices/surfaces.ts`), the Scenarios, the auto-tuner's logic, and the pure word and unit modules the Dock used (`weather.ts`, `openings.ts`, `probeWords.ts`, `smokeWords.ts`, `clock.ts`, `physicsPanel.ts`, `massBalance.ts`).
+
+**Replaced:** the article page and the Dock (`ui/Dock.svelte` and its groups), the slice-plane-first scene, the dollhouse wall fade and the Look/Probe/Emit mode toggle.
+
+**New:**
+- `routes/experiments/airflow`: full screen, out of the site's layout, with an exit button.
+- `scene/camera/`: the Sims camera, pure and unit-tested.
+- `scene/walls/`: cutaway.
+- `scene/look/`: lighting, materials, post-processing, quality tiers.
+- `scene/air/`: streaks, the smoke volume and the overlays, fed by a new downsampled volume snapshot from the backends (velocity, PM2.5 and temperature on a grid of at most about 64,000 cells, up to 10 times a second; a compute kernel on the GPU, a transfer from the worker on the CPU).
+- `ui/hud/`: the tools, the catalog, the context menus, the inspector, the weather widget, the time bar, the overlay switcher, About and Advanced.
+- Assets: `static/airflow/` (models, textures and an HDRI), each with its licence in `static/airflow/LICENSES.md`.
+
+## Milestones and check-ins
+
+1. **Look and camera.** The full-screen route, the Sims camera, the cutaway walls, the lighting and post-processing, placeholder furniture, and today's particles filling the room volume (no slice plane). Check-in: eye level in a room, side view, bird's-eye.
+2. **Air.** The volume snapshot, the streaks, the smoke volume and the overlays. Check-in: the same three views with a breeze, smoke and each overlay.
+3. **HUD and interactions.** Tools, catalog drag and drop, context menus, inspector, weather widget, time bar, About and Advanced. Check-in: the HUD over the world, a fan dropped in, a window opened from its menu.
+4. **Assets, opening, loading, phones.** CC0 furniture and textures, the first-30-seconds opening, the loading screen with grid tuning, the phone version. Check-in: a short recording of the first 30 seconds, and the phone.
+5. **Hardening.** End-to-end tests in place of the Dock specs, the performance pass against the budgets, the accessibility floor, the status doc and the issues, then the launch issue (#69).
+
+## What happens to the existing work
+
+- The Dock slices (#49 to #55) are done but superseded. Their pure logic is reused by the HUD. The Dock's components and end-to-end specs were deleted when the HUD replaced them (bb56fd7).
+- #56 (the auto-tuner) changes: it tunes during the loading screen instead of restarting while the visitor watches.
+- #61 to #64 and #68 are re-scoped to the new page.
+- #58, #59, #60, #65 and #69 are unchanged.
+- New sub-issues for milestones 1 to 5 are added to #30 after the first check-in confirms the direction.
+
+## Where it stands (2026-10-20, paused after check-in 2)
+
+Kyle approved check-in 2 on 2026-10-20 and paused the project. Milestones 1 to 3 are merged into the working branch and pushed: e2b5e97 is the merge of check-in 2. `/experiments/airflow` is now the full-screen experience: the new world, the air and the HUD, with no Dock and no slice plane. The history of how each milestone got here is in git.
+
+**The approved look (check-in 2, 2026-10-20):** this is what Kyle approved. Compare new work against it, and change it only with his say-so. The images are 1600 px versions of the originals, which were 1440x900 at device scale 2 (390x844 for the phone), taken in Chromium with real WebGPU, on the Two-bedroom in its cross-ventilation Scenario.
+
+| | |
+| --- | --- |
+| ![The HUD over the world at eye level, with streaks in the living room](airflow-checkins/2026-10-20-check-in-2/hud-eye-level.jpg) | ![A side view with smoke drifting through a room](airflow-checkins/2026-10-20-check-in-2/side-smoke.jpg) |
+| ![Bird's-eye with the Air speed overlay colouring the streaks](airflow-checkins/2026-10-20-check-in-2/birds-eye-speed.jpg) | ![A fan carried from the Build catalog over a room, with its ghost](airflow-checkins/2026-10-20-check-in-2/catalog-drag.jpg) |
+| ![A window's context menu](airflow-checkins/2026-10-20-check-in-2/window-menu.jpg) | ![The phone layout at 390 px](airflow-checkins/2026-10-20-check-in-2/phone.jpg) |
+
+**Built:**
+- **World (milestone 1):**
+  - Kenney furniture fitted to each piece's box in the plans, with laminate or tile floors, painted walls, a lawn, trees and the HDR sky. Assets are in `static/airflow/`, licences in `LICENSES.md`.
+  - A low warm sun with soft shadows, GTAO, bloom, AgX and SMAA, with high, medium and low tiers.
+  - The Sims camera (`scene/camera/`) and cutaway walls (`scene/walls/`).
+  - The full-screen route outside the site's shell, with an Exit button. `?camera=` and `?cell=` reproduce a shot.
+- **Air (milestone 2):**
+  - A downsampled volume snapshot on both backends (`solver/volume.ts`).
+  - Streaks carried through the whole room volume, a ray-marched smoke volume, and puffs on low quality (`scene/air/`).
+  - The overlays (Air speed, Temperature, Smoke) colour the streaks, with a haze capped at 22%. The world is muted 30% under an overlay. There is no plane anywhere.
+  - A GPU snapshot race fixed, with a regression test.
+- **HUD (milestone 3):**
+  - Built pieces: the top bar, tool rail, Build catalog with drag-to-place, context menus, inspector, weather widget, bottom bar, About, Advanced, and the phone layout (`ui/hud/`).
+  - The Dock's components and specs were deleted in bb56fd7, which reverts alone. The Physics panel, the explainer and the pure modules stay.
+
+**Measured** on the M3 Max, on mains power, load 9 to 15:
+- 60 fps at 1440x900 on high with the air on, and 58.2 fps under Air speed at two device pixels.
+- The first frame takes 0.5 s with shaders cached, and about 6 s on a first visit, nearly all of it shader compiling.
+
+**Checks** at the merge:
+- The type check is at its baseline.
+- The Node suite: 489 passed, 1 skipped.
+- The GPU suite: 43 passed, 15 skipped.
+- `tests/airflow.spec.ts`, `airflow-tune.spec.ts` and `airflow-hud.spec.ts`: 66 passed in Chromium, Firefox and WebKit at two workers.
+
+**Next, in order:**
+1. **Milestone 4** (#81 the loading screen, #82 the first 30 seconds, #83 the phone pass, #84 polish from check-in 2).
+   - The first-30-seconds opening.
+   - A loading screen that compiles the shaders (`compileAsync`) and picks the grid from a warm-up, so the air never restarts in view.
+   - A phone pass: the air is faint there, and the 3D view is small under the sheets.
+2. **Milestone 5.** The performance pass against the budgets, the accessibility floor, the issues, and the launch issue (#69).
+3. **Tracker.** Done on 2026-10-21: #81 to #84 added under #30, #49, #53 and #56 closed, #68 closed as superseded, #61 to #64 re-scoped, and PR #45 rewritten.
+
+**Known weak spots:**
+- Smoke reads as a soft volume, not wisps, because the volume averages blocks of up to 0.3 m.
+- Near the windows at eye level the streaks can look like rain.
+- Some Kenney pieces are stretched to their boxes (the dining table, the sideboard), and some read as plain boxes (the bookcase).
+- A door or window in a cut-away wall can be changed only from the Inspector, or with the walls up.
+- The outdoor air presets (0, 35, 150 and 350 µg/m³) and the wind speeds were picked from the US EPA bands and the Beaufort scale from memory. Check them against the sources before launch.
+- `scene/particles.ts`, `arrows.ts`, `SliceLayer` and `dollhouse.ts` are drawn by nothing now and imported only by tests. Remove them.
+
+**Notes for the agents that resume this:**
+- A worktree may start from `main`, which lacks this branch's work. Point the empty branch at this branch's tip with `git reset --hard` instead of merging.
+- Vite's dev server refuses a `node_modules` that is a symlink into another worktree. Use `yarn build && yarn preview`, allow it in a scratch config (`server.fs.allow`), or install `node_modules` in the worktree.
+- The machine is often loaded by other sessions. Run end-to-end specs at `--workers=2`, check `uptime` before blaming the code, and re-measure frame rates on mains power.
+
+### Milestone 4: the loading screen and the opening (#81, #82), 2026-10-21
+
+**Built:**
+- **The loading screen** (`ui/LoadingScreen.svelte`, `load.ts`, `loading.svelte.ts`). It is in the server's HTML, so it is the first paint. It has the title, one line on what is coming, and one bar for the fetch, the shader compile and the warm-up, in the HUD's glass and the site's type. The world and the HUD are `inert` under it, and it fades into the world.
+- **The shaders compile before the first frame** (`look/stage.ts`):
+  - `renderer.compile` runs with the post-processing buffer bound, which is the variant `RenderPass` draws, and waits on `KHR_parallel_shader_compile`.
+  - Two frames are then drawn out of sight. Metal builds its pipelines at a program's first draw, and the shadow map's, ambient occlusion's and the passes' shaders compile there. These two draws hold the page for about 2.2 s cold; the bar's sheen keeps moving.
+- **The grid is picked during loading** (`sim/calibrate.ts`, `tuner.ts`, `backends.ts`, `session.ts`):
+  - The first world is built at the finest grid its backend allows and stepped as fast as it goes for half a second, with three steps queued. A deeper queue made the GPU size its scalar substeps from a stale speed and measured the house at 2.5 times its cost.
+  - A step costs what it did in the fastest stretch. The budget is the cells that fit 40% of the GPU at 5 times real time, or 80% of the worker's thread at real time.
+  - The world shown is the finest grid that fits, with the warmed-up air resampled onto it (`sim/resample.ts`, which keeps the smoke's mass).
+  - The tuner never climbs. A device that falls behind steps down by the shortfall, never in the first minute and at most once a minute. The air, the simulated time and the smoke's books carry over, and it says so once, announced and shown for 6 s.
+- **The opening** (`scene/camera/opening.ts`). The camera drifts from the default view to the living room's west windows in 6 s, eased at both ends, and any click, key, wheel or touch stops it at once. Reduced motion, and a reload in the same visit, open at the drift's end. A share link opens on its default view, and `?camera=` keeps its own.
+- **The hint** (`ui/hud/OpeningHint.svelte`). It points at Build wherever the layout puts it and nudges three times. It goes for the visit when dismissed or when a device is placed, in session storage that may refuse.
+
+**Measured** on the M3 Max, on mains power, in Chromium with WebGPU, 1440x900 at 2x, from a local preview build:
+- **First interactive frame, cold:** 4.3 to 4.4 s (3 runs, load 7 to 9), with every shader made new to the GPU's caches. Fetching the 7 MB over broadband adds about a second, which is still inside the 8 s budget.
+- **Cached:** 1.70 to 1.73 s (6 runs), inside the 4 s budget.
+- **What the warm-up picks** (`tests/gpu/tune.gpu.ts`, load 10 to 25):
+  - On the GPU, 7.5 cm for the studio, one-bedroom and two-bedroom, and 10 cm for the house, in 0.6 to 0.9 s. Its step costs match the per-step table to within 10%.
+  - On the worker, 15 cm for the studio and 20 cm for the rest, at 0.98 to 1.00 of real time.
+  - Both five-minute soaks passed: the studio at 7.5 cm and the house at 10 cm, one grid each for 300 s, at 59.9 fps and 5.00 times real time.
+- **The first minute** in the page, at 2x:
+  - On WebGPU: one grid (7.5 cm), a median of 60 fps (slowest second 55), and nothing said.
+  - On the worker: one grid (20 cm), and nothing said.
+
+**Weak spots:**
+- A later step down resamples the air, but the air's renderers (`scene/air/index.ts`) clear the streaks for any new world, so the streaks re-pour for a moment.
+- The warm-up's half second can be noisy on a busy machine. Before the fastest stretch was used, one run measured the house at 10 ms a step and gave it 15 cm. A GPU that another program holds for the whole half second still gets a grid too coarse, and it keeps it for the visit, since nothing climbs.
+- The hint also goes if a reset raises the device count without a placement.
+
+### Paused 2026-10-21: the phone pass and the polish are built but not merged
+
+Kyle paused the project after milestone 4's three agents finished. The loading screen and the opening (#81, #82) are merged (cdaee6c). The phone pass (#83) and the polish (#84) are built and verified on their own branches, and are not merged yet because they conflict:
+
+| Issue | Branch (local), backup on GitHub | Commits | Verified on its branch |
+| --- | --- | --- | --- |
+| #84 polish | `worktree-agent-ad0836d444136d2f7`, `backup/airflow-84-polish` | 11 (9763108 to 09761fe) | Node 491 passed, GPU 43 + 15 skipped, airflow e2e 66 in three browsers |
+| #83 phone pass | `worktree-agent-ac1363f989a5a5642`, `backup/airflow-83-phone-pass` | 10 (a68df5d to 7f55e28) | phone and HUD specs 63 passed + 18 skipped by design, airflow e2e 66, GPU 43 + 15 skipped |
+
+- **#84 polish:**
+  - removes the dead modules
+  - sources the presets from the EPA AQI technical document (2024 revision) and the Beaufort scale
+  - makes openings in cut-away walls clickable at their cut
+  - adds smoke wisps carried by the solver's air and eye-level streaks that read as moving air
+  - fixes the furniture to keep its proportions, with the dining table, bookcase, cabinets, dresser and wardrobe built at real proportions
+  - fixes six #68 items and records three as no longer applying
+  - Two calls for Kyle:
+    - compass letters N and E hide behind standing walls (the other option is to lift them above the walls)
+    - a model smaller than its box leaves the solver blocking the whole box
+- **#83 phone pass:**
+  - bolder streaks and denser puffs on the low tier, through a new `AirLook` option
+  - sheets that fold to a peek
+  - a two-line weather pill
+  - the camera framed to the free part of the screen
+  - two-finger pinch and twist in every tool
+  - the desktop layout unchanged
+- **Merge plan:**
+  1. Merge #84 first; it merges into the current branch with no conflicts. Run the checks.
+  2. Then merge #83. It conflicts with the current branch in `scene/airflowScene.ts` and `scene/look/stage.ts`, and with #84 in `scene/air/index.ts` and `ui/hud/WeatherWidget.svelte`. Resolve those, run the Node, GPU and three-browser e2e suites, and fix the opening hint's position on a phone, which points between Probe and Smoke.
+  3. Send Kyle check-in 3: the first-30-seconds recording and the phone. Then delete the two backup branches.
+- **Interplay to check after the merges:** a step down after the first minute clears the streaks for a moment (`scene/air/index.ts`), and #84's furniture changes the opening's end pose (its bookcase was a plain box).
+
+### Milestone 4 merged, and check-in 3 (2026-10-27)
+
+The merge plan above was carried out on 2026-10-27 and 28. The two backup branches are kept until Kyle approves check-in 3.
+
+**Merged:**
+- #84, the polish (d2729fc), with no conflicts.
+- #83, the phone pass (d9ed32b). Its four conflicts keep both sides: the warm-up and opening hooks beside `cancelTouch` (`scene/airflowScene.ts`, `scene/look/stage.ts`), the low tier's puffs with the render order from `renderOrder.ts` (`scene/air/index.ts`), and `compassWord` from `directionWords.ts`, which #84 renamed from `readout.ts` (`ui/hud/WeatherWidget.svelte`). `Hud.svelte`'s rule that makes room for the hint over a phone's toolbar now matches `OpeningHint`.
+
+**Fixed after the merges:**
+- **The phone hint** points at Build. On #83's branch the tool rail still drew the hint from before #82, centred over the whole toolbar, between Probe and Smoke. The merge replaced it with `OpeningHint`, which measures where Build is. `tests/airflow-phone.spec.ts` holds it (f94aecd).
+- **The phone's framing spec** opens a share link (a19aa12). Since #82 a visit opens at the drift's end, on the living room. The drift's first frame on a phone is the same framed view as the default (zoom 0.88, every room's name in the frame at 390 by 844).
+- **A tuner test that failed on a busy machine** (cdc92db). The warm-up measured the solver as slow and put the studio on the coarsest grid, with nothing coarser to step down to. The test starts the tuner at 20,000 cells now.
+- **The smoke** (8a73795). Kyle saw smoke that had spread for a few seconds as mist, smog or a ghost, and the plume by its source, darker and less see-through, as smoke. `SMOKE_LOOK` now scatters a cool dark grey (0.32 to 0.4, from 0.8 to 0.88), takes out light at 6 per metre with the 1.75 power of the concentration (from 4 with the square), and scatters less forward (0.25, from 0.35). A first pass at a mid grey (0.44 to 0.5) left spread smoke about as bright as the sunlit floor, so it vanished. The phone spec counts smoke as pixels made clearly greyer, darker or lighter, leaving out the air's blue.
+
+The same burst from check-in 2's pose, measured as the mean brightness change over the plume against a frame with no smoke:
+
+| | Before | After |
+| --- | --- | --- |
+| As it is released | lighter by 22 | darker by 20 |
+| 2 s after | lighter by 21 | darker by 7 |
+| 5 s after | lighter by 12.5, the mist | gone |
+| A room a 30 s release has filled | not taken | darker by 12.6, read through a grey haze |
+
+**Checks** on the merged tree:
+- The type check is at its baseline.
+- The Node suite: 531 passed.
+- The GPU suite: 43 passed, 15 skipped. Both five-minute soaks kept one grid at 59.9 fps and 5 times real time.
+- The airflow end-to-end specs, before the smoke change: 147 passed and 18 skipped in Chromium, Firefox and WebKit. The 6 that failed, the phone's framing spec in each browser at both sizes, pass after its fix. After the smoke change, the phone's low-tier smoke spec and the HUD's quality spec pass in the three browsers.
+
+**Measured** for check-in 3 on the M3 Max, on mains power, load 4 to 5, from a fresh browser profile: the first frame in 1.8 to 1.9 s on a desktop and 1.2 s on a phone, faster than the 4.3 s of 2026-10-21, probably because macOS keeps its own shader cache. The drift ran at 60 fps on both, with no frame over 16.8 ms.
+
+**Check-in 3** (1440x900 at device scale 2, 390x844 at 3, in Chromium with real WebGPU, on the Two-bedroom in its cross-ventilation Scenario). The recordings of the first 30 seconds on a desktop and the first 20 on a phone, and the other stills, were sent to Kyle and are not in the repo.
+
+| | |
+| --- | --- |
+| ![The drift's end at the living room's west windows, with the hint at Build](airflow-checkins/2026-10-27-check-in-3/drift-end-hint.jpg) | ![The phone at the drift's end, with the hint over the toolbar](airflow-checkins/2026-10-27-check-in-3/phone-opening-end.jpg) |
+| ![The phone's Build sheet at its peek](airflow-checkins/2026-10-27-check-in-3/phone-build-peek.jpg) | ![The phone's weather sheet at its peek](airflow-checkins/2026-10-27-check-in-3/phone-weather-peek.jpg) |
+| ![The phone's View sheet at its peek, with Air speed on](airflow-checkins/2026-10-27-check-in-3/phone-view-air-speed.jpg) | ![Eye level in the living room, with the streaks by the windows](airflow-checkins/2026-10-27-check-in-3/eye-level-streaks.jpg) |
+| ![The same burst before and after the smoke change, at 0, 2, 5 and 10 s](airflow-checkins/2026-10-27-check-in-3/smoke-before-after.jpg) | ![A room a 30 s release has filled, read through a grey haze](airflow-checkins/2026-10-27-check-in-3/smoke-after-filled-room.jpg) |
+
+**Interplay after the merges:**
+- **A step down still clears the streaks for a moment.** `adoptWorld` (`scene/air/index.ts`) resets the streaks and the puffs for any new world, though a step down's world carries the air on (`SimulationSession.carry`). Particle positions are in metres, so they could ride on through a world of the same Home. The renderer cannot yet tell such a world from a restart.
+- **The opening's end and #84's furniture.** Both west windows stay clear on a desktop and a phone. The bookcase stands centre-left in front, hides about 12% of the south window's air, and draws the eye. A tilt of 12 degrees halves that (`?camera=2.0,5.0,332,0.6,12`). Heading 300 hides nothing, but the air then comes toward the camera and its streaks look shorter (`?camera=2.0,5.2,300,0.6,8`).
+
+**Found at check-in 3** (all but the last fixed below):
+- The eye-level streaks are much sparser and fainter than at check-in 2. They no longer read as rain, but the air at the windows is hard to see (`eye-level-streaks.jpg` against check-in 2's `hud-eye-level.jpg`).
+- From heading 212 the S letter shows through the bathroom window, painted on the south wall.
+- The phone's smoke puffs are a flat, unshaded film under the streaks, still brownish after the smoke change. They read as a film, not as smoke.
+- A step down clears the streaks for a moment (the interplay above).
+- A few charcoal pockets by the dining chairs make the darker smoke a little blotchy near its source.
+
+**Kyle's calls** (2026-10-28):
+- **The compass letters** stay hidden while a standing wall is between them and the camera, as #84 made them. In the default view N and E, 1.8 m out at the floor, are behind the far walls.
+- **The furniture's solver boxes are its models.** Before, the sofa's box was 2.0 by 0.9 by 0.8 m and its model about 1.70 by 0.71 m, so strips of 15 to 19 cm blocked air that looked free. Each plan box is now what the scene draws for its piece, rounded out to the centimetre: 58 pieces shrank, by up to 28 cm, and none grew. `tests/solver/look-home.spec.ts` holds every side of every box to within a centimetre of what is drawn.
+- **The opening ends looking 12 degrees further down** (`OPENING_END.tilt`, from 2), which halves how much of the south window's air the bookcase hides.
+- **Spread smoke fades as real smoke does**, a call Kyle left to the physics. Smoke has to reach about 10 mg/m³ to be seen across a metre (a mass extinction of about 4 m²/g), while a cooking burst mixed through a living room is about 0.15 mg/m³. So real smoke shows near its source and is gone within seconds as it mixes, while its PM2.5 stays for minutes. The current fade does that, and the Smoke overlay shows the PM2.5 after the smoke has faded, so the fade stays.
+
+**The findings, fixed** (2026-10-28, each shot before and after with the same pose and procedure; the comparisons were sent to Kyle):
+- **A step down keeps the air.** Each `World` has an `id`, and the session's `carry` marks the world that took another's air (`carriedFrom`). The air's renderers (`scene/air/index.ts`) keep the streaks, the puffs and the last picture through such a world, moving on through that picture until the new grid's first one comes; a restart, another Home or the furniture shown or hidden still starts the air afresh. Forced by slowing the page 16 times after its first minute, from 209,942 cells at 10 cm to 62,268 at 15 cm, the streaks' share of the living room in the half second after the switch went from 0.02% (all gone, back after 1.8 s and overshooting to twice as many at 2.8 s) to 0.85%, against 0.91% before it.
+- **A compass letter is hidden behind a window or door** in a standing wall, as behind the wall (`Selection.walled` with `solid`), up to where the wall is cut. From heading 212, S no longer shows through the bathroom window; N and E still show there, and the default view still hides N and E.
+- **The eye-level streaks show the air across the room again.** Near the eye they fade in from 0.35 to 1.2 m rather than 0.5 to 2 m, reach 140 px on the screen rather than 90, are 75 to 100% strong rather than 55 to 100%, and their soft heads dim by 60% rather than 85%; falling air still makes short flicks of different lengths. About half way back to check-in 2's density, with long diagonal strokes over the TV console the one place that still looks a little like rain.
+- **A phone's smoke puffs read as smoke.** Each billows rather than being a disc, is shaded from above (lighter on top, darker underneath and in its middle) with its own tone, and is lit by the sky and a quarter of the sun rather than half, as the volume's shadowed inside is. They are drawn after the streaks, so the smoke covers the streaks in it (`renderOrder.ts`). From the same view, a cooking burst went from lighter than the floor (143 against 126) to darker (106), with twice the spread of brightness in its middle; it is still warm, as the golden-hour light is.
+
+### Milestone 4 done (2026-10-28)
+
+Kyle approved check-in 3 on 2026-10-28, and milestone 4 is closed: #81 to #84 are closed, each against its criteria, and the two backup branches are deleted, their commits merged here.
+- **The blotchy smoke**, the last finding, is fixed (47ad7af): a plume's middle is shaded down to 60% of the sky's light rather than 42%, which with the dark grey had been close to black. Against a frame with no smoke, the plume's pixels darker than 90 fell from 2.3 to 2.6% to 1.3 to 1.4% (furniture shadows alone make 2.1%), and it still darkens the room behind it, by 18.5 on average rather than 20 to 22.
+- **#84's last criterion**, the #68 items, had three that nothing recorded. Each was checked on the page on 2026-10-28 and is fixed: switching Home lands on the new Home's default view with every room's name on the screen, on a desktop and a phone; the default view's walls are cut away, the west wall to a low strip; and a click on a Probe's spot through a standing inside wall pins nothing.
+- **#84's furniture criterion** said the solver's boxes stay the plan's; Kyle's call at check-in 3 changed that, and the boxes are now the models' (8ae252d).
+- **Left as they are:** the phone's smoke is warm under the golden-hour light, and the eye-level streaks are about half way back to check-in 2's density, where long strokes over the TV console begin to look like rain.
+
+### Main merged in (2026-10-28)
+
+Main is merged into this branch (41c132e) ahead of milestone 5, so CI (`yarn run check` and `yarn test:e2e`) runs on #45 from now on. Two files conflicted, and each keeps both sides: `playwright.config.ts` takes main's web server environment, which stubs GitHub, beside this branch's `PW_PORT`, and `RangeField.svelte` takes main's announcement of a value changed before hydration, with this branch's shared `experience`.
+- **Checks on the merge:** `yarn run check` has 0 errors, and the end-to-end suite has 851 passed, 21 skipped and 4 failed. All four fail on main too. The Learning Korean story's axe check at 390 px fails in all three browsers, as in main's own CI run of 4dd2c48, so CI on #45 is expected to fail until main fixes it. The Chromium test of Back pressed as a transitioned link changes the URL is flaky on this machine: under the same load it failed 11 of 20 runs on main's tree and 9 of 20 on the merge.
+
+**Next:** milestone 5, the performance pass against the budgets, the accessibility floor and the hardening issues (#57, #58 to #65), then the launch (#69). Optional: #66 and #67; a stretch: #85.
+
+### Milestone 5: #57 done, and no cones (2026-10-31)
+
+#57's last two criteria are met, so all five are:
+- **A purifier draws its intake, and the solver cleans where it is drawn** (64d1265, f030d6c). Each stand-in wraps a light grey band round its body over the heights the solver cleans, 3 mm proud and flat over its whole height, shaded smooth round its corners as the body is. The solver's band stayed square to the grid while the body turned with its yaw, so a turned purifier cleaned a different patch of air from the one drawn; it now takes cells in the body's own axes, and a purifier at yaw 0 cleans the same cells as before. `tests/solver/deviceMeshes.spec.ts` checks each purifier at yaws 0, 90, 37.5 and 200 against the drawn band and outlet, and fails for all three against the old solver. The tray's Purifiers tab lists the three (`tests/solver/hud.spec.ts`).
+- **The explainer** (d300cdd) says Sleep, Low and Medium are derived from the top-speed rate and that the openings' sizes are estimates, and its sources list the three purifiers. The research note's third pass already listed what could not be confirmed; its status line and gaps list now point at it.
+- **No cones** (9ad3e2e, Kyle's call on 2026-10-31). The orange cone over every running fan and purifier read as a rocket nozzle, hid a purifier's outlet and was drawn over the smoke. A running device now shows it as a real one does: a fan's blades turn light, and a purifier's outlet turns light and a small lamp in its middle lights blue, on a dark lens so the blue comes through the tone mapping and the warm grade. Off, the lamp is the outlet's grey and leaves no mark. The air a device moves is left to the streaks and the smoke. In the screenshots the lamps are the only blue in the scene and read as on at the overview's zoom; the floor ring, dark while a device runs, is the other cue.
+- **Checks:** the Node suite has 536 passed before the cones went, and the stand-in, purifier, editor and tray specs (54) pass after; `svelte-check` has 0 errors and 0 warnings. After the cones went, the GPU suite has 43 passed and 15 skipped, the five-minute tuner runs included, and the airflow end-to-end specs 153 passed and 18 skipped across Chromium, Firefox and WebKit, under a load average of 20 to 40 from other processes. Playwright's own browsers had gone from this machine's browser cache and were reinstalled for these runs.
+- **Left for #86:** the ambient occlusion draws dark streaks on a pale band where furniture stands close in front of it, at high quality only; and `scene/deviceMeshes.ts` still describes the slice plane, which the world no longer draws.
+
+**Next:** the rest of milestone 5: the performance pass against the budgets, the accessibility floor and the hardening issues (#58 to #65; #65 waits only on #57), then the launch (#69). Optional: #66 and #67; a stretch: #85.
+
+### Milestone 5: #58, the purifier Scenarios, and a runaway fixed (2026-10-31)
+
+#58's criteria are met (bfedb25, 07debd5, 704aa32):
+- **Clearing the smoke** (two-bedroom): smoke at 150 µg/m³ through the home, the Coway Mighty on High in bedroom 2 with its door shut, a still day. **The smoky day** (studio): the Smoky outdoor air (150 µg/m³) outside and in, the Airmega 400 on High, every window shut, a breeze from the east. Both start at 20 times real time with the Smoke overlay on: smoke spread through a room is too thin to see, as a room's PM2.5 is, and a Scenario's overlay used to come on only if the visitor already had one on.
+- **What the notices claim, and on which grid.** A purifier clears its room more slowly the finer the grid: its band draws no air in, so the air it has cleaned lingers round it. Bedroom 2 halves in 4.2 minutes on the CPU fallback's 0.2 m cells and 7.0 on the GPU's finest 0.075 m (5.9 at 0.1 m), and the studio's main room in 8.3 and 11.7, so the notices give those as ranges, and the explainer's "What it isn't" says why. Ventilation agrees on both grids: the open window halves bedroom 2's smoke in 10.4 and 10.7 minutes, and with the studio's windows open the main room levels off at 0.82 and 0.87 of the smoke outside. Low takes 2.02 and 1.77 times as long as High, which the notice puts down to the derived Low rate. `tests/solver/scenario-presets.spec.ts` checks the coarse grid, `tests/gpu/scenarios.gpu.ts` the finest, stepped as the page steps, and `tests/airflow-hud.spec.ts` picks each from the menu and checks its Home, notice, weather and overlay.
+- **A runaway, fixed** (b1a990b). On 0.075 m cells the Mighty's outlet, 0.14 m across at 7 m/s, took its push on a few faces; read off the flow at the start of each step, the push overshot the fan curve, the next push overshot back, and within five steps the air was not a number. The page's warm-up runs the first world on the finest grid the device allows, so the two-bedroom home with the Mighty broke on load on a GPU that picks 0.075 m (a grid pinned with `?cell=` skipped the warm-up and ran). Each fan's push now eases toward its curve over about a second (`FAN_SPIN_UP`, both backends), which leaves every steady flow as it was; `tests/solver/purifiers.spec.ts` runs each catalog purifier on 0.075 m cells at the warm-up's 0.05 s step, and fails for the Mighty without the easing.
+- **Checks:** the Node suite has 541 passed, the GPU suite 45 passed and 15 skipped (the five-minute tuner runs included), and the airflow end-to-end specs 156 passed and 18 skipped across Chromium, Firefox and WebKit; `svelte-check` has 0 errors and 0 warnings.
+- **Left for #87:** the purifier's grid-dependent cleaning (a half to nine-tenths of what its rating implies in a closed room), and the Mighty's outlet delivering 1.19 of its rated flow on 0.075 m cells, against 1.02 for the other two.
+
+### #86, the two items left from #57 (2026-10-31)
+
+Both are done:
+- **The streaks** (ed8ef96). GTAO counted anything within 0.35 m in depth as a solid occluder, so the coffee table 20 cm in front of the Airmega 400's pale band drew three or four grainy dark bands along its edge across the band, which crawled as the camera turned. At a thickness of 0.2 m they are gone; the contact shading under and beside furniture and along the counters stays, a little lighter, frame time is unchanged (9.7 ms at 2880 by 1800), and the TV console's open shelves look a little flatter. A denoiser with a wider reach or a lower normal threshold did not remove them. The before and after, from the same camera, were sent to Kyle.
+- **The comments** (f85f1e2). `scene/deviceMeshes.ts` says each device's ring and arrow lie round its feet, not on the slice plane the world no longer draws, and `update`'s height is `symbolY`, the floor unless asked.
+- **Checks:** the airflow end-to-end specs have 156 passed and 18 skipped in Chromium, Firefox and WebKit after the change; the stand-in, purifier and editor specs pass.
+
+### #65, the explainer's sources and wording (2026-11-04)
+
+#65's criteria are met (d027530, 0c9542c, 97ec526), and #65 is closed:
+- **Sources.** The first pass's five corrections are applied. Stam (1999) and Zuo and Chen (2009) open the Sources under "The method". The 16 smoke and particle works and Dacunto and others 2013 are cited in two new groups, "How fast smoke settles and sticks" and "The smoke slider's marks", so the list is 52 entries in seven groups. The 15 sources added since the first pass (the four Air King sheets the catalog uses, Air King's window-fan page, the purifier manuals and pages, the ENERGY STAR record, the AHAM directory, the AHAM FAQ and Dacunto) were checked against the documents: 11 correct, 4 corrected (the manuals' titles, and the AHAM directory prints no unit). All 49 links work. `explainer-sources-check.md` records each check (sections 5 and 6).
+- **Wording.** Section 9 of the devices note is applied: the smoke slider's marks are sourced figures, and the settling and deposition speeds are derived. The fan sources list the catalog's four Air King fans in place of the Lasko fans and the 9166.
+- **Found on the read, and fixed.** The swirls' stickiness grows with speed and stream width, not shear rate. "That last step is most of the work" is gone: the pressure step is 11 to 17 % of a processor step, and 65 % of the air's update on WebGPU. A window fan is not a disc. The weather carries outdoor smoke. Measured discharge coefficients go below 0.1. Unresolved swirls are the size of a cube. The heated-cavity test stops at Ra 10⁵. Air King's window-fan page names AMCA 230-99 as its test. The smoke books' "within 0.1 %" names the one known drift: rounding on a phone's 0.3 m grid after half an hour in a sealed, still home (`tests/gpu/massbalance.gpu.ts`, a `test.fixme`). Section 7 of the note lists every claim with where its truth comes from.
+- **Checks:** `yarn run check` 0 errors and 0 warnings. The physics-panel, particle-constants and purifier specs pass, and so do the jet, openings and decay benchmarks. The HUD end-to-end spec had 20 of 21 passed; the one failure was the wall-modes screenshot test in Chromium under a load average near 100, a test that never opens the explainer, and it needs a run on a quiet machine. The About panel was checked at 1440 and 390 px: every group, every link, no overflow, axe clean.
+- **Left for #87:** the purifier cleaning-rate sentences in "How it works" and "What it isn't" describe today's band. #87's third criterion covers restating them, and the list is in a comment on #87.
+
+### #87, a purifier that draws its air in (2026-11-04)
+
+**Built** (ebe6c71, 24a39a1, merged as 704e6ce). A purifier is now a pump in the pressure solve, not a fan disk over a band that drew nothing in:
+- **Intake and outlet.** The band of its body takes its CADR out of the air, and the layer of cells holding the body's top, under the grille, gives it back. The band stops below that layer. The projection enforces both, so the purifier moves its rated flow on any grid, and the band always draws room air instead of air it has already cleaned.
+- **Particulates and heat.** What it removes is the flow times the concentration of the air it draws, so the cell size has nothing to tune. It takes the drawn air's heat in too, and `returnDrawn` hands that back at the outlet in the same substep, so a purifier neither warms nor cools a room.
+- **The jet.** The outlet's push is the jet's momentum, ρ·Q·U (a steady ρ·U² over the grille), with no fan curve, so the runaway's mechanism is gone; `FAN_SPIN_UP` still eases the push in. `FanDisk.qMax = 0` now means a steady push, and `rasterizeFan` skips cells weighted under 1e-6.
+- **Both backends** changed together: the projection's right-hand side, the scalar removal, a new `returnDrawn` kernel, and the divergence readout less the purifiers' own sources. `srcsink`'s second lane is now the signed air rate.
+
+**Measured.** Halving times in minutes, from 30 s to 2 min, stepped as the page steps:
+
+| | 0.2 m | 0.15 m | 0.1 m | 0.075 m |
+| --- | --- | --- | --- | --- |
+| Bedroom 2, before (CPU, room alone) | 4.49 | 5.31 | 6.05 | 7.06 |
+| Bedroom 2, after (GPU, the Scenario) | 3.57 | 3.50 | 3.51 | 3.55 |
+| 3 m test room, before (CPU) | 2.91 | 3.54 | 4.13 | 5.02 |
+| 3 m test room, after (CPU) | 2.24 | 2.19 | 2.20 | 2.18 |
+| Studio main room, after (GPU) | 5.17 | 5.10 | 4.92 | 4.58 |
+
+- **Bedroom 2 on Low and with the window.** Low takes 6.77 min on the coarse grid and 6.81 on the finest (1.88 and 1.92 times High). The open window instead takes 10.43 and 10.70.
+- **Smoky day.** With the windows open, the main room levels off at 0.74 of the smoke outside on both grids (the old notice said 85 %).
+- **Flow in and out.** On 0.2, 0.1 and 0.075 m cells each catalog purifier draws 0.988 to 1.000 of its rated flow and blows out 1.000 to 1.0004 (`tests/solver/purifiers.spec.ts`). Before, the Mighty's outlet gave 0.70 on 0.2 m and 1.19 on 0.075 m.
+- **Against the rating.** In well-mixed air the smoke clears at 94 to 97 % of what the CADR implies, and in a still room at 91 to 98 % (before: 88 to 95 % and 60 to 76 %).
+- **Mass and energy.** GPU mass balance: worst error 6.7e-6 at 0.15 m and 3.3e-5 at 0.1 m. A studio whose Airmega 400 stops loses kinetic energy every second after the first five (`tests/solver/decay.spec.ts`).
+- **Notices and explainer.** Clearing the smoke: about every three and a half minutes, about twice as long on Low, about ten and a half with the window open instead. The smoky day: about every five minutes, and open windows level off at about three quarters of the smoke outside. The explainer's "What it isn't" says a purifier clears a closed room at about its rated rate on every grid and that its body is not solid.
+- **Checks:** `yarn run check` 0 errors; `yarn test:solver` 541 passed on the branch; GPU compile and parity 15 passed (the purifier room's worst parity gap 1.0e-5, in pressure), scenarios, mass balance, world and snapshots 9 passed and 1 skipped (the existing `fixme`). After the merge, the purifier, particle-constants, Scenario-preset and Physics-panel specs pass (47).
+
+**Weak spots:**
+- **The studio's main room is open to the kitchen.** On finer grids the kitchen mixes in more slowly at first, so over the first two minutes the main room halves in 4.58 min at 0.075 m against 5.17 at 0.2 m (11 %), and over ten minutes 5.02 against 5.29 (5 %). The purifier removes the same smoke on both grids (8.73 and 8.69 mg in ten minutes), so this is the room's mixing, not the purifier. #87's first criterion is about a closed room, which bedroom 2 with its door shut is (0.6 %).
+- **The body is not solid.** The outlet's push draws 0.7 to 1.6 times the purifier's flow up through the body, so the jet leaves with about twice the flow, at the right momentum. Capping the body did not bring the studio's grids closer (15 %). Solid device bodies would be a separate change, made through `World`'s face updates as the Openings are.
+- **The flow readout.** A purifier's `deviceFlow` is now the flow through its outlet layer, not what it delivers. Nothing on the page shows it.
+
+### Milestone 5: the accessibility floor and the visual pass, first part (#62, #63), 2026-11-04
+
+An audit of the page in Chromium (with the GPU), Firefox and WebKit, at 1440, 768 and 390 px, with reduced motion: axe in each main state, every control's accessible name (Playwright's computed tree in all three engines), each control's hit area measured with `elementFromPoint` around its middle, a Tab walk recording each stop's focus ring and whether it is drawn over glass or over the world, and the contrast of every line of text measured from pixels (the text made transparent for one screenshot, so what is behind it is read as drawn). The audit scripts are not in the repo.
+
+**Fixed** (216a8dc, 7cd2950, 11d9a85, 525cec1):
+- **Names.** Between 700 and 1180 px the overlay buttons hid their words with `display: none` and had no accessible name: axe's `button-name` at 768 px, in all three engines. The words are now hidden from sight only. The axe test in `tests/airflow-hud.spec.ts` runs at 768 px too.
+- **Targets of 44 px.** Chips, segments, the catalog's tabs, sliders, a probe card's name, a menu's All settings and the phone weather sheet's speed chip were 24 to 40 px high. All are 44 now; the bottom bar is 2 px taller. The weather summary's speed chip keeps its look and takes a finger over 44 px. The sheet grabber rings its bar rather than its box, and is still 24 px high: a 44 px grabber that reached 20 px above its sheet did not take a finger there (the phone spec's drag from just above the sheet moved the world, twice), so it went back into its own box (525cec1).
+- **Contrast.** The accent ring is 1.2:1 against a sunlit wall. A control that is a panel of its own (the Inspector button, the phone's weather pill) is ringed over the world, so it now has a dark band on either side of the ring. The world's own ring, blue at about 1.4:1 on the lawn, has a white band inside it. The status line was 3.05:1 over a sunlit wall and is now as opaque as the glass. Compass letters were 4.08:1 over the darkest lawn and are #4a524c (4.9:1 or more).
+- **Announcements.** A pause was said twice, by the status line (a polite status) and by the announcement; the status line says it alone now. The Faces, Aim and window Open sliders and the wind dial's keys no longer announce the value the slider already speaks; buttons and drags still announce. The phone's pause button was named Resume under the word Play, and is now named by its word.
+- **Keyboard.** A tool change reset the keyboard cursor on the next frame, so the Smoke tool followed at once by Enter lost the smoke. `AirflowInput.syncMode` now forgets the old tool once, before the next key or press (`tests/solver/input.spec.ts`).
+- **Layout (#63).** Below 960 px the top bar and the weather card overlapped over the Scenario picker, which could not be clicked at its middle. There the bar keeps its icons, as a phone's does.
+
+**Measured:**
+- axe found no AA violations in 19 states at 1440 px in Chromium: loading, paused, running, an overlay with its legend, Build, the Inspector on a fan and on the home, a window's menu, the Probe tool, a probe pinned and its menu, smoke releasing, the weather open, the Home and Scenario pickers, Advanced, About, and a fan carried. At 768 and 390 px it found nothing in the closed and Build states after the fixes.
+- The pixel measurement found no HUD text under 4.5:1 in those 19 states (lines a panel covers or a scrolling box clips left out). Worked out by hand, the dimmest HUD text (#aebdb5) over the glass over pure white is 6.2:1.
+
+**Found and not fixed:**
+- At 768 px, "Running at N× real time" under the clock runs under the overlay switcher (`BottomBar.svelte` `.clock-behind`).
+- At 390 px, the house's Bathroom label is half under Primary bathroom.
+- Smoky outdoor air (150 µg/m³) is drawn as a mottled grey film on the walls and floors on a desktop, and as a brown fog that fills the rooms on a phone's puffs. That contradicts the 2026-10-28 call that spread smoke fades as real smoke does.
+- The keyboard cursor tells a screen reader nothing: where it is, whether there is air, or why Enter did nothing (`scene/input.ts`).
+
+**Decisions (#63):**
+- The lightest particulates colour: the ramp stays. The haze adds nothing for clean air, so the light end (#fbd7ca) never reads as smoke and is not meant to. At the default sensitivity 12 µg/m³ is a salmon (#f69673) that shows on the walls and the floors, and 35 to 150 µg/m³ are clear oranges (`airflow-checkins/2026-11-04-check-in-4/1280-two-bedroom-smoke.jpg`).
+- The temperature neutral: stays. With no plane, it colours only the streaks of air at the starting temperature, and the haze adds nothing there. It does not glare in `airflow-checkins/2026-11-04-check-in-4/1280-two-bedroom-temperature.jpg`, where the cold air coming in is blue. The phone shots of it are hidden by the smoke puffs of the review setup, so they say nothing yet.
+- The faint near-wall fade on a 1x phone: no longer applies. It was the slice plane's fade, and there is no plane. Streaks run to the walls at 3 CSS px or wider on the low tier.
+- A 12 m Home on a portrait phone: the camera frames the whole Home in the part of the screen above a sheet at its peek, under the top bar and the weather pill, with the Home's long side up the screen. The 14.4 m house fills the screen's width and about 45% of its height at 390 by 844. The rest is lawn kept for a sheet. The first visit's opening ends close over the living room instead.
+
+**Parked, 2026-11-04, when the session ended** (merged as 6aef57f; the commits pass `yarn run check`):
+- **Keyboard-only spec.** `tests/airflow-keyboard.spec.ts` walks every task: a Home, a Scenario, placing and aiming a fan, a window, the weather, a probe, smoke and Copy link. In Chromium every step passed under a load average near 90, but the run hit its six-minute limit on the last line, which reads the copied link. It has not run in Firefox or WebKit. It is a `test.fixme` until it passes in all three browsers.
+- **Not yet run after the fixes:** the axe state sweep at 768 and 390 px and in Firefox and WebKit; the airflow end-to-end specs in Firefox and WebKit; `tests/accessibility.spec.ts`; the full solver and GPU suites.
+- **Not started:** the real-Safari speckle check, and the before and after stills (the 64 review stills, 4 widths by 4 Homes by 4 overlays, were taken after the fixes; eight are in `airflow-checkins/2026-11-04-check-in-4/`).
+- **Left in #62:** the keyboard cursor's announcement (a debounced message from `scene/input.ts` through `airflowScene.ts`, its words in `probeWords.ts`); a 44 px sheet grabber, which needs the three sheets' scrolling moved to an inner element (`ContextMenu.svelte .menu.sheet`, `WeatherWidget.svelte .weather-sheet`, `TopBar.svelte .panel` on a phone); and the listening a person must do in VoiceOver with Safari and in NVDA with Firefox (the list is on #62).
+- **Left in #63:** the clock line under the overlay switcher at 768 px, the house's two bathroom labels at 390 px, the Smoke legend's "µg/m³ below" with only ppm ticks, and Kyle's call on how Smoky outdoor air looks (a mottled film on desktop walls, a brown fog on a phone).
+
+### #60, the GPU's open items, and the first part of #59 (2026-11-04)
+
+#60's criteria are met (22cde16, da51064, c59711e, b1b9c5b, merged as fd81bd6), and #60 is closed:
+- **The parity gap was the old solver's.** The window-fan-only room gave 1.53e-4 on 2bf7877. It fell to 2.0e-5 with the mean of the last two pressure solves, and is 2.6e-5 now, under the 1e-4 tolerance. A new parity test holds it there and fails on 2bf7877. It also steps both solvers once from the same state along the run: they agree to 7e-7 of the fastest air and 1e-5 Pa, which is rounding. Confidence is high for today and moderate for how the old solver grew the gap.
+- **The page keeps its CFL reading fresh** (`tests/gpu/cfl.gpu.ts`, the page's own session on the device). The reading is at most 1 step old at 1×, 3 at 5× and 14 at 20×. Nothing steps while paused. A read takes the log at least every 28 steps, against 8,192. Before 22cde16 a new world's first frame took the 64-substep cap (8 steps at 20× after a restart or a step down). Fields written in are now their own reading, and a backend with no reading takes one step at a time. Only a still-air world's first step takes the cap now.
+- **Found, not fixed, filed as #91: an intake window fan runs away at the page's real-time step.** At 1/60 s the window-fan Scenario passes 26 m/s within 11 steps on 7.5 cm cells, on both backends, and it runs away on 10 and 15 cm cells at every step tried, from 1/120 to 1/30 s. It is stable at 5×. The stress sweeps only run at 1/20 s. The probable cause is the fan face's instant response to the fan curve on short steps; easing it as `FAN_SPIN_UP` does for disk fans would test that. #91 blocks #69.
+
+#59, the first part (e9762a6):
+- Every snapshot is checked by `runawayOf`: a non-finite number anywhere in the diagnostics, or air past 40 m/s. A NaN shows in the divergence even where the max passes over it. One check costs 0.15 µs.
+- A runaway drops the world and its picture and clears the readings. The status line and the Physics panel give the reason, a screen reader hears it once, and a restart or reset starts the run again. The CPU now measures written-in fields at once, as the GPU does.
+- `tests/solver/runaway.spec.ts`: an injected NaN and an injected 50 m/s each trigger the runaway on the in-page CPU and on the worker, and a reset recovers.
+- Left (the steps are on #59): the HUD notice with Reset, an end-to-end injection spec, the worker watchdog, a GPU injection test, and the `STRESS=1` sweep with the new check.
+
+### Parked 2026-11-04, 21:10
+
+Kyle asked on 2026-11-04 to take #30 to completion, with no CI work unless it sped #30 up and no rebuilding of any 3D model (deferred to a stretch goal after #30 is done), then to park cleanly at 22:00. Four agents ran in parallel worktrees; all four are merged here and their worktrees removed.
+- **Closed:** #65, #87, #60.
+- **Parked with their next steps in a comment:** #59 (notice, injection spec, watchdog), #62 (keyboard spec in three browsers, cursor announcement, grabber, listening by a person), #63 (two overlaps, legend wording, Safari, a house framing test, stills).
+- **New:** #91, the intake window fan's runaway at 1/60 s, which blocks #69.
+- **Not started:** #61 (end-to-end tests of the running simulation), #64 (real devices; ngrok is installed for a phone over https, with Kyle's OK), #69 (launch).
+- **Resume order:** #91 and #59's notice first (a shipped Scenario can run away at 1×), then the rest of #62 and #63, then #61, then #64 on a quiet machine, then #69. #69 merges #45, which changes `playwright.config.ts` and the `package.json` scripts, so main's `AGENTS.md` makes it wait for Kyle, with green CI and an `/interrogate` PASS on the PR. CI on #45 times out at 60 minutes in `yarn test:e2e`.
+- **Kyle's calls waiting:** how Smoky outdoor air should look (a mottled film on desktop walls, a brown fog on a phone; #63), and the studio's 11 % grid difference over its first two minutes (#87's weak spot, accepted as room mixing unless he says otherwise).

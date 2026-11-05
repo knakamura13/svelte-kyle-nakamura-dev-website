@@ -1,6 +1,6 @@
 /**
  * Colors for the 3D scenes. The neutrals and tints are the site's tokens (src/lib/styles/site.css);
- * the four "roles" are this experiment's own and are repeated in experiments.css for the Dock:
+ * the four "roles" are this experiment's own and are repeated in relativity.css for the Dock:
  * the same hue always means the same thing in every Stage.
  */
 export const palette = {

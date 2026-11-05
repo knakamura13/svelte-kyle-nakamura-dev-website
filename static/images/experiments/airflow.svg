@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240" fill="none" stroke-linecap="round" stroke-linejoin="round">
+	<!-- A home seen from above: two rooms, a window at each end, and the air the wind pushes through them. -->
+	<path d="M26 62a6 6 0 0 1 6-6h78v128H32a6 6 0 0 1-6-6z" fill="#dfe9d3"/>
+	<path d="M110 56h98a6 6 0 0 1 6 6v116a6 6 0 0 1-6 6h-98z" fill="#fff"/>
+	<path d="M26 62a6 6 0 0 1 6-6h176a6 6 0 0 1 6 6v116a6 6 0 0 1-6 6H32a6 6 0 0 1-6-6z" stroke="#202a24" stroke-width="4"/>
+	<path d="M110 56v52M110 132v52" stroke="#202a24" stroke-width="4"/>
+	<!-- The windows. -->
+	<path d="M26 96v48M214 96v48" stroke="#fff" stroke-width="8"/>
+	<path d="M23 96v48M29 96v48M211 96v48M217 96v48" stroke="#202a24" stroke-width="1.5"/>
+	<!-- The air: it enters at the left window, squeezes through the doorway, and spreads out to the right. -->
+	<path d="M6 108C46 106 84 116 110 120S168 124 234 112" stroke="#3f63c8" stroke-width="3.5" opacity=".9"/>
+	<path d="M6 120C48 120 86 120 110 120S168 120 234 120" stroke="#3f63c8" stroke-width="3.5"/>
+	<path d="M6 132C46 134 84 124 110 120S168 116 234 128" stroke="#3f63c8" stroke-width="3.5" opacity=".9"/>
+	<path d="M44 90C70 92 96 100 108 112" stroke="#3f63c8" stroke-width="2.5" stroke-dasharray="1 6" opacity=".7"/>
+	<path d="M44 150C70 148 96 140 108 128" stroke="#3f63c8" stroke-width="2.5" stroke-dasharray="1 6" opacity=".7"/>
+	<path d="M126 98C150 100 176 96 198 82M126 142C150 140 176 144 198 160" stroke="#3f63c8" stroke-width="2.5" stroke-dasharray="1 6" opacity=".7"/>
+	<path d="M224 111l10 9-10 9" stroke="#3f63c8" stroke-width="3.5"/>
+	<!-- A fan by the wall and a puff of smoke in the far room. -->
+	<circle cx="62" cy="76" r="13" fill="#fff" stroke="#276b42" stroke-width="3"/>
+	<path d="M62 76V64M62 76l10.4 6M62 76l-10.4 6" stroke="#276b42" stroke-width="4.5"/>
+	<circle cx="176" cy="150" r="17" fill="#f2a01f" opacity=".22"/>
+	<circle cx="186" cy="142" r="11" fill="#f2a01f" opacity=".3"/>
+	<circle cx="168" cy="158" r="8" fill="#f2a01f" opacity=".42"/>
+</svg>

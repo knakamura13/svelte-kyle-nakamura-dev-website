@@ -16,8 +16,8 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import { formatYears } from '../format';
 import { seededRandom, twinTrip, twinTripAt } from '../physics';
 import { palette } from '../palette';
-import { Tubes, blobShadow, clay, disposeTree, flat, glow, studio } from '../engine/kit';
-import type { SceneFactory } from '../engine/types';
+import { Tubes, blobShadow, clay, disposeTree, flat, glow, studio } from '$lib/experiments/engine/kit';
+import type { SceneFactory } from '$lib/experiments/engine/types';
 
 export interface TwinTripParams {
 	/** Distance to the star, light-years. */

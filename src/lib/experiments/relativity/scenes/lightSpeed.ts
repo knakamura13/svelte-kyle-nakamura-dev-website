@@ -12,8 +12,8 @@ import {
 } from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { palette } from '../palette';
-import { Fader, Tubes, blobShadow, clay, disposeTree, flat, glow, shade, studio } from '../engine/kit';
-import type { SceneFactory } from '../engine/types';
+import { Fader, Tubes, blobShadow, clay, disposeTree, flat, glow, shade, studio } from '$lib/experiments/engine/kit';
+import type { SceneFactory } from '$lib/experiments/engine/types';
 
 export interface LightSpeedParams {
 	/** Ship speed relative to the station, as a fraction of c. */

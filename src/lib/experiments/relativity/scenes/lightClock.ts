@@ -2,8 +2,8 @@ import { CylinderGeometry, Group, MathUtils, Mesh, PerspectiveCamera, Scene, Sph
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { gamma, lightClockHalfTick } from '../physics';
 import { palette } from '../palette';
-import { Tubes, blobShadow, clay, disposeTree, flat, glow, setOpacity, shade, studio, triangle } from '../engine/kit';
-import type { SceneFactory } from '../engine/types';
+import { Tubes, blobShadow, clay, disposeTree, flat, glow, setOpacity, shade, studio, triangle } from '$lib/experiments/engine/kit';
+import type { SceneFactory } from '$lib/experiments/engine/types';
 
 export interface LightClockParams {
 	/** Speed of the moving clock, as a fraction of c. */

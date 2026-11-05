@@ -1,12 +1,12 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { formatBeta, formatGamma, formatYears } from '../format';
-	import { prefersReducedMotion, useExperience } from '../experience.svelte';
+	import { prefersReducedMotion, useExperience } from '$lib/experiments/engine/experience.svelte';
 	import { twinTrip, twinTripAt } from '../physics';
 	import type { TwinTripParams, TwinTripReadout } from '../scenes/twinTrip';
 	import Chapter from '../ui/Chapter.svelte';
-	import PlayControls from '../ui/PlayControls.svelte';
-	import RangeField from '../ui/RangeField.svelte';
+	import PlayControls from '$lib/experiments/ui/PlayControls.svelte';
+	import RangeField from '$lib/experiments/ui/RangeField.svelte';
 
 	const experience = useExperience();
 	const params: TwinTripParams = $state({

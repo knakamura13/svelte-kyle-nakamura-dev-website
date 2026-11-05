@@ -1,13 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { formatBeta, formatChance, formatGamma, formatMicroseconds } from '../format';
-	import { prefersReducedMotion, useExperience } from '../experience.svelte';
+	import { prefersReducedMotion, useExperience } from '$lib/experiments/engine/experience.svelte';
 	import { MUON_COUNT, betaFromNines, muonSurvival, muonTrip, ninesFromBeta } from '../physics';
 	import type { MuonsParams, MuonsReadout } from '../scenes/muons';
 	import Chapter from '../ui/Chapter.svelte';
-	import PlayControls from '../ui/PlayControls.svelte';
-	import RangeField from '../ui/RangeField.svelte';
-	import Segmented from '../ui/Segmented.svelte';
+	import PlayControls from '$lib/experiments/ui/PlayControls.svelte';
+	import RangeField from '$lib/experiments/ui/RangeField.svelte';
+	import Segmented from '$lib/experiments/ui/Segmented.svelte';
 
 	const experience = useExperience();
 	const start = 0.995;
