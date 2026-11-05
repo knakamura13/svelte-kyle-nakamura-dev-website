@@ -415,3 +415,26 @@ An audit of the page in Chromium (with the GPU), Firefox and WebKit, at 1440, 76
 - **Not started:** the real-Safari speckle check, and the before and after stills (the 64 review stills, 4 widths by 4 Homes by 4 overlays, were taken after the fixes; eight are in `airflow-checkins/2026-11-04-check-in-4/`).
 - **Left in #62:** the keyboard cursor's announcement (a debounced message from `scene/input.ts` through `airflowScene.ts`, its words in `probeWords.ts`); a 44 px sheet grabber, which needs the three sheets' scrolling moved to an inner element (`ContextMenu.svelte .menu.sheet`, `WeatherWidget.svelte .weather-sheet`, `TopBar.svelte .panel` on a phone); and the listening a person must do in VoiceOver with Safari and in NVDA with Firefox (the list is on #62).
 - **Left in #63:** the clock line under the overlay switcher at 768 px, the house's two bathroom labels at 390 px, the Smoke legend's "µg/m³ below" with only ppm ticks, and Kyle's call on how Smoky outdoor air looks (a mottled film on desktop walls, a brown fog on a phone).
+
+### #60, the GPU's open items, and the first part of #59 (2026-11-04)
+
+#60's criteria are met (22cde16, da51064, c59711e, b1b9c5b, merged as fd81bd6), and #60 is closed:
+- **The parity gap was the old solver's.** The window-fan-only room gave 1.53e-4 on 2bf7877. It fell to 2.0e-5 with the mean of the last two pressure solves, and is 2.6e-5 now, under the 1e-4 tolerance. A new parity test holds it there and fails on 2bf7877. It also steps both solvers once from the same state along the run: they agree to 7e-7 of the fastest air and 1e-5 Pa, which is rounding. Confidence is high for today and moderate for how the old solver grew the gap.
+- **The page keeps its CFL reading fresh** (`tests/gpu/cfl.gpu.ts`, the page's own session on the device). The reading is at most 1 step old at 1×, 3 at 5× and 14 at 20×. Nothing steps while paused. A read takes the log at least every 28 steps, against 8,192. Before 22cde16 a new world's first frame took the 64-substep cap (8 steps at 20× after a restart or a step down). Fields written in are now their own reading, and a backend with no reading takes one step at a time. Only a still-air world's first step takes the cap now.
+- **Found, not fixed, filed as #91: an intake window fan runs away at the page's real-time step.** At 1/60 s the window-fan Scenario passes 26 m/s within 11 steps on 7.5 cm cells, on both backends, and it runs away on 10 and 15 cm cells at every step tried, from 1/120 to 1/30 s. It is stable at 5×. The stress sweeps only run at 1/20 s. The probable cause is the fan face's instant response to the fan curve on short steps; easing it as `FAN_SPIN_UP` does for disk fans would test that. #91 blocks #69.
+
+#59, the first part (e9762a6):
+- Every snapshot is checked by `runawayOf`: a non-finite number anywhere in the diagnostics, or air past 40 m/s. A NaN shows in the divergence even where the max passes over it. One check costs 0.15 µs.
+- A runaway drops the world and its picture and clears the readings. The status line and the Physics panel give the reason, a screen reader hears it once, and a restart or reset starts the run again. The CPU now measures written-in fields at once, as the GPU does.
+- `tests/solver/runaway.spec.ts`: an injected NaN and an injected 50 m/s each trigger the runaway on the in-page CPU and on the worker, and a reset recovers.
+- Left (the steps are on #59): the HUD notice with Reset, an end-to-end injection spec, the worker watchdog, a GPU injection test, and the `STRESS=1` sweep with the new check.
+
+### Parked 2026-11-04, 21:10
+
+Kyle asked on 2026-11-04 to take #30 to completion, with no CI work unless it sped #30 up and no rebuilding of any 3D model (deferred to a stretch goal after #30 is done), then to park cleanly at 22:00. Four agents ran in parallel worktrees; all four are merged here and their worktrees removed.
+- **Closed:** #65, #87, #60.
+- **Parked with their next steps in a comment:** #59 (notice, injection spec, watchdog), #62 (keyboard spec in three browsers, cursor announcement, grabber, listening by a person), #63 (two overlaps, legend wording, Safari, a house framing test, stills).
+- **New:** #91, the intake window fan's runaway at 1/60 s, which blocks #69.
+- **Not started:** #61 (end-to-end tests of the running simulation), #64 (real devices; ngrok is installed for a phone over https, with Kyle's OK), #69 (launch).
+- **Resume order:** #91 and #59's notice first (a shipped Scenario can run away at 1×), then the rest of #62 and #63, then #61, then #64 on a quiet machine, then #69. #69 merges #45, which changes `playwright.config.ts` and the `package.json` scripts, so main's `AGENTS.md` makes it wait for Kyle, with green CI and an `/interrogate` PASS on the PR. CI on #45 times out at 60 minutes in `yarn test:e2e`.
+- **Kyle's calls waiting:** how Smoky outdoor air should look (a mottled film on desktop walls, a brown fog on a phone; #63), and the studio's 11 % grid difference over its first two minutes (#87's weak spot, accepted as room mixing unless he says otherwise).
