@@ -25,11 +25,12 @@ const DIAGONAL = (coef: string, sx: string, sxy: string) => `fn diagonal(c: i32)
 /**
  * The fine level's conductances (cpu/pressure.ts `assemble`, first loop): a face between two cells conducts a·h·dt/ρ
  * if either cell is air; faces on the box conduct nothing until the exterior kernel sets openings. Also the cell's
- * flux imbalance, the right-hand side.
+ * flux imbalance, the right-hand side, less the air a purifier draws in there (`srcsink`'s second lane, 1/s, negative
+ * where it blows the air out) times the cell's volume.
  */
 export const assemble: KernelSource = {
 	name: 'assemble',
-	bindings: [uniform('C', 'Consts'), uniform('S', 'Step'), read('geo', VEC4), read('vel', VEC4), write('coef', VEC4)],
+	bindings: [uniform('C', 'Consts'), uniform('S', 'Step'), read('geo', VEC4), read('vel', VEC4), read('srcsink', VEC2), write('coef', VEC4)],
 	code: `${DECODE}
 ${ENTRY} {
 	${LINEAR}
@@ -77,7 +78,7 @@ ${ENTRY} {
 		if (k < C.nz - 1) {
 			divergence = divergence + geo[c + C.sxy].z * vel[c + C.sxy].z;
 		}
-		rhs = -(C.h * C.h) * divergence;
+		rhs = -(C.h * C.h) * divergence - srcsink[c].y * (C.h * C.h * C.h);
 	}
 	coef[c] = vec4<f32>(cx, cy, cz, rhs);
 }`

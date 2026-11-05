@@ -345,14 +345,18 @@ async function devicesParity(steps: number, off: string[] = []) {
 			scalarSubsteps: 3
 		};
 		const fan = rasterizeFan(grid, geometry, { center: [1.5, 1.2, 1.35], normal: [0, 0, 1], radius: 0.3, thickness: 0.1, qMax: 0.3, dpMax: 20 });
+		// The purifier's outlet push: a steady one (no qMax), one cell thick, over its outlet's cells.
+		const push = rasterizeFan(grid, geometry, { center: [2.25, 0.975, 1.875], normal: [0, 1, 0], radius: 0.15, thickness: 0, qMax: 0, dpMax: 8 });
 		const source = [grid.index(4, 1, 4), grid.index(5, 1, 4)];
 		const inlet = [grid.index(14, 3, 12), grid.index(15, 3, 12), grid.index(14, 4, 12), grid.index(15, 4, 12)];
+		// The purifier draws its air in at the inlet and blows it out two cells higher, unevenly, with the heat the air took in.
+		const outlet = { cells: Uint32Array.from([grid.index(14, 6, 12), grid.index(15, 6, 12)]), share: new Float32Array([0.375, 0.625]) };
 		return {
 			config,
 			exterior,
-			fans: off.includes('fan') ? [] : [fan],
+			fans: off.includes('fan') ? [] : [fan, push],
 			emitters: off.includes('emitter') ? [] : [{ cells: Uint32Array.from(source), share: new Float32Array([0.5, 0.5]), rate: 1 }],
-			sinks: off.includes('sink') ? [] : [{ cells: Uint32Array.from(inlet), share: new Float32Array(4).fill(0.25), cadr: 0.05 }]
+			sinks: off.includes('sink') ? [] : [{ cells: Uint32Array.from(inlet), share: new Float32Array(4).fill(0.25), cadr: 0.05, outlet }]
 		};
 	};
 	const a = build();
@@ -385,7 +389,7 @@ async function devicesParity(steps: number, off: string[] = []) {
 	const nut = await readBack(device, solver.nut, 4 * solver.grid.size);
 	const p = await readBack(device, solver.levels[0].p, 4 * solver.grid.size);
 	const log = await readBack(device, (solver as any).log, 32 * steps);
-	const fanState = await readBack(device, (solver as any).fanState.buffer, 16);
+	const fanState = await readBack(device, (solver as any).fanState.buffer, 32);
 	const outlet = solver.outlet;
 	solver.dispose();
 	// The particulate mass log, summed over the steps' slots in double as the backend would: (inflow, outflow,
@@ -413,8 +417,8 @@ async function devicesParity(steps: number, off: string[] = []) {
 		theta: compare({ theta: [theta, cpu.theta] }, inside),
 		particulates: compare({ c: [c, cpu.c] }, inside),
 		nut: compare({ nut: [nut, cpu.nut] }, inside),
-		// The flow through the fan disk measured at the start of the last step (cpu/forces.ts fanAcceleration).
-		fanFlow: compare({ fanFlow: [Float32Array.of(fanState[0]), Float32Array.from(cpu.fanFlow)] }),
+		// The flow through each fan disk measured at the start of the last step (cpu/forces.ts fanAcceleration).
+		fanFlow: compare({ fanFlow: [Float32Array.from(cpu.fanFlow, (_, n) => fanState[4 * n]), Float32Array.from(cpu.fanFlow)] }),
 		...tally
 	};
 }

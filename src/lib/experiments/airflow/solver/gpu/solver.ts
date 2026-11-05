@@ -307,6 +307,10 @@ export class GpuSolver {
 	private readonly sampleOut: Growable;
 	private sources = new Map<number, number>();
 	private sinks = new Map<number, number>();
+	/** The purifiers, for handing back at each outlet the heat its intake drew in (`returnDrawn`). */
+	private readonly purifierInfo: Growable;
+	private readonly purifierCells: Growable;
+	private purifierCount = 0;
 
 	// Profiling.
 	readonly querySet: GpuQuerySet | null = null;
@@ -455,6 +459,8 @@ export class GpuSolver {
 		this.scatterVals = new Growable(this, 'scatterVals', 256);
 		this.samplePoints = new Growable(this, 'samplePoints', 256);
 		this.sampleOut = new Growable(this, 'sampleOut', 256);
+		this.purifierInfo = new Growable(this, 'purifierInfo', 256);
+		this.purifierCells = new Growable(this, 'purifierCells', 256);
 
 		if (options.profile && context.timestamps) {
 			this.querySet = device.createQuerySet({ type: 'timestamp', count: 2 * PROFILE_GROUPS.length * PROFILE_STEPS });
@@ -706,10 +712,10 @@ export class GpuSolver {
 		}
 	}
 
-	/** 5a. The pressure system: conductances and right-hand side, exterior openings side by side, coarse operators. */
+	/** 5a. The pressure system: conductances and right-hand side (with the air purifiers draw in and blow out), exterior openings side by side, coarse operators. */
 	assemble(pass: GpuComputePassEncoder) {
 		const fine = this.levels[0];
-		this.run(pass, 'assemble', { C: this.consts, S: this.step, geo: this.geo, vel: this.vel, coef: fine.coef }, this.cellGroups);
+		this.run(pass, 'assemble', { C: this.consts, S: this.step, geo: this.geo, vel: this.vel, srcsink: this.srcsink, coef: fine.coef }, this.cellGroups);
 		for (let s = 0; s < 6; s++) {
 			const slots = this.grid.sideSize(s as SideIndex);
 			if (!slots) continue;
@@ -773,6 +779,8 @@ export class GpuSolver {
 				{ C: this.consts, S: this.step, scal: this.scal, vel: this.vel, geo: this.geo, nut: this.nut, srcsink: this.srcsink, next: this.scalNext, partials: this.scalarPartials },
 				this.cellGroups
 			);
+			if (this.purifierCount)
+				this.run(pass, 'returnDrawn', { S: this.step, N: this.count('purifiers'), purifierInfo: this.purifierInfo.buffer, purifierCells: this.purifierCells.buffer, next: this.scalNext }, [1, 1]);
 			this.run(pass, 'tally', { S: this.step, N: this.count('cellPartials'), partials: this.scalarPartials, log: this.log }, [1, 1]);
 			this.swapScalars();
 		}
@@ -784,7 +792,7 @@ export class GpuSolver {
 
 	/** Diagnostics partials per workgroup, and the small on-device finish of the CFL speed for the substep estimate. */
 	measure(pass: GpuComputePassEncoder) {
-		this.run(pass, 'measure', { C: this.consts, vel: this.vel, geo: this.geo, scal: this.scal, partials: this.measurePartials }, this.cellGroups);
+		this.run(pass, 'measure', { C: this.consts, vel: this.vel, geo: this.geo, scal: this.scal, srcsink: this.srcsink, partials: this.measurePartials }, this.cellGroups);
 		this.run(pass, 'measureFinish', { N: this.count('cellPartials'), partials: this.measurePartials, result: this.measureResult }, [1, 1]);
 	}
 
@@ -934,13 +942,45 @@ export class GpuSolver {
 		this.sources = next;
 	}
 
-	/** Replaces every sink (cpu/solver.ts `setSinks`). */
+	/**
+	 * Replaces every purifier (cpu/solver.ts `setSinks`): the air each draws in per second per unit of volume, positive in its intake and
+	 * negative in its outlet, accumulated in f32 as the CPU's array is, and the lists `returnDrawn` walks.
+	 */
 	setSinks(sinks: Sink[]) {
 		const volume = this.grid.cellVolume;
 		const next = new Map<number, number>();
-		for (const sink of sinks) for (let n = 0; n < sink.cells.length; n++) next.set(sink.cells[n], Math.fround((next.get(sink.cells[n]) ?? 0) + (sink.cadr * sink.share[n]) / volume));
+		const add = (cell: number, rate: number) => next.set(cell, Math.fround((next.get(cell) ?? 0) + rate));
+		const info = new Uint32Array(4 * Math.max(sinks.length, 1));
+		const entries: number[] = [];
+		const values: number[] = [];
+		sinks.forEach((sink, p) => {
+			const drawn = Float32Array.from(sink.share, (share) => (sink.cadr * share) / volume);
+			info.set([entries.length, sink.cells.length], 4 * p);
+			for (let n = 0; n < sink.cells.length; n++) {
+				add(sink.cells[n], drawn[n]);
+				entries.push(sink.cells[n]);
+				values.push(drawn[n]);
+			}
+			info.set([entries.length, sink.outlet.cells.length], 4 * p + 2);
+			for (let n = 0; n < sink.outlet.cells.length; n++) {
+				add(sink.outlet.cells[n], -(sink.cadr * sink.outlet.share[n]) / volume);
+				entries.push(sink.outlet.cells[n]);
+				values.push(sink.outlet.share[n]);
+			}
+		});
 		this.writeSources(this.sources, next, [...this.sinks.keys()]);
 		this.sinks = next;
+		this.purifierCount = sinks.length;
+		if (!sinks.length) return;
+		const cells = new Uint32Array(2 * entries.length);
+		const bits = new Float32Array(cells.buffer);
+		entries.forEach((cell, n) => {
+			cells[2 * n] = cell;
+			bits[2 * n + 1] = values[n];
+		});
+		this.device.queue.writeBuffer(this.purifierInfo.fit(info.byteLength), 0, info);
+		this.device.queue.writeBuffer(this.purifierCells.fit(cells.byteLength), 0, cells);
+		this.setCount('purifiers', sinks.length);
 	}
 
 	private writeSources(sources: Map<number, number>, sinks: Map<number, number>, previous: number[]) {

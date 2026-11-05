@@ -41,7 +41,8 @@ export function applyPressureGradient(grid: Grid, geometry: Geometry, p: Float32
 /**
  * How hard each fan pushes right now, as an acceleration in m/s² (times the faces' own weights, which are
  * applied by `applyFans`). The push follows the fan curve for the flow the fan is delivering: Δp = Δp_max·(1 − (Q/Q_max)²),
- * so it shrinks as the room pushes back and the fan delivers its rated flow in open air. The push is the pressure
+ * so it shrinks as the room pushes back and the fan delivers its rated flow in open air; with no `qMax` the push is a
+ * steady Δp_max (a purifier's outlet). The push is the pressure
  * rise times the swept area, spread over the disk's cells by their weights, which works the same whether the disk
  * spans many cells or is smaller than one. `accelerations` holds each fan's push from the step before, which eases toward
  * the curve's over `FAN_SPIN_UP` (`dt` the step's length, s), so a small fast disk cannot overshoot its curve.
@@ -67,11 +68,11 @@ export function fanAcceleration(grid: Grid, fans: FanDisk[], vel: Velocity, rho:
 		}
 		const flow = weights > 0 ? (fan.area * axial) / weights : 0;
 		flows[n] = flow;
-		if (fan.qMax <= 0 || fan.dpMax <= 0 || weights <= 0) {
+		if (fan.dpMax <= 0 || weights <= 0) {
 			accelerations[n] = 0;
 			continue;
 		}
-		const ratio = flow / fan.qMax;
+		const ratio = fan.qMax > 0 ? flow / fan.qMax : 0;
 		const curve = (fan.dpMax * (1 - ratio * ratio) * fan.area) / (weights * volume * rho);
 		accelerations[n] += (curve - accelerations[n]) * (dt / (dt + FAN_SPIN_UP));
 	}

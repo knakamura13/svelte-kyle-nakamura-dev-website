@@ -215,26 +215,46 @@ test.describe('smoke in a sealed room with a catalog purifier', () => {
 	});
 });
 
-test.describe('a catalog purifier on the finest grid', () => {
-	test('stays finite at the warm-up’s 0.05 s step and settles to a steady flow: the Mighty’s small, fast outlet on 0.075 m cells once overshot its fan curve until the air was not a number', async () => {
-		const h = 0.075;
-		const [nx, ny, nz] = [40, 32, 40];
-		const raster = rasterizePlan(room, h, { furniture: false });
-		for (const model of PURIFIER_MODELS) {
-			const device: DeviceState = { id: 'p', model: model.id, x: 1.5, z: 1.5, y: 0, yaw: 0, tilt: 0, power: 1, height: 0, oscillation: { on: false, sweep: 90, period: 8 } };
-			const inputs = deviceInputs({ devices: [device], models, raster, fluid: AIR, time: 0 });
-			const solver = new CpuSolver({ grid: { nx, ny, nz, h }, fluid: AIR, geometry: boxGeometry({ nx, ny, nz, h }) });
-			solver.setFans(inputs.fans);
-			const flows: number[] = [];
-			advance(solver, 4, 0.05, () => flows.push(solver.fanFlow[0]));
-			const last = flows.slice(-20);
-			const mean = last.reduce((a, b) => a + b, 0) / last.length;
-			const rated = purifierCadr(model, 1);
-			console.log(`${model.id} on 0.075 m cells: ${mean.toFixed(4)} m³/s through its outlet over the fourth second, ${(mean / rated).toFixed(2)} of its rated ${rated.toFixed(4)}`);
-			expect(flows.every(Number.isFinite), `${model.id}: every step finite`).toBe(true);
-			expect(Math.max(...last.map((q) => Math.abs(q - mean))) / mean, `${model.id}: steady over the fourth second`).toBeLessThan(0.1);
-			expect(mean / rated, model.id).toBeGreaterThan(0.6);
-			expect(mean / rated, model.id).toBeLessThan(1.4);
+test.describe('a catalog purifier on every grid the page runs', () => {
+	test('draws its rated flow in at its intake and blows it out of its outlet, and stays finite at the warm-up’s 0.05 s step: the Mighty’s small, fast outlet on 0.075 m cells once overshot its fan curve until the air was not a number', async () => {
+		test.setTimeout(600_000);
+		for (const h of [0.2, 0.1, 0.075]) {
+			const [nx, ny, nz] = [Math.round(3 / h), Math.round(2.4 / h), Math.round(3 / h)];
+			const raster = rasterizePlan(room, h, { furniture: false });
+			for (const model of PURIFIER_MODELS) {
+				const device: DeviceState = { id: 'p', model: model.id, x: 1.5, z: 1.5, y: 0, yaw: 0, tilt: 0, power: 1, height: 0, oscillation: { on: false, sweep: 90, period: 8 } };
+				const inputs = deviceInputs({ devices: [device], models, raster, fluid: AIR, time: 0 });
+				const solver = new CpuSolver({ grid: { nx, ny, nz, h }, fluid: AIR, geometry: boxGeometry({ nx, ny, nz, h }) });
+				solver.setFans(inputs.fans);
+				solver.setSinks(inputs.sinks);
+				let finite = true;
+				advance(solver, 4, 0.05, () => (finite &&= Number.isFinite(solver.fanFlow[0])));
+				/** Net flow out of a set of cells, through the faces that lead out of it, m³/s. */
+				const outOf = (cells: Uint32Array) => {
+					const set = new Set(cells);
+					const { u, v, w } = solver.vel;
+					const { sx, sxy } = solver.grid;
+					let out = 0;
+					for (const c of cells)
+						for (const [flow, beyond] of [
+							[u[c + 1], c + 1],
+							[-u[c], c - 1],
+							[v[c + sx], c + sx],
+							[-v[c], c - sx],
+							[w[c + sxy], c + sxy],
+							[-w[c], c - sxy]
+						])
+							if (!set.has(beyond)) out += flow * h * h;
+					return out;
+				};
+				const rated = purifierCadr(model, 1);
+				const drawn = -outOf(inputs.sinks[0].cells) / rated;
+				const blown = outOf(inputs.sinks[0].outlet.cells) / rated;
+				console.log(`${model.id} on ${h} m cells: its intake draws ${drawn.toFixed(4)} of its rated ${rated.toFixed(4)} m³/s, its outlet blows ${blown.toFixed(4)}`);
+				expect(finite, `${model.id} at ${h} m: every step finite`).toBe(true);
+				expect(Math.abs(drawn - 1), `${model.id} at ${h} m: the intake`).toBeLessThan(0.1);
+				expect(Math.abs(blown - 1), `${model.id} at ${h} m: the outlet`).toBeLessThan(0.1);
+			}
 		}
 	});
 });

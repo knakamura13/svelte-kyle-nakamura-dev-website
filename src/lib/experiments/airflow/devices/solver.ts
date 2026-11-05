@@ -48,9 +48,9 @@ function curve(rated: number, area: number, rho: number) {
 
 /**
  * Turns the devices into what the solver pushes and cleans with. `time` is the page's simulated seconds, which
- * oscillating fans turn by. Devices are not solid: a fan's disk and a purifier's inlet are regions of air the solver
- * acts on. A purifier removes particulates in a band around its body (where it breathes in) and blows its clean air
- * up out of the top as a jet, which is what the fan machinery already does.
+ * oscillating fans turn by. Devices are not solid: a fan's disk and a purifier's intake and outlet are regions of air
+ * the solver acts on. A purifier draws its flow in through a band of its body (where it breathes in) and blows the
+ * same air, cleaned, up out of the top as a jet (`purifierInputs`).
  */
 export function deviceInputs(args: { devices: DeviceState[]; models: ReadonlyMap<string, DeviceModel>; raster: Raster; fluid: FluidProperties; time: number }): DeviceInputs {
 	const { devices, models, raster, fluid, time } = args;
@@ -64,17 +64,11 @@ export function deviceInputs(args: { devices: DeviceState[]; models: ReadonlyMap
 		const model = models.get(device.model);
 		if (!model || device.power <= 0.005) continue;
 		if (model.kind === 'air-purifier') {
-			const cadr = purifierCadr(model, device.power);
-			sinks.push(purifierSink(grid, raster, device, model, cadr));
-			const outlet = rasterizeFan(grid, raster.geometry, {
-				center: [device.x, device.y + model.body.height + 0.06, device.z],
-				normal: [0, 1, 0],
-				radius: model.outletDiameter / 2,
-				thickness: DISK_THICKNESS,
-				...curve(cadr, (Math.PI * model.outletDiameter ** 2) / 4, fluid.rho)
-			});
+			const purifier = purifierInputs(grid, raster, device, model, purifierCadr(model, device.power), fluid.rho);
+			if (!purifier) continue;
+			sinks.push(purifier.sink);
 			fanIndex.set(device.id, fans.length);
-			fans.push(outlet);
+			fans.push(purifier.outlet);
 		} else if (model.kind === 'window-fan') {
 			const input = windowFanInput(raster, device, model.shutoff ?? 25, fanFlow(model, device.power));
 			if (input) windowFans.push(input);
@@ -96,12 +90,36 @@ export function deviceInputs(args: { devices: DeviceState[]; models: ReadonlyMap
 }
 
 /**
- * The cells of the band of air around a purifier's body where it breathes in, sharing its cleaning equally. The body turns with the
- * purifier's yaw, as it is drawn (`scene/deviceMeshes.ts`) and picked, so a cell is in the band when its centre, turned into the
- * body's own axes, is within the body's footprint.
+ * A purifier as the solver runs it: it draws `cadr` m³/s in through the band of its body where it breathes in and blows the same air out
+ * of its outlet, cleaned of every particle (`Sink`), and the outlet's push makes that air a jet.
+ *
+ * The intake is the cells of the band, sharing the flow equally. The body turns with the purifier's yaw, as it is drawn
+ * (`scene/deviceMeshes.ts`) and picked, so a cell is in the band when its centre, turned into the body's own axes, is within the body's
+ * footprint. The outlet is the layer of cells that holds the top of the body, under the outlet's round grille, each sharing the flow by
+ * how much of it the grille covers; the band stops below that layer, so no cell is both. The push is the momentum the jet leaves the grille
+ * with: the flow times its speed through the grille, ρ·Q·U, a steady pressure rise of ρ·U² over the grille's area. It does not follow a
+ * fan curve, because the pressure solve sets the flow: that is what keeps the flow and the jet the same on every grid. Null for a
+ * purifier with no air over its top, which has nowhere to blow.
  */
-function purifierSink(grid: Grid, raster: Raster, device: DeviceState, model: Extract<DeviceModel, { kind: 'air-purifier' }>, cadr: number): Sink {
+function purifierInputs(grid: Grid, raster: Raster, device: DeviceState, model: Extract<DeviceModel, { kind: 'air-purifier' }>, cadr: number, rho: number): { sink: Sink; outlet: FanDisk } | null {
 	const { nx, ny, nz, sx, sxy, h } = grid;
+	const top = Math.min(ny - 1, Math.max(1, Math.floor((device.y + model.body.height) / h)));
+	const area = (Math.PI * model.outletDiameter ** 2) / 4;
+	const speed = cadr / area;
+	const outlet = rasterizeFan(grid, raster.geometry, {
+		center: [device.x, (top + 0.5) * h, device.z],
+		normal: [0, 1, 0],
+		radius: model.outletDiameter / 2,
+		thickness: 0,
+		qMax: 0,
+		dpMax: rho * speed * speed
+	});
+	const weights = outlet.cellWeight.reduce((sum, w) => sum + w, 0);
+	const pushed = outlet.faceWeight.reduce((sum, w) => sum + w, 0);
+	if (!(weights > 0) || !(pushed > 0)) return null;
+	// The push is spread over the faces it acts on: a face closed by a wall takes none, and the rest carry the whole momentum.
+	outlet.dpMax = (rho * speed * speed * weights) / pushed;
+
 	const half = [model.body.width / 2 + h / 2, model.body.depth / 2 + h / 2];
 	const low = device.y + model.inlet.from;
 	const high = device.y + model.inlet.to;
@@ -109,7 +127,7 @@ function purifierSink(grid: Grid, raster: Raster, device: DeviceState, model: Ex
 	const [cos, sin] = [Math.cos(turn), Math.sin(turn)];
 	const cells: number[] = [];
 	for (let k = 0; k < nz; k++)
-		for (let j = 0; j < ny; j++)
+		for (let j = 0; j < top; j++)
 			for (let i = 0; i < nx; i++) {
 				const dx = (i + 0.5) * h - device.x;
 				const y = (j + 0.5) * h;
@@ -118,14 +136,20 @@ function purifierSink(grid: Grid, raster: Raster, device: DeviceState, model: Ex
 				const along = dz * cos - dx * sin;
 				if (Math.abs(across) <= half[0] && Math.abs(along) <= half[1] && y >= low && y <= high && raster.geometry.fluid[i + sx * j + sxy * k]) cells.push(i + sx * j + sxy * k);
 			}
-	// A band narrower than a cell still cleans: take the cell nearest its centre.
+	// A band narrower than a cell still draws: take the cell nearest its centre, below the outlet.
 	if (!cells.length) {
 		const i = Math.min(nx - 1, Math.max(0, Math.floor(device.x / h)));
-		const j = Math.min(ny - 1, Math.max(0, Math.floor((low + high) / 2 / h)));
+		const j = Math.min(top - 1, Math.max(0, Math.floor((low + high) / 2 / h)));
 		const k = Math.min(nz - 1, Math.max(0, Math.floor(device.z / h)));
 		cells.push(i + sx * j + sxy * k);
 	}
-	return { cells: Uint32Array.from(cells), share: new Float32Array(cells.length).fill(1 / cells.length), cadr };
+	const sink: Sink = {
+		cells: Uint32Array.from(cells),
+		share: new Float32Array(cells.length).fill(1 / cells.length),
+		cadr,
+		outlet: { cells: outlet.cells, share: Float32Array.from(outlet.cellWeight, (w) => w / weights) }
+	};
+	return { sink, outlet };
 }
 
 /** A window fan fills the opening it sits in: every covered face gets the fan's curve, with the free-delivery speed that makes the whole opening pass the fan's rated flow. */

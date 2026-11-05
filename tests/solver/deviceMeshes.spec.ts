@@ -131,8 +131,13 @@ test.describe('a purifier stand-in', () => {
 				});
 				centroid.divideScalar(weight);
 				expect(Math.hypot(centroid.x - axis.x, centroid.z - axis.z), `centred on the outlet at yaw ${yaw}`).toBeLessThan(h / 2);
-				expect(centroid.y, 'leaving from the outlet’s face').toBeGreaterThan(face);
-				expect(centroid.y, 'within a disc’s thickness of it').toBeLessThan(face + 0.1);
+				// The jet leaves from the layer of cells that holds the top of the body, where the outlet is drawn.
+				expect(Math.abs(centroid.y - (device.y + model.body.height)), 'from the layer that holds the body’s top').toBeLessThanOrEqual(h / 2 + 1e-9);
+				expect(Math.abs(centroid.y - face), 'within a cell of the outlet’s face').toBeLessThan(h);
+				// And the air it blows comes out of those cells, each by its share of the outlet, none of them a cell of the intake.
+				expect([...sinks[0].outlet.cells]).toEqual([...jet.cells]);
+				expect(sinks[0].outlet.share.reduce((a, b) => a + b, 0)).toBeCloseTo(1, 6);
+				expect([...sinks[0].cells].some((cell) => jet.cells.includes(cell)), 'no cell both draws and blows').toBe(false);
 			}
 			meshes.dispose();
 		});

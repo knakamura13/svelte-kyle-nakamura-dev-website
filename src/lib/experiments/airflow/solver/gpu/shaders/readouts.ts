@@ -12,7 +12,7 @@ import { AXIS, DECODE, ENTRY, F32, LIMITS, LINEAR, VEC2, VEC4, read, sampler, un
  */
 export const measure: KernelSource = {
 	name: 'measure',
-	bindings: [uniform('C', 'Consts'), read('vel', VEC4), read('geo', VEC4), read('scal', VEC2), write('partials', VEC4)],
+	bindings: [uniform('C', 'Consts'), read('vel', VEC4), read('geo', VEC4), read('scal', VEC2), read('srcsink', VEC2), write('partials', VEC4)],
 	code: `${DECODE}
 var<workgroup> sums: array<vec4<f32>, 256>;
 var<workgroup> extra: array<vec2<f32>, 256>;
@@ -31,7 +31,8 @@ ${ENTRY} {
 				let ux = vel[c + 1].x;
 				let vy = vel[c + C.sx].y;
 				let wz = vel[c + C.sxy].z;
-				let net = geo[c + 1].x * ux - g.x * here.x + geo[c + C.sx].y * vy - g.y * here.y + geo[c + C.sxy].z * wz - g.z * here.z;
+				// Less the net outflow a purifier makes there (cpu/solver.ts \`measure\`).
+				let net = geo[c + 1].x * ux - g.x * here.x + geo[c + C.sx].y * vy - g.y * here.y + geo[c + C.sxy].z * wz - g.z * here.z + srcsink[c].y * C.h;
 				let fast = max(max(max(abs(here.x), abs(ux)), max(abs(here.y), abs(vy))), max(abs(here.z), abs(wz)));
 				let cu = 0.5 * (here.x + ux);
 				let cv = 0.5 * (here.y + vy);

@@ -44,7 +44,8 @@ export function rasterizeFan(grid: Grid, geometry: Geometry, shape: FanShape): F
 				const along = dx * ax + dy * ay + dz * az;
 				const across = Math.hypot(dx - along * ax, dy - along * ay, dz - along * az);
 				const weight = clamp01((shape.radius - across) / h + 0.5) * clamp01((half - Math.abs(along)) / h + 0.5);
-				if (weight <= 0) continue;
+				// Below a millionth a cell is in only by rounding: a disk one cell thick centred on a layer of cells reaches the layers either side so.
+				if (weight < 1e-6) continue;
 				cells.push(cell);
 				weights.push(weight);
 			}

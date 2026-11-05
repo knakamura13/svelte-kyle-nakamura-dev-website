@@ -200,7 +200,8 @@ export function windRoom(h: number, windward: number, leeward: number) {
 }
 
 /**
- * A closed-in 3 × 3 × 2.4 m room (cells 0.15 m: a grid whose dimensions the multigrid can coarsen, as a plan's are padded to) with two openings, a purifier inlet in the middle and particulates on every
+ * A closed-in 3 × 3 × 2.4 m room (cells 0.15 m: a grid whose dimensions the multigrid can coarsen, as a plan's are padded to) with two openings, a purifier in the middle
+ * (drawing its air in low and blowing it out higher up) and particulates on every
  * surface, in which the particulates are held well mixed by a large eddy diffusivity (a room's real mixing is
  * what the other benchmarks test): the box model dC/dt = −(Q/V + CADR/V + v_d·A/V)·C.
  */
@@ -219,9 +220,12 @@ export function mixedRoom(options: { h: number; pressure: number; cadr: number; 
 	for (const f of faces) solver.exterior.sides[f.side][3 * f.slot] = f.side === 0 ? options.pressure : -options.pressure;
 	solver.fill(0, 100);
 	const g = solver.grid;
-	const inlet: number[] = [];
-	for (let a = 0; a < 2; a++) for (let b = 0; b < 2; b++) for (let c = 0; c < 2; c++) inlet.push(Math.round(nx / 2) + a + g.sx * (3 + b) + g.sxy * (Math.round(nz / 2) + c));
-	solver.setSinks([{ cells: Uint32Array.from(inlet), share: new Float32Array(inlet.length).fill(1 / inlet.length), cadr: options.cadr }]);
+	const block = (j: number) => {
+		const cells: number[] = [];
+		for (let a = 0; a < 2; a++) for (let b = 0; b < 2; b++) for (let c = 0; c < 2; c++) cells.push(Math.round(nx / 2) + a + g.sx * (j + b) + g.sxy * (Math.round(nz / 2) + c));
+		return { cells: Uint32Array.from(cells), share: new Float32Array(cells.length).fill(1 / cells.length) };
+	};
+	solver.setSinks([{ ...block(3), cadr: options.cadr, outlet: block(7) }]);
 	const openingArea = span * span * h * h;
 	return {
 		solver,

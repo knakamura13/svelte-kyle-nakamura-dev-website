@@ -154,7 +154,7 @@ export const geometryScatter: KernelSource = {
 }`
 };
 
-/** Sparse writes of the per-cell release and removal rates (cpu/solver.ts `setEmitters`, `setSinks`), one entry per cell. */
+/** Sparse writes of the per-cell release rates and the air purifiers draw in (cpu/solver.ts `setEmitters`, `setSinks`), one entry per cell. */
 export const sourceScatter: KernelSource = {
 	name: 'sourceScatter',
 	bindings: [uniform('N', 'Counts'), read('idx', U32), read('vals', VEC2), write('srcsink', VEC2)],

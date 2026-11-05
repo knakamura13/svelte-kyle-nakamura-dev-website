@@ -131,9 +131,18 @@ test.describe('the device catalog', () => {
 				const disk = inputs.fans[index!];
 				expect(disk.cells.length, model.id).toBeGreaterThan(0);
 				expect(Number.isFinite(disk.dpMax) && disk.dpMax > 0, model.id).toBe(true);
-				const rated = model.kind === 'air-purifier' ? model.cadr.high : model.flow.high;
-				expect(disk.qMax / rated, model.id).toBeCloseTo(Math.SQRT2, 9);
-				if (model.kind === 'air-purifier') expect(inputs.sinks[0].cadr, model.id).toBeCloseTo(model.cadr.high, 9);
+				if (model.kind === 'air-purifier') {
+					// A purifier moves its flow by the pressure solve (`Sink`), and its outlet's push is the momentum its jet leaves the grille with:
+					// ρ·U² over the grille, a steady push with no fan curve.
+					const sink = inputs.sinks[0];
+					expect(sink.cadr, model.id).toBeCloseTo(model.cadr.high, 9);
+					expect(sink.share.reduce((a, b) => a + b, 0), model.id).toBeCloseTo(1, 6);
+					expect(sink.outlet.share.reduce((a, b) => a + b, 0), model.id).toBeCloseTo(1, 6);
+					expect(disk.qMax, model.id).toBe(0);
+					const speed = model.cadr.high / ((Math.PI * model.outletDiameter ** 2) / 4);
+					const push = (disk.dpMax * disk.area * disk.faceWeight.reduce((a, b) => a + b, 0)) / disk.cellWeight.reduce((a, b) => a + b, 0);
+					expect(push / (AIR.rho * model.cadr.high * speed), `${model.id}: the jet's momentum`).toBeCloseTo(1, 5);
+				} else expect(disk.qMax / model.flow.high, model.id).toBeCloseTo(Math.SQRT2, 9);
 			}
 		}
 	});
