@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
-import { formatChance } from '../src/lib/experiments/relativity/format';
-import { muonSurvival } from '../src/lib/experiments/relativity/physics';
+import { formatBeta, formatChance } from '../src/lib/experiments/relativity/format';
+import { betaFromNines, muonSurvival, ninesFromBeta } from '../src/lib/experiments/relativity/physics';
 
 const chapterIds = ['frames', 'light-speed', 'light-clock', 'twins', 'muons', 'gravity'];
 
@@ -138,6 +138,33 @@ test.describe('the relativity page', () => {
 	test('sliders announce what changed to screen readers, politely and after a pause', async ({ page }) => {
 		await page.locator('#light-clock-speed').fill('0.9');
 		await expect(page.locator('p[aria-live="polite"]')).toContainText('0.90 times the speed of light', { timeout: 3000 });
+	});
+});
+
+test.describe('a slider moved before hydration', () => {
+	test('announces the muon speed that move selected', async ({ page }) => {
+		await page.emulateMedia({ reducedMotion: 'reduce' });
+		// Module scripts hydrate after the document is parsed. A classic script at the end of the
+		// body runs once the slider exists and before that hydration, so the input event is never replayed.
+		await page.route(/\/experiments\/relativity\/?$/, async (route) => {
+			const response = await route.fetch();
+			const body = (await response.text()).replace(
+				'</body>',
+				`<script>document.getElementById('muon-speed').value='0.5'</script></body>`
+			);
+			const headers = response.headers();
+			delete headers['content-length'];
+			await route.fulfill({ status: response.status(), headers, body });
+		});
+		await page.goto('/experiments/relativity');
+
+		const position = Number(await page.locator('#muon-speed').inputValue());
+		expect(Math.abs(position - ninesFromBeta(0.995))).toBeGreaterThan(0.005 / 2);
+		const beta = betaFromNines(position);
+		const announced = `Muons at ${formatBeta(beta)} times the speed of light: ${formatChance(muonSurvival(beta, true))} reach the ground.`;
+		await expect(page.locator('p[aria-live="polite"]')).toHaveText(announced, { timeout: 3000 });
+		await expect(page.locator('#muons .field-value')).toHaveText(`${formatBeta(beta)} c`);
+		await expect(page.locator('#muons .readouts dd').first()).toHaveText(formatChance(muonSurvival(beta, true)));
 	});
 });
 

@@ -49,8 +49,10 @@
 #about .background-copy .record:nth-child(4) { transition-delay:calc(var(--stagger) * 2); }
 .case-sections>section.reveal-pending .case-example { opacity:0; transform:translateY(18px); }
 .case-example { transition:opacity 500ms var(--ease) var(--stagger),transform 500ms var(--ease) var(--stagger); }
-.discover { position:relative; display:inline-block; }
-.discover svg { position:absolute; inset:-6px; width:calc(100% + 12px); height:calc(100% + 12px); overflow:visible; }
+/* The outline is decoration. It stays inside the line and behind the glyph, so the sentence
+   and the letter can be measured. An SVG on top of either one leaves contrast unmeasured. */
+.discover { position:relative; display:inline-block; padding:6px; isolation:isolate; }
+.discover svg { position:absolute; inset:0; width:100%; height:100%; z-index:-1; pointer-events:none; }
 .discover rect { fill:none; stroke:#8eaf7e; stroke-width:1; stroke-dasharray:160; stroke-dashoffset:160; }
 .case-sections>section:not(.reveal-pending) .discover rect { animation:letter-stroke 500ms var(--ease) forwards; }
 @keyframes letter-stroke { to { stroke-dashoffset:0; } }
@@ -81,7 +83,7 @@
 .case-sections section>p { font-size:15px; line-height:1.9; margin-bottom:18px; }
 .case-example { border-left:2px solid #8eaf7e; padding:8px 0 8px 25px; margin:30px 0 0; }
 .case-example p:last-child { font-size:16px; line-height:1.8; }
-.case-example [lang="ko"] { font-size:25px; line-height:1; display:inline-block; }
+.case-example [lang="ko"] { position:relative; font-size:25px; line-height:normal; background:var(--canvas); }
 .case-end { border-top:1px solid var(--rule); padding:30px 0 50px; display:flex; justify-content:space-between; gap:20px; }
 @media(max-width:1000px) {
  .portfolio-opening,.portfolio-background { gap:7%; grid-template-columns:minmax(220px,.76fr) minmax(0,1.24fr); }
