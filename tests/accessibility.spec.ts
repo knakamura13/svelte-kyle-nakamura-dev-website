@@ -1,5 +1,20 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+
+// The shell clips overflow, so un-clip it and check that nothing extends past the viewport.
+async function expectReflow(page: Page, path: string, width: number) {
+	await page.setViewportSize({ width, height: 800 });
+	await page.goto(path);
+	// addStyleTag waits on a load event that never fires with JavaScript disabled.
+	await page.evaluate(() => document.head.append(Object.assign(document.createElement('style'), { textContent: '.concept { overflow: visible !important; }' })));
+	const outside = await page.evaluate(() =>
+		[...document.querySelectorAll('main *')]
+			.filter((el) => { const box = el.getBoundingClientRect(); return box.width > 0 && (box.left < -1 || box.right > innerWidth + 1); })
+			.map((el) => `${el.tagName.toLowerCase()}.${[...el.classList].join('.')}`)
+	);
+	expect(outside).toEqual([]);
+	expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+}
 
 const pages = ['/', '/projects/learning-korean', '/resume', '/send-money', '/experiments', '/experiments/relativity', '/does-not-exist'];
 
@@ -39,20 +54,10 @@ for (const path of pages) {
 			});
 		}
 
-		// 320px wide is WCAG 1.4.10 reflow; 720px is a 1440px window at 200% zoom. The shell clips
-		// overflow, so un-clip it and check that nothing extends past the viewport.
+		// 320px wide is WCAG 1.4.10 reflow; 720px is a 1440px window at 200% zoom.
 		for (const width of [320, 720]) {
 			test(`reflows without cutting off content at ${width}px`, async ({ page }) => {
-				await page.setViewportSize({ width, height: 800 });
-				await page.goto(path);
-				await page.addStyleTag({ content: '.concept { overflow: visible !important; }' });
-				const outside = await page.evaluate(() =>
-					[...document.querySelectorAll('main *')]
-						.filter((el) => { const box = el.getBoundingClientRect(); return box.width > 0 && (box.left < -1 || box.right > innerWidth + 1); })
-						.map((el) => `${el.tagName.toLowerCase()}.${[...el.classList].join('.')}`)
-				);
-				expect(outside).toEqual([]);
-				expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+				await expectReflow(page, path, width);
 			});
 		}
 
@@ -67,6 +72,13 @@ for (const path of pages) {
 
 test.describe('without JavaScript', () => {
 	test.use({ javaScriptEnabled: false });
+
+	// Server-rendered layout is what a slow device shows before hydration, so it must reflow too.
+	for (const path of pages) {
+		test(`${path} reflows at 320px before hydration`, async ({ page }) => {
+			await expectReflow(page, path, 320);
+		});
+	}
 
 	for (const path of pages) {
 		test(`${path} renders its content visibly`, async ({ page }) => {
