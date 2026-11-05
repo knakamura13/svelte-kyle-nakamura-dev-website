@@ -114,17 +114,21 @@
 </button>
 
 <style>
-	/* A wide, short target along the sheet's top edge, the bar in its middle. The sheet keeps room for it with its top padding. */
+	/*
+	 * A wide target along the sheet's top edge, the bar in its middle. It is 44 px high, as every target is, and reaches 20 px above the
+	 * sheet, where the world is, so it takes no more of the sheet than the room its top padding keeps and covers none of the first row. (A
+	 * sheet that scrolls itself clips that part: its grabber is 24 px high.)
+	 */
 	.grip {
 		position: absolute;
-		top: 0;
+		top: -20px;
 		left: 50%;
 		z-index: 1;
 		display: grid;
 		place-items: start center;
 		width: min(160px, 50%);
-		height: 24px;
-		padding: 7px 0 0;
+		height: 44px;
+		padding: 27px 0 0;
 		border: 0;
 		border-radius: 0 0 12px 12px;
 		background: transparent;
@@ -149,7 +153,12 @@
 		width: 44px;
 		background: rgb(255 255 255 / 0.46);
 	}
+	/* The ring goes round the bar, inside the sheet's glass, not round the target, which reaches over the world. */
 	.grip:focus-visible {
-		outline-offset: -2px;
+		outline: none;
+	}
+	.grip:focus-visible .bar {
+		outline: 2px solid var(--hud-accent);
+		outline-offset: 3px;
 	}
 </style>

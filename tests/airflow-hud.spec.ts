@@ -293,8 +293,10 @@ test.describe('the HUD', () => {
 		await expect(page.getByRole('button', { name: /^Smoky, 150 micrograms/ })).toHaveAttribute('aria-pressed', 'true');
 	});
 
+	// A tablet's 768 too: between 700 and 1180 px the overlays show only their icons, and once had no names there.
 	for (const [width, height] of [
 		[1440, 900],
+		[768, 1024],
 		[390, 844]
 	]) {
 		test(`has no WCAG 2.1 A/AA violations that axe can detect at ${width}px, closed and with panels open`, async ({ page }) => {
