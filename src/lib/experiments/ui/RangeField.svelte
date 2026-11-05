@@ -41,6 +41,9 @@
 		const current = field instanceof HTMLInputElement ? field.valueAsNumber : NaN;
 		// Ignore the browser snapping an off-step value. A real change moves by at least one step.
 		if (describe && !Number.isNaN(current) && Math.abs(current - rendered) > step / 2) {
+			// The bound value is not always what the chapter announces. The muon slider
+			// binds a position, and this callback is the only write of its speed.
+			onuser?.(current);
 			experience.announce(describe(current));
 		}
 	});

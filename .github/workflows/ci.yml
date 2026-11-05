@@ -16,6 +16,12 @@ jobs:
     name: yarn check and yarn test:e2e
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    # Browsers and their system libraries come preinstalled. Keep the tag equal to @playwright/test in yarn.lock.
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
+    env:
+      # The container runs as root, and Firefox refuses a HOME owned by another user.
+      HOME: /root
     steps:
       - name: Check out the repository
         uses: actions/checkout@v7
@@ -31,9 +37,6 @@ jobs:
 
       - name: Check
         run: yarn run check
-
-      - name: Install Playwright browsers
-        run: yarn playwright install --with-deps
 
       - name: End-to-end tests
         run: yarn test:e2e
