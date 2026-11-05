@@ -392,6 +392,20 @@
 		line-height: 1.45;
 	}
 
+	/*
+	 * Between a phone and a laptop (a tablet, a narrow window) the weather card needs the room the pickers' words take: below 960 px the bar
+	 * and the card overlapped over the Scenario picker. The bar keeps its icons, as on a phone; each picker still names its Home or Scenario
+	 * to a screen reader and in its tooltip, and opens on it.
+	 */
+	@media (max-width: 959px) {
+		.exit-text,
+		.picker-text {
+			display: none;
+		}
+		.exit {
+			padding: 0 12px;
+		}
+	}
 	:global(.hud.phone) .exit-text,
 	:global(.hud.phone) .picker-text,
 	:global(.hud.phone) .chevron {

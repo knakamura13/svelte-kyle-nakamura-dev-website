@@ -250,10 +250,16 @@
 		background: var(--hud-rule);
 	}
 
-	/* A narrower desktop keeps the overlay icons and drops their words. */
+	/* A narrower desktop keeps the overlay icons and drops their words from sight. The words stay for a screen reader: they are each button's name. */
 	@media (max-width: 1180px) {
 		.seg-text {
-			display: none;
+			position: absolute;
+			width: 1px;
+			height: 1px;
+			margin: -1px;
+			overflow: hidden;
+			clip-path: inset(50%);
+			white-space: nowrap;
 		}
 	}
 
@@ -300,7 +306,12 @@
 		width: auto;
 	}
 	.bar.sheet .seg-text {
-		display: inline;
+		position: static;
+		width: auto;
+		height: auto;
+		margin: 0;
+		overflow: visible;
+		clip-path: none;
 	}
 	/* The overlays in one row, each its icon over its name, as the toolbar's tools are. */
 	.bar.sheet .overlays .seg {

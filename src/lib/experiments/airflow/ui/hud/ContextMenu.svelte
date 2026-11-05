@@ -162,7 +162,7 @@
 	}
 	.details {
 		justify-self: end;
-		min-height: 40px;
+		min-height: 44px;
 		padding: 0 10px;
 		color: var(--hud-muted);
 		font-size: 12px;

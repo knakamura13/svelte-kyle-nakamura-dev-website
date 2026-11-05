@@ -125,9 +125,9 @@
 								step={5}
 								display={describeBearing(device.yaw).text}
 								spoken={describeBearing(device.yaw).spoken}
-								oninput={(value) => experience.turnDevice(device.id, value)}
+								oninput={(value) => experience.turnDevice(device.id, value, false)}
 							/>
-							<HudRange label="Aim" value={device.tilt} min={tilts.min} max={tilts.max} step={tilts.step} display={aim(device.tilt)} oninput={(value) => experience.aimDevice(device.id, value)} />
+							<HudRange label="Aim" value={device.tilt} min={tilts.min} max={tilts.max} step={tilts.step} display={aim(device.tilt)} oninput={(value) => experience.aimDevice(device.id, value, false)} />
 						{/if}
 						{#if model.kind === 'pedestal-fan'}
 							{#if device.oscillation.on}

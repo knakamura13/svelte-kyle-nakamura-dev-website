@@ -89,7 +89,7 @@
 		gap: 8px;
 		flex: 1;
 		min-width: 0;
-		min-height: 36px;
+		min-height: 44px;
 		padding: 0 6px 0 0;
 		border: 0;
 		border-radius: 10px;

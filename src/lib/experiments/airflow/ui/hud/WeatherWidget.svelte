@@ -296,6 +296,15 @@
 	.speed-chip:hover {
 		background: rgb(95 213 154 / 0.26);
 	}
+	/* The chip in the summary is drawn small, under the wind's letters; a finger takes it over 44 px, which reach past it top and bottom. */
+	.summary .speed-chip {
+		position: relative;
+	}
+	.summary .speed-chip::before {
+		content: '';
+		position: absolute;
+		inset: -10px -4px;
+	}
 	.air-dot {
 		width: 9px;
 		height: 9px;
@@ -482,7 +491,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 4px;
-		min-height: 36px;
+		min-height: 44px;
 		margin-top: 4px;
 		padding: 0 8px 0 12px;
 		border-radius: 12px;

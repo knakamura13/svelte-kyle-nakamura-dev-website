@@ -149,7 +149,12 @@
 		width: 44px;
 		background: rgb(255 255 255 / 0.46);
 	}
+	/* The ring goes round the bar, inside the sheet's glass, rather than round the whole target at the sheet's edge. */
 	.grip:focus-visible {
-		outline-offset: -2px;
+		outline: none;
+	}
+	.grip:focus-visible .bar {
+		outline: 2px solid var(--hud-accent);
+		outline-offset: 3px;
 	}
 </style>

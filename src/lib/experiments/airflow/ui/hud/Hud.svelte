@@ -282,7 +282,8 @@
 		margin: 0;
 		padding: 6px 14px;
 		border-radius: 100px;
-		background: rgb(12 17 15 / 0.62);
+		/* As opaque as the glass: over a sunlit wall a thinner one left its words at 3:1. */
+		background: rgb(12 17 15 / 0.9);
 		color: var(--hud-muted);
 		font-size: 11.5px;
 		text-align: center;
@@ -325,6 +326,15 @@
 	.hud :global(:focus-visible) {
 		outline: 2px solid var(--hud-accent);
 		outline-offset: 2px;
+	}
+	/*
+	 * A control that is a panel of its own (the Inspector's button, the phone's weather pill) is ringed over the world, which can be as
+	 * light as the ring. A dark band under the ring, either side of it, keeps it well over 3:1 against whatever is behind.
+	 */
+	.hud :global(.glass:focus-visible) {
+		box-shadow:
+			0 0 0 6px rgb(8 12 10 / 0.92),
+			var(--hud-shadow);
 	}
 	/* An icon button: 44 px square at least, the icon in the middle; pressed, it fills with the accent. */
 	.hud :global(.ibtn) {
@@ -408,7 +418,7 @@
 	.hud :global(.btn.quiet:hover) {
 		background: var(--hud-hover);
 	}
-	/* Chips: a row of choices, one pressed. */
+	/* Chips: a row of choices, one pressed. Every control of the HUD is 44 px high at least, the site's least target for a finger. */
 	.hud :global(.chips) {
 		display: flex;
 		flex-wrap: wrap;
@@ -419,7 +429,7 @@
 		align-items: center;
 		justify-content: center;
 		gap: 6px;
-		min-height: 40px;
+		min-height: 44px;
 		padding: 0 14px;
 		border: 0;
 		border-radius: 100px;
@@ -457,7 +467,7 @@
 		justify-content: center;
 		gap: 7px;
 		min-width: 44px;
-		min-height: 40px;
+		min-height: 44px;
 		padding: 0 12px;
 		border: 0;
 		border-radius: 12px;
@@ -509,13 +519,13 @@
 		scrollbar-width: thin;
 		scrollbar-color: rgb(255 255 255 / 0.22) transparent;
 	}
-	/* A slider drawn for dark glass: a thin track that fills with the accent, and a round thumb. */
+	/* A slider drawn for dark glass: a thin track that fills with the accent, and a round thumb, in a box 44 px high that a finger can take. */
 	.hud :global(input[type='range'].slider) {
 		-webkit-appearance: none;
 		appearance: none;
 		display: block;
 		width: 100%;
-		height: 32px;
+		height: 44px;
 		margin: 0;
 		background: transparent;
 		cursor: pointer;

@@ -387,7 +387,7 @@
 	}
 	.phone-head .tabs > button {
 		flex: none;
-		min-height: 36px;
+		min-height: 44px;
 		padding: 0 11px;
 	}
 	.phone-head .tabs :global(.icon),

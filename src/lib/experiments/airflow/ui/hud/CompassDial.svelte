@@ -31,7 +31,7 @@
 		/** False: a picture of the wind only, inside a button that says it in words (the phone's weather pill), not a control of its own. */
 		interactive?: boolean;
 		onchange: (bearing: number) => void;
-		/** Once a drag ends or a key is let go: for the announcement. */
+		/** Once a drag ends: for the announcement. A key says nothing more, since the slider says its own value as it turns. */
 		oncommit?: (bearing: number) => void;
 	} = $props();
 
@@ -87,9 +87,6 @@
 		if (next !== bearing) onchange(next);
 	}
 
-	function keyup(event: KeyboardEvent) {
-		if (stepBearing(bearing, event.key) !== null) oncommit?.(bearing);
-	}
 </script>
 
 {#snippet face()}
@@ -143,7 +140,6 @@
 		onpointerup={up}
 		onpointercancel={up}
 		onkeydown={keydown}
-		onkeyup={keyup}
 	>
 		{@render face()}
 	</svg>

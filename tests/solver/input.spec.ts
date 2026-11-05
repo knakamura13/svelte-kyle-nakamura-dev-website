@@ -362,6 +362,24 @@ test.describe('the keyboard', () => {
 		expect(h.input.key(h.key('Escape'))).toBe(false);
 	});
 
+	test('a new mode forgets the old one’s cursor and smoke once, so a key pressed before the next frame is kept', () => {
+		const h = harness('probe');
+		h.input.syncMode();
+		h.input.key(h.key('ArrowLeft'));
+		// The Smoke tool is chosen, and Enter pressed, before the scene has drawn a frame.
+		h.setMode('emit');
+		h.input.key(h.key('Enter'));
+		expect(h.log.emits, 'from the middle: the probe cursor was forgotten').toEqual([{ x: 3, y: 1.1, z: 2 }]);
+		// The frame comes, and keeps the smoke.
+		h.input.syncMode();
+		expect(h.log.emits.at(-1)).toEqual({ x: 3, y: 1.1, z: 2 });
+		expect(h.input.busy).toBe(true);
+		// Another tool ends it.
+		h.setMode('look');
+		h.input.syncMode();
+		expect(h.log.emits.at(-1)).toBeNull();
+	});
+
 	test('a reset, as when the mode changes, drops the cursor and any smoke', () => {
 		const h = harness('emit');
 		h.input.key(h.key('Enter'));
