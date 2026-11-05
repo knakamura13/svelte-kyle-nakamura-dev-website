@@ -51,7 +51,7 @@
 .chart { position:relative; margin:30px 0 26px; max-width:520px; }
 .chart-title { font-size:12px; font-weight:650; margin-bottom:6px; }
 .chart-plot { position:relative; }
-.chart svg { display:block; overflow:visible; }
+.chart svg { display:block; overflow:visible; width:100%; height:auto; }
 .chart text { font:11px 'Manrope Variable',sans-serif; fill:var(--muted); }
 .chart .chart-value { fill:var(--ink); font-size:12px; font-weight:650; }
 .chart-grid { stroke:#e6eae3; stroke-width:1; }

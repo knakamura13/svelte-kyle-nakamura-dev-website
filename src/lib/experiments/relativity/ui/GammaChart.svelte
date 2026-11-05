@@ -25,7 +25,9 @@
 	const xTicks = [0, 0.25, 0.5, 0.75, 1];
 	const table = [0.1, 0.5, 0.8, 0.9, 0.95, 0.99, 0.999];
 
-	let width = $state(520);
+	// The exact, fractional width keeps the viewBox at a 1:1 scale once measured.
+	let box = $state<DOMRectReadOnly>();
+	const width = $derived(box?.width || 520);
 	let hovered = $state<number | null>(null);
 	let dragging = false;
 
@@ -69,12 +71,13 @@
 	const leave = () => (hovered = null);
 </script>
 
-<figure class="chart" bind:clientWidth={width}>
+<figure class="chart" bind:contentRect={box}>
 	<figcaption class="chart-title">How much slower a moving clock ticks, by speed</figcaption>
 	<div class="chart-plot">
 		<svg
 			{width}
 			height={HEIGHT}
+			viewBox="0 0 {width} {HEIGHT}"
 			role="img"
 			aria-label="Graph of the slowdown factor gamma against speed. It starts at 1, rises slowly, then climbs steeply as speed nears the speed of light. At {formatBeta(beta)} times the speed of light, gamma is {formatGamma(now.g)}."
 		>
