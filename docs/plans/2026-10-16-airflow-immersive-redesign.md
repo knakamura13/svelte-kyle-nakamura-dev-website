@@ -349,3 +349,34 @@ Both are done:
 - **Found on the read, and fixed.** The swirls' stickiness grows with speed and stream width, not shear rate. "That last step is most of the work" is gone: the pressure step is 11 to 17 % of a processor step, and 65 % of the air's update on WebGPU. A window fan is not a disc. The weather carries outdoor smoke. Measured discharge coefficients go below 0.1. Unresolved swirls are the size of a cube. The heated-cavity test stops at Ra 10⁵. Air King's window-fan page names AMCA 230-99 as its test. The smoke books' "within 0.1 %" names the one known drift: rounding on a phone's 0.3 m grid after half an hour in a sealed, still home (`tests/gpu/massbalance.gpu.ts`, a `test.fixme`). Section 7 of the note lists every claim with where its truth comes from.
 - **Checks:** `yarn run check` 0 errors and 0 warnings. The physics-panel, particle-constants and purifier specs pass, and so do the jet, openings and decay benchmarks. The HUD end-to-end spec had 20 of 21 passed; the one failure was the wall-modes screenshot test in Chromium under a load average near 100, a test that never opens the explainer, and it needs a run on a quiet machine. The About panel was checked at 1440 and 390 px: every group, every link, no overflow, axe clean.
 - **Left for #87:** the purifier cleaning-rate sentences in "How it works" and "What it isn't" describe today's band. #87's third criterion covers restating them, and the list is in a comment on #87.
+
+### #87, a purifier that draws its air in (2026-11-04)
+
+**Built** (ebe6c71, 24a39a1, merged as 704e6ce). A purifier is now a pump in the pressure solve, not a fan disk over a band that drew nothing in:
+- **Intake and outlet.** The band of its body takes its CADR out of the air, and the layer of cells holding the body's top, under the grille, gives it back. The band stops below that layer. The projection enforces both, so the purifier moves its rated flow on any grid, and the band always draws room air instead of air it has already cleaned.
+- **Particulates and heat.** What it removes is the flow times the concentration of the air it draws, so the cell size has nothing to tune. It takes the drawn air's heat in too, and `returnDrawn` hands that back at the outlet in the same substep, so a purifier neither warms nor cools a room.
+- **The jet.** The outlet's push is the jet's momentum, ρ·Q·U (a steady ρ·U² over the grille), with no fan curve, so the runaway's mechanism is gone; `FAN_SPIN_UP` still eases the push in. `FanDisk.qMax = 0` now means a steady push, and `rasterizeFan` skips cells weighted under 1e-6.
+- **Both backends** changed together: the projection's right-hand side, the scalar removal, a new `returnDrawn` kernel, and the divergence readout less the purifiers' own sources. `srcsink`'s second lane is now the signed air rate.
+
+**Measured.** Halving times in minutes, from 30 s to 2 min, stepped as the page steps:
+
+| | 0.2 m | 0.15 m | 0.1 m | 0.075 m |
+| --- | --- | --- | --- | --- |
+| Bedroom 2, before (CPU, room alone) | 4.49 | 5.31 | 6.05 | 7.06 |
+| Bedroom 2, after (GPU, the Scenario) | 3.57 | 3.50 | 3.51 | 3.55 |
+| 3 m test room, before (CPU) | 2.91 | 3.54 | 4.13 | 5.02 |
+| 3 m test room, after (CPU) | 2.24 | 2.19 | 2.20 | 2.18 |
+| Studio main room, after (GPU) | 5.17 | 5.10 | 4.92 | 4.58 |
+
+- **Bedroom 2 on Low and with the window.** Low takes 6.77 min on the coarse grid and 6.81 on the finest (1.88 and 1.92 times High). The open window instead takes 10.43 and 10.70.
+- **Smoky day.** With the windows open, the main room levels off at 0.74 of the smoke outside on both grids (the old notice said 85 %).
+- **Flow in and out.** On 0.2, 0.1 and 0.075 m cells each catalog purifier draws 0.988 to 1.000 of its rated flow and blows out 1.000 to 1.0004 (`tests/solver/purifiers.spec.ts`). Before, the Mighty's outlet gave 0.70 on 0.2 m and 1.19 on 0.075 m.
+- **Against the rating.** In well-mixed air the smoke clears at 94 to 97 % of what the CADR implies, and in a still room at 91 to 98 % (before: 88 to 95 % and 60 to 76 %).
+- **Mass and energy.** GPU mass balance: worst error 6.7e-6 at 0.15 m and 3.3e-5 at 0.1 m. A studio whose Airmega 400 stops loses kinetic energy every second after the first five (`tests/solver/decay.spec.ts`).
+- **Notices and explainer.** Clearing the smoke: about every three and a half minutes, about twice as long on Low, about ten and a half with the window open instead. The smoky day: about every five minutes, and open windows level off at about three quarters of the smoke outside. The explainer's "What it isn't" says a purifier clears a closed room at about its rated rate on every grid and that its body is not solid.
+- **Checks:** `yarn run check` 0 errors; `yarn test:solver` 541 passed on the branch; GPU compile and parity 15 passed (the purifier room's worst parity gap 1.0e-5, in pressure), scenarios, mass balance, world and snapshots 9 passed and 1 skipped (the existing `fixme`). After the merge, the purifier, particle-constants, Scenario-preset and Physics-panel specs pass (47).
+
+**Weak spots:**
+- **The studio's main room is open to the kitchen.** On finer grids the kitchen mixes in more slowly at first, so over the first two minutes the main room halves in 4.58 min at 0.075 m against 5.17 at 0.2 m (11 %), and over ten minutes 5.02 against 5.29 (5 %). The purifier removes the same smoke on both grids (8.73 and 8.69 mg in ten minutes), so this is the room's mixing, not the purifier. #87's first criterion is about a closed room, which bedroom 2 with its door shut is (0.6 %).
+- **The body is not solid.** The outlet's push draws 0.7 to 1.6 times the purifier's flow up through the body, so the jet leaves with about twice the flow, at the right momentum. Capping the body did not bring the studio's grids closer (15 %). Solid device bodies would be a separate change, made through `World`'s face updates as the Openings are.
+- **The flow readout.** A purifier's `deviceFlow` is now the flow through its outlet layer, not what it delivers. Nothing on the page shows it.
