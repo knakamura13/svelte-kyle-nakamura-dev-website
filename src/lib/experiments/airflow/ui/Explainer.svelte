@@ -31,7 +31,7 @@
 			<li>
 				<strong>Smoke is fine particulate matter, PM2.5.</strong> The air carries it and swirls spread it. It settles slowly, sticks to surfaces, leaves
 				through openings, and is removed by purifiers at their rated clean air delivery rate. The Physics panel adds it all up: smoke that was already there, released and let in
-				equals smoke still in the air plus smoke that left, was filtered, or settled. The two sides agree to within 0.1&nbsp;%, and the panel says so if they stop.
+				equals smoke still in the air plus smoke that left, was filtered, or settled. The two sides agree to within 0.1&nbsp;%, and the panel says so if they stop, as rounding alone can after half an hour in a sealed, still home on the coarse grid a phone runs.
 			</li>
 			<li>
 				<strong>The solver is checked against published results.</strong> Each of these runs in the test suite: air in a lid-driven cavity at Reynolds number
