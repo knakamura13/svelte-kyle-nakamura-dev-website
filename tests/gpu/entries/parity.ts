@@ -308,53 +308,60 @@ async function heatedParity(n: number, nz: number, steps: number, turbulent: boo
 	};
 }
 
+/** The room of `devicesParity`: its grid and its step, s. */
+const ROOM = { nx: 20, ny: 16, nz: 18, h: 0.15, dt: 0.04 };
+
 /**
  * A 3D room with everything the scenes use: two windows with a pressure difference across them (so the box has an
  * outlet and the mean is not removed) and a window fan in one, warmer and dirtier outdoor air, a fan disk in the
- * room, a particulate source and a purifier, buoyancy and the turbulence closure.
+ * room, a particulate source and a purifier, buoyancy and the turbulence closure. The parts named in `off` are left
+ * out: `windowFan`, `outdoors`, `fan`, `emitter`, `sink`.
  */
-async function devicesParity(steps: number, off: string[] = []) {
-	const [nx, ny, nz, h] = [20, 16, 18, 0.15];
-	const dt = 0.04;
-	const build = () => {
-		const geometry = boxGeometry({ nx, ny, nz, h });
-		const grid = new Grid({ nx, ny, nz, h });
-		const exterior = emptyExterior(grid);
-		for (let k = 7; k < 11; k++)
-			for (let j = 6; j < 10; j++) {
-				geometry.au[0 + grid.sx * j + grid.sxy * k] = 1;
-				geometry.au[nx + grid.sx * j + grid.sxy * k] = 1;
-				const slot = j + ny * k;
-				exterior.sides[0][3 * slot] = 2;
-				exterior.sides[1][3 * slot] = -2;
-				// A window fan blowing in through one face of the west window.
-				if (j === 6 && k === 7 && !off.includes('windowFan')) {
-					exterior.sides[0][3 * slot + 1] = 1.5;
-					exterior.sides[0][3 * slot + 2] = 30;
-				}
+function deviceRoom(off: string[]) {
+	const { nx, ny, nz, h } = ROOM;
+	const geometry = boxGeometry({ nx, ny, nz, h });
+	const grid = new Grid({ nx, ny, nz, h });
+	const exterior = emptyExterior(grid);
+	for (let k = 7; k < 11; k++)
+		for (let j = 6; j < 10; j++) {
+			geometry.au[0 + grid.sx * j + grid.sxy * k] = 1;
+			geometry.au[nx + grid.sx * j + grid.sxy * k] = 1;
+			const slot = j + ny * k;
+			exterior.sides[0][3 * slot] = 2;
+			exterior.sides[1][3 * slot] = -2;
+			// A window fan blowing in through one face of the west window.
+			if (j === 6 && k === 7 && !off.includes('windowFan')) {
+				exterior.sides[0][3 * slot + 1] = 1.5;
+				exterior.sides[0][3 * slot + 2] = 30;
 			}
-		exterior.theta = off.includes('outdoors') ? 0 : 2;
-		exterior.particulates = off.includes('outdoors') ? 0 : 10;
-		const config: SolverConfig = {
-			grid: { nx, ny, nz, h },
-			// Settling and deposition on, so the particulate tally's deposited lane and the settling flux are exercised.
-			fluid: { ...AIR, cd: 0.62, settling: 2e-3, deposition: 1e-3 },
-			geometry,
-			sides: [WALL, WALL, WALL, WALL, WALL, WALL],
-			turbulence: 'shear-length',
-			scalarSubsteps: 3
-		};
-		const fan = rasterizeFan(grid, geometry, { center: [1.5, 1.2, 1.35], normal: [0, 0, 1], radius: 0.3, thickness: 0.1, qMax: 0.3, dpMax: 20 });
-		const source = [grid.index(4, 1, 4), grid.index(5, 1, 4)];
-		const inlet = [grid.index(14, 3, 12), grid.index(15, 3, 12), grid.index(14, 4, 12), grid.index(15, 4, 12)];
-		return {
-			config,
-			exterior,
-			fans: off.includes('fan') ? [] : [fan],
-			emitters: off.includes('emitter') ? [] : [{ cells: Uint32Array.from(source), share: new Float32Array([0.5, 0.5]), rate: 1 }],
-			sinks: off.includes('sink') ? [] : [{ cells: Uint32Array.from(inlet), share: new Float32Array(4).fill(0.25), cadr: 0.05 }]
-		};
+		}
+	exterior.theta = off.includes('outdoors') ? 0 : 2;
+	exterior.particulates = off.includes('outdoors') ? 0 : 10;
+	const config: SolverConfig = {
+		grid: { nx, ny, nz, h },
+		// Settling and deposition on, so the particulate tally's deposited lane and the settling flux are exercised.
+		fluid: { ...AIR, cd: 0.62, settling: 2e-3, deposition: 1e-3 },
+		geometry,
+		sides: [WALL, WALL, WALL, WALL, WALL, WALL],
+		turbulence: 'shear-length',
+		scalarSubsteps: 3
 	};
+	const fan = rasterizeFan(grid, geometry, { center: [1.5, 1.2, 1.35], normal: [0, 0, 1], radius: 0.3, thickness: 0.1, qMax: 0.3, dpMax: 20 });
+	const source = [grid.index(4, 1, 4), grid.index(5, 1, 4)];
+	const inlet = [grid.index(14, 3, 12), grid.index(15, 3, 12), grid.index(14, 4, 12), grid.index(15, 4, 12)];
+	return {
+		config,
+		exterior,
+		fans: off.includes('fan') ? [] : [fan],
+		emitters: off.includes('emitter') ? [] : [{ cells: Uint32Array.from(source), share: new Float32Array([0.5, 0.5]), rate: 1 }],
+		sinks: off.includes('sink') ? [] : [{ cells: Uint32Array.from(inlet), share: new Float32Array(4).fill(0.25), cadr: 0.05 }]
+	};
+}
+
+/** Every step of `deviceRoom` on both solvers from the same start, compared after `steps`. */
+async function devicesParity(steps: number, off: string[] = []) {
+	const { dt } = ROOM;
+	const build = () => deviceRoom(off);
 	const a = build();
 	const cpu = new CpuSolver(a.config);
 	cpu.exterior = a.exterior;
@@ -417,6 +424,63 @@ async function devicesParity(steps: number, off: string[] = []) {
 		fanFlow: compare({ fanFlow: [Float32Array.of(fanState[0]), Float32Array.from(cpu.fanFlow)] }),
 		...tally
 	};
+}
+
+/**
+ * One GPU step from exactly the CPU's state, before each of `steps` steps of `deviceRoom`: the CPU's velocity, scalars, pressure and the
+ * pressure before it are written to the GPU, both take one step, and the results are compared. Where `devicesParity` lets differences
+ * build up over the run, this shows what a single step adds, at every state along it.
+ */
+async function lockstepParity(steps: number, off: string[] = []) {
+	const { dt } = ROOM;
+	const a = deviceRoom(off);
+	const cpu = new CpuSolver(a.config);
+	cpu.exterior = a.exterior;
+	cpu.setFans(a.fans);
+	cpu.setEmitters(a.emitters);
+	cpu.setSinks(a.sinks);
+	cpu.fill(0, 20);
+	const b = deviceRoom(off);
+	const solver = await GpuSolver.create(await context(), b.config);
+	const device = solver.device;
+	const queue = device.queue;
+	solver.setExterior(b.exterior);
+	solver.setFans(b.fans);
+	solver.setEmitters(b.emitters);
+	solver.setSinks(b.sinks);
+	solver.fill(0, 20);
+	const grid = cpu.grid;
+	const inside = (n: number) => {
+		const k = Math.floor(n / grid.sxy);
+		const j = Math.floor((n - k * grid.sxy) / grid.sx);
+		return n - k * grid.sxy - j * grid.sx < grid.nx && j < grid.ny && k < grid.nz;
+	};
+	const out: { step: number; velocity: Comparison; pressure: Comparison }[] = [];
+	device.pushErrorScope('validation');
+	for (let s = 0; s < steps; s++) {
+		queue.writeBuffer(solver.vel, 0, packVelocity(cpu.vel.u, cpu.vel.v, cpu.vel.w));
+		queue.writeBuffer(solver.scal, 0, packPair(cpu.theta, cpu.c));
+		queue.writeBuffer(solver.levels[0].p, 0, cpu.pressure.pressure as Float32Array);
+		// The first step starts its previous pressure from the latest, as the CPU's does; after that it is the CPU's own.
+		if (s > 0) queue.writeBuffer(solver.prevP, 0, (cpu as any).previousPressure as Float32Array);
+		solver.stepsTaken = s;
+		solver.writeStep(dt, 3, solver.diffusionSubsteps(dt), s);
+		const encoder = device.createCommandEncoder();
+		solver.encodeStep(encoder, dt, 3, s);
+		queue.submit([encoder.finish()]);
+		cpu.step(dt);
+		const gpu = await gpuVelocity(solver);
+		const p = await readBack(device, solver.levels[0].p, 4 * solver.grid.size);
+		out.push({
+			step: s + 1,
+			velocity: compare({ u: [gpu.u, cpu.vel.u], v: [gpu.v, cpu.vel.v], w: [gpu.w, cpu.vel.w] }),
+			pressure: compare({ p: [p, cpu.pressure.pressure as Float32Array] }, inside)
+		});
+	}
+	const error = await device.popErrorScope();
+	solver.dispose();
+	if (error) throw new Error(`validation: ${error.message}`);
+	return out;
 }
 
 /** The point sampler and the horizontal slice, on the same random state uploaded to the GPU. */
@@ -688,5 +752,5 @@ async function stepTime(nx: number, ny: number, nz: number, steps: number) {
 	return { cells: nx * ny * nz, ms };
 }
 
-(window as any).parity = { diffuseParity, advectParity, turbulenceParity, pressureParity, cavityParity, heatedParity, devicesParity, readoutParity, faceUpdateParity, measureParity, roomsParity, particlesSanity, profiledStep, stepTime };
+(window as any).parity = { diffuseParity, advectParity, turbulenceParity, pressureParity, cavityParity, heatedParity, devicesParity, lockstepParity, readoutParity, faceUpdateParity, measureParity, roomsParity, particlesSanity, profiledStep, stepTime };
 (window as any).harnessReady = true;
