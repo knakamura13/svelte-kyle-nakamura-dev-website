@@ -3,6 +3,7 @@ import { stubClipboard } from './clipboard';
 import { focusRing } from './dock';
 import { DEVICE_MODELS } from '../src/lib/experiments/airflow/devices/catalog';
 import { plans } from '../src/lib/experiments/airflow/homes/plans';
+import { requireWebGL2 } from './webgl';
 
 /**
  * Every task of the page from the keyboard alone (#62): pick a Home and a Scenario, place a fan and aim it, open a window, set the
@@ -47,6 +48,8 @@ test('every task from the keyboard alone, with a focus ring at every stop', asyn
 	// About 250 round trips to the page, a key or a look at the focus each. They are quick only while a paused page stays quiet: when it
 	// kept drawing in software, each one waited behind a frame, and the run took six minutes under load (#62).
 	test.setTimeout(180_000);
+	// Every task here is done in the world, which needs WebGL 2 (Firefox on CI has none).
+	await requireWebGL2(page);
 	const copied = await stubClipboard(page, 'succeed');
 	await page.goto(PAGE);
 	await expect(view(page)).toHaveAttribute('data-state', 'live', { timeout: 60_000 });

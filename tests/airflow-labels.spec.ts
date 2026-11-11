@@ -2,6 +2,7 @@ import { devices, expect, test, type Page } from '@playwright/test';
 import { plans } from '../src/lib/experiments/airflow/homes/plans';
 import { setupToHash } from '../src/lib/experiments/airflow/link';
 import { blankSetup } from '../src/lib/experiments/airflow/state';
+import { requireWebGL2 } from './webgl';
 
 /**
  * The Rooms' names never cover one another (#63): at a phone's 390 px the house's Bathroom sat half under Primary bathroom. Each Home,
@@ -42,6 +43,8 @@ for (const size of WIDTHS)
 		test('every Room of every Home is named, and no two names overlap', async ({ page }) => {
 			// Four Homes, each a page load that draws the world in software in some browsers.
 			test.setTimeout(240_000);
+			// The names stand over the world, which needs WebGL 2 (Firefox on CI has none).
+			await requireWebGL2(page);
 			for (const plan of plans) {
 				await page.goto(`/experiments/airflow?cell=0.3${setupToHash(blankSetup(plan.id))}`);
 				await expect(view(page)).toHaveAttribute('data-state', 'live', { timeout: 60_000 });
