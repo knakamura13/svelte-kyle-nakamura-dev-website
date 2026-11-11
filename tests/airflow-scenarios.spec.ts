@@ -134,8 +134,9 @@ test.describe('each Scenario does what its notice says', { tag: '@slow' }, () =>
 		const end = openingFor(planById('house')!, 1440 / 900).to;
 		const camera = [end.x, end.z, OPENING_END.heading, OPENING_END.zoom, OPENING_END.tilt].map((n) => n.toFixed(2)).join(',');
 		await load(page, 'stack-effect', `/experiments/airflow?cell=0.3&camera=${camera}${setupToHash(blankSetup('house'))}`);
-		// 60 simulated seconds and a quarter more, within the test's quarter of an hour (two minutes kept for the page and the probes).
-		await requireSimRate(page, 75, 780_000);
+		// 60 simulated seconds and a quarter more, within the one wait they run in below (12 minutes). Sizing it to the test's whole budget
+		// let WebKit on CI, at 0.12× real time, pass this check and then reach only 59.2 s in an 8-minute wait (run 43062042229).
+		await requireSimRate(page, 75, 720_000);
 		const { indoorTemp, outdoorTemp, windSpeed } = scenario('stack-effect').setup.conditions;
 		expect(windSpeed).toBe(0);
 
@@ -144,7 +145,7 @@ test.describe('each Scenario does what its notice says', { tag: '@slow' }, () =>
 		const high = await pinAtHeight(page, 'End', 'Living room');
 
 		await openPhysics(page);
-		const later = await readAt(page, 60);
+		const later = await readAt(page, 60, 720_000);
 		const [floor, top] = [await probeTemperature(page, low), await probeTemperature(page, high)];
 		console.log(`${browserName}: stack effect at ${later.time} s: the living room at ${later.rooms.living.temperature} °C, ${floor} °C at the floor and ${top} °C 2.3 m up; ${show(later, 'changes')}`);
 		// A minute in, the living room is at least half a degree under the 21 °C it started at, and above the −5 °C outside.
