@@ -214,6 +214,16 @@ export class SimulationSession {
 	}
 
 	/**
+	 * The key that stops the running world's run for good (a runaway, a worker that crashed): its run, with the retunes as they are now,
+	 * not as they were when it was built. A retune asked for just before has already moved the wanted key on, and its world may still
+	 * be building. That build is overtaken (`generation`), so its world is let go when it is ready, and the run is not built again on
+	 * any grid until the visitor restarts or resets. No retune can be asked for meanwhile, since the tuner is only told a running world's frames.
+	 */
+	private stoppedKey() {
+		return `${this.worldKey.slice(0, this.worldKey.lastIndexOf('|'))}|${this.retunes}`;
+	}
+
+	/**
 	 * How far the first world is from ready to show, for the loading screen: the device being measured, the world being built at the
 	 * size the measurement gives, and the air's first picture. A session that cannot run any solver, or failed to start, is as ready as
 	 * it will get.
@@ -465,7 +475,7 @@ export class SimulationSession {
 			this.options.announce?.('The graphics device was lost, so the simulation is starting again.');
 		} else {
 			console.error(`The simulation's backend failed: ${failure.message}`);
-			this.failedKey = this.worldKey;
+			this.failedKey = this.stoppedKey();
 			readout.status = 'error';
 			readout.note = 'The simulation stopped because its worker failed. Restart it to try again.';
 			this.options.announce?.('The simulation stopped.');
@@ -489,7 +499,7 @@ export class SimulationSession {
 		this.retuning = '';
 		this.retuned = '';
 		this.carried = FRESH;
-		this.failedKey = this.worldKey;
+		this.failedKey = this.stoppedKey();
 		world.dispose();
 		this.history.clear();
 		this.probeHistory.clear();

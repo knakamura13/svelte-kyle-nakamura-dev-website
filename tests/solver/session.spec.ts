@@ -804,6 +804,47 @@ test.describe('simulation session', () => {
 			}
 		});
 
+		test('a worker that crashed while a retune was building the next world is not started again either, on that grid or any other', async () => {
+			const { made, factory } = fragileThen('plain');
+			const tuner = scripted();
+			let size = 0.3;
+			let gate: Promise<void> | null = null;
+			let release: () => void = () => {};
+			const cellSize = async () => {
+				if (gate) await gate;
+				return size;
+			};
+			const { session, params, readout } = makeSession(undefined, factory, cellSize, { tuning: tuner.tuning });
+			const log = listen();
+			try {
+				await start(session);
+				await draw(session, 4);
+				// The tuner asks for a coarser grid, and the next world's build waits on the gate while the worker crashes.
+				size = 0.2;
+				gate = new Promise<void>((resolve) => (release = resolve));
+				tuner.ask(retune(0.2));
+				await draw(session, 2);
+				(made[0] as Fragile).fail({ reason: 'crashed', message: 'the solver blew up' });
+				expect(readout.status).toBe('error');
+				release();
+				for (let n = 0; n < 30; n++) {
+					session.update(FRAME);
+					await pause(5);
+				}
+				expect(readout.status, 'the error stays until the visitor restarts').toBe('error');
+				expect(session.world).toBeNull();
+				expect(made, 'not built again').toHaveLength(1);
+
+				params.restarts++;
+				await start(session);
+				await draw(session, 2);
+				expect(readout.status).toBe('running');
+			} finally {
+				log.restore();
+				session.dispose();
+			}
+		});
+
 		test('a world that was being built when the running one failed is let go, and its own failure is not the page\'s: the next frame builds again', async () => {
 			const made: CpuBackend[] = [];
 			let calls = 0;
