@@ -1,4 +1,4 @@
-import { ClampToEdgeWrapping, Data3DTexture, DataUtils, FloatType, HalfFloatType, LinearFilter, NearestFilter, RGBAFormat, UnsignedByteType, Vector3 } from 'three';
+import { ClampToEdgeWrapping, Data3DTexture, DataUtils, FloatType, HalfFloatType, LinearFilter, NearestFilter, RGBAFormat, RedFormat, UnsignedByteType, Vector3, type AnyPixelFormat } from 'three';
 import { FLOW_STRIDE, SCALAR_STRIDE, volumeExtent, type Volume } from '../../solver/volume';
 import type { SolidMask } from './mask';
 
@@ -9,7 +9,8 @@ import type { SolidMask } from './mask';
  *
  * Each read is two textures. The velocity one is the volume's own `flow` (east, up and south in m/s, and the share of air), uploaded
  * as it came. The look one is what the ray-marches read in one fetch: the speed, the temperature (K above the reference), the
- * PM2.5 (ppm by mass) and the share of air. Both are filtered linearly, which 32-bit floats allow only with
+ * PM2.5 (ppm by mass) and the share of air. A third, of one number a cell, is the smoke that the smoke volume and the puffs draw:
+ * the PM2.5 above each Room's average (`excess.ts`). All three are filtered linearly, which 32-bit floats allow only with
  * `OES_texture_float_linear`; a GPU without it is given half floats.
  */
 
@@ -18,6 +19,9 @@ export interface FieldUniforms {
 	uVelocityB: { value: Data3DTexture };
 	uLookA: { value: Data3DTexture };
 	uLookB: { value: Data3DTexture };
+	/** The smoke that is drawn, ppm: the PM2.5 above each Room's average. */
+	uSmokeA: { value: Data3DTexture };
+	uSmokeB: { value: Data3DTexture };
 	uBlend: { value: number };
 	/** The volume's size, m: a whole number of its cells, which may reach past the home by less than one. */
 	uExtent: { value: Vector3 };
@@ -32,9 +36,9 @@ export interface FieldUniforms {
 /** The shortest and longest the blend from one read to the next may take, s, whatever the reads' rhythm. */
 const BLEND_RANGE: [number, number] = [0.05, 0.5];
 
-function volumeTexture(data: Float32Array | Uint16Array, width: number, height: number, depth: number, half: boolean) {
+function volumeTexture(data: Float32Array | Uint16Array, width: number, height: number, depth: number, half: boolean, format: AnyPixelFormat = RGBAFormat) {
 	const texture = new Data3DTexture(data, width, height, depth);
-	texture.format = RGBAFormat;
+	texture.format = format;
 	texture.type = half ? HalfFloatType : FloatType;
 	texture.minFilter = texture.magFilter = LinearFilter;
 	texture.wrapS = texture.wrapT = texture.wrapR = ClampToEdgeWrapping;
@@ -59,6 +63,8 @@ interface Slot {
 	velocity: Data3DTexture;
 	look: Data3DTexture;
 	lookData: Float32Array;
+	smoke: Data3DTexture;
+	smokeData: Float32Array;
 }
 
 /** The look of a volume: speed, temperature, PM2.5 and air, four numbers per cell. */
@@ -76,6 +82,14 @@ export function lookOf(volume: Volume, out?: Float32Array) {
 	}
 	return look;
 }
+
+/** The PM2.5 of each cell of a volume, ppm. */
+const pm25Of = (volume: Volume) => {
+	const cells = volume.nx * volume.ny * volume.nz;
+	const out = new Float32Array(cells);
+	for (let n = 0; n < cells; n++) out[n] = volume.scalars[SCALAR_STRIDE * n + 1];
+	return out;
+};
 
 const toHalf = (data: Float32Array) => {
 	const out = new Uint16Array(data.length);
@@ -97,16 +111,20 @@ export class AirFields {
 	private interval = 0.1;
 	private mask: Data3DTexture | null = null;
 	private readonly empty: Data3DTexture;
+	private readonly emptySmoke: Data3DTexture;
 	private readonly emptyMask: Data3DTexture;
 
 	constructor() {
 		this.empty = volumeTexture(new Float32Array(4), 1, 1, 1, false);
+		this.emptySmoke = volumeTexture(new Float32Array(1), 1, 1, 1, false, RedFormat);
 		this.emptyMask = maskTexture({ width: 1, height: 1, depth: 1, h: 1, data: new Uint8Array(4) });
 		this.uniforms = {
 			uVelocityA: { value: this.empty },
 			uVelocityB: { value: this.empty },
 			uLookA: { value: this.empty },
 			uLookB: { value: this.empty },
+			uSmokeA: { value: this.emptySmoke },
+			uSmokeB: { value: this.emptySmoke },
 			uBlend: { value: 1 },
 			uExtent: { value: new Vector3(1, 1, 1) },
 			uMask: { value: this.emptyMask },
@@ -129,24 +147,35 @@ export class AirFields {
 		if (half === this.half) return;
 		this.half = half;
 		const [older, newest] = [this.older, this.newest];
+		// The smoke each read drew, which the reads themselves do not hold.
+		const smoke = this.slots ? [this.slots[1 - this.head].smokeData.slice(), this.slots[this.head].smokeData.slice()] : [];
 		this.disposeSlots();
 		if (newest) {
-			this.push(older ?? newest, 0);
-			if (older) this.push(newest, 0);
+			this.push(older ?? newest, 0, older ? smoke[0] : smoke[1]);
+			if (older) this.push(newest, 0, smoke[1]);
 		}
 	}
 
-	/** Takes a new volume read, made at `now` (real seconds). The blend restarts from the read before it. */
-	push(volume: Volume, now: number) {
+	/**
+	 * Takes a new volume read, made at `now` (real seconds), and the smoke to draw from it, ppm per cell (`excess.ts`; without it, the
+	 * PM2.5 itself). The blend restarts from the read before it.
+	 */
+	push(volume: Volume, now: number, smoke?: Float32Array) {
+		const drawn = smoke && smoke.length === volume.nx * volume.ny * volume.nz ? smoke : pm25Of(volume);
 		const fresh = !this.slots || !this.newest || this.newest.nx !== volume.nx || this.newest.ny !== volume.ny || this.newest.nz !== volume.nz || this.newest.h !== volume.h;
 		if (fresh) {
 			this.disposeSlots();
 			const look = lookOf(volume);
-			const make = (): Slot => ({
-				velocity: volumeTexture(this.half ? toHalf(volume.flow) : volume.flow, volume.nx, volume.ny, volume.nz, this.half),
-				look: volumeTexture(this.half ? toHalf(look) : look, volume.nx, volume.ny, volume.nz, this.half),
-				lookData: new Float32Array(look)
-			});
+			const make = (): Slot => {
+				const smokeData = new Float32Array(drawn);
+				return {
+					velocity: volumeTexture(this.half ? toHalf(volume.flow) : volume.flow, volume.nx, volume.ny, volume.nz, this.half),
+					look: volumeTexture(this.half ? toHalf(look) : look, volume.nx, volume.ny, volume.nz, this.half),
+					lookData: new Float32Array(look),
+					smoke: volumeTexture(this.half ? toHalf(smokeData) : smokeData, volume.nx, volume.ny, volume.nz, this.half, RedFormat),
+					smokeData
+				};
+			};
 			this.slots = [make(), make()];
 			this.head = 0;
 			this.older = volume;
@@ -160,8 +189,11 @@ export class AirFields {
 			lookOf(volume, slot.lookData);
 			slot.velocity.image.data = this.half ? toHalf(volume.flow) : volume.flow;
 			slot.look.image.data = this.half ? toHalf(slot.lookData) : slot.lookData;
+			slot.smokeData.set(drawn);
+			slot.smoke.image.data = this.half ? toHalf(slot.smokeData) : slot.smokeData;
 			slot.velocity.needsUpdate = true;
 			slot.look.needsUpdate = true;
+			slot.smoke.needsUpdate = true;
 			this.head = next;
 			this.older = this.newest;
 			this.newest = volume;
@@ -175,6 +207,8 @@ export class AirFields {
 		this.uniforms.uLookA.value = older.look;
 		this.uniforms.uVelocityB.value = newer.velocity;
 		this.uniforms.uLookB.value = newer.look;
+		this.uniforms.uSmokeA.value = older.smoke;
+		this.uniforms.uSmokeB.value = newer.smoke;
 		this.uniforms.uBlend.value = fresh ? 1 : 0;
 	}
 
@@ -212,10 +246,12 @@ export class AirFields {
 		for (const slot of this.slots) {
 			slot.velocity.dispose();
 			slot.look.dispose();
+			slot.smoke.dispose();
 		}
 		this.slots = null;
 		this.uniforms.uVelocityA.value = this.uniforms.uVelocityB.value = this.empty;
 		this.uniforms.uLookA.value = this.uniforms.uLookB.value = this.empty;
+		this.uniforms.uSmokeA.value = this.uniforms.uSmokeB.value = this.emptySmoke;
 	}
 
 	dispose() {
@@ -223,6 +259,7 @@ export class AirFields {
 		this.mask?.dispose();
 		this.mask = null;
 		this.empty.dispose();
+		this.emptySmoke.dispose();
 		this.emptyMask.dispose();
 	}
 }

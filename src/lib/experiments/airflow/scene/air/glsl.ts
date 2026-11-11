@@ -13,6 +13,8 @@ uniform highp sampler3D uVelocityA;
 uniform highp sampler3D uVelocityB;
 uniform highp sampler3D uLookA;
 uniform highp sampler3D uLookB;
+uniform highp sampler3D uSmokeA;
+uniform highp sampler3D uSmokeB;
 uniform float uBlend;
 uniform vec3 uExtent;
 
@@ -25,6 +27,12 @@ vec3 airVelocity(vec3 p) {
 vec4 airLook(vec3 p) {
 	vec3 uvw = p / uExtent;
 	return mix(texture(uLookA, uvw), texture(uLookB, uvw), uBlend);
+}
+
+/** The smoke that is drawn, ppm: the PM2.5 above each Room's average (excess.ts). */
+float airSmoke(vec3 p) {
+	vec3 uvw = p / uExtent;
+	return mix(texture(uSmokeA, uvw).r, texture(uSmokeB, uvw).r, uBlend);
 }
 `;
 
