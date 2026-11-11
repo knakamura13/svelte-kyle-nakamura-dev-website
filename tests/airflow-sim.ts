@@ -10,11 +10,7 @@ import { requireWebGL2 } from './webgl';
  */
 
 /** The coarsest grid, pinned, so no auto-tuner warm-up loads a busy machine or restarts a run, and the camera on the two-bedroom's own view. */
-// `quality=low`: the page sends solver steps once per drawn frame, so on CI's software rendering the air runs only as fast as the
-// page draws. WebKit there names its renderer "Apple GPU", so the page cannot tell it is software and picks the medium tier from its
-// 4 cores. That ran the air too slowly for the purifier and smoke waits (run 43039223857). These specs read the page's numbers, not
-// its pixels, so the tier changes nothing they check.
-export const PAGE = '/experiments/airflow?cell=0.3&quality=low&camera=6,3.9,32,0.9,-10';
+export const PAGE = '/experiments/airflow?cell=0.3&camera=6,3.9,32,0.9,-10';
 
 /**
  * How long one wait on the simulation may take. A frame asks for at most a tenth of a second times the clock's speed, so at the 2 frames
