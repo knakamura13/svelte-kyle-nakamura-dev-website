@@ -29,8 +29,9 @@ test.beforeEach(async ({ browser }) => {
 });
 
 const call = (name: string, ...args: unknown[]) => page.evaluate(([name, args]) => (window as any).stress[name as string](...(args as unknown[])), [name, args] as const) as Promise<any>;
-const failed = (r: any) => r.nonFinite.length > 0 || !(r.maxSpeed < 40) || !(r.divergence < 0.05);
-const line = (r: any) => `fastest ${Number(r.maxSpeed).toFixed(2)} m/s, divergence ${Number(r.divergence).toExponential(2)}${r.nonFinite.length ? `, NOT FINITE: ${r.nonFinite.join(' ')}` : ''}`;
+// `runaway` is runawayOf (sim/runaway.ts) on the snapshot the entry read: null, or `{ kind, speed }` (the same check the page runs).
+const failed = (r: any) => r.nonFinite.length > 0 || !(r.maxSpeed < 40) || !(r.divergence < 0.05) || r.runaway !== null;
+const line = (r: any) => `fastest ${Number(r.maxSpeed).toFixed(2)} m/s, divergence ${Number(r.divergence).toExponential(2)}${r.nonFinite.length ? `, NOT FINITE: ${r.nonFinite.join(' ')}` : ''}${r.runaway ? `, RUNAWAY ${r.runaway.kind} at ${Number(r.runaway.speed).toFixed(2)} m/s` : ''}`;
 
 async function check(kind: 'randomOpenings' | 'randomDevices', plan: string, seed: number, h: number) {
 	const r = await call(kind, plan, seed, h, 'gpu');
@@ -43,6 +44,7 @@ async function check(kind: 'randomOpenings' | 'randomDevices', plan: string, see
 	expect.soft(r.nonFinite, `${r.where}: non-finite fields`).toEqual([]);
 	expect.soft(r.maxSpeed, `${r.where}: fastest air`).toBeLessThan(40);
 	expect.soft(r.divergence, `${r.where}: divergence`).toBeLessThan(0.05);
+	expect.soft(r.runaway, `${r.where}: runaway check`).toBeNull();
 }
 
 for (const plan of PLANS)
@@ -62,11 +64,13 @@ for (const plan of PLANS)
 			test.setTimeout(600_000);
 			for (const kind of ['wind', 'cold'] as const) {
 				const r = await call('longRun', plan, h, kind, 'gpu');
-				console.log(`${failed(r) ? 'FAIL' : 'ok  '} gpu long ${r.where} (${r.cells}): ${r.series.map((s: any) => `${s.step}: ${s.maxSpeed.toFixed(2)} m/s ${s.divergence.toExponential(1)}`).join(' | ')}${r.nonFinite.length ? ` NOT FINITE: ${r.nonFinite.join(' ')}` : ''}`);
+				const runs = r.series.filter((s: any) => s.runaway).map((s: any) => `step ${s.step} ${s.runaway.kind} ${Number(s.runaway.speed).toFixed(2)} m/s`);
+				console.log(`${failed(r) || runs.length ? 'FAIL' : 'ok  '} gpu long ${r.where} (${r.cells}): ${r.series.map((s: any) => `${s.step}: ${s.maxSpeed.toFixed(2)} m/s ${s.divergence.toExponential(1)}`).join(' | ')}${r.nonFinite.length ? ` NOT FINITE: ${r.nonFinite.join(' ')}` : ''}${runs.length ? ` RUNAWAY: ${runs.join('; ')}` : ''}`);
 				expect.soft(r.nonFinite, `${r.where}: non-finite fields`).toEqual([]);
 				for (const s of r.series) {
 					expect.soft(s.maxSpeed, `${r.where}, step ${s.step}: fastest air`).toBeLessThan(40);
 					expect.soft(s.divergence, `${r.where}, step ${s.step}: divergence`).toBeLessThan(0.05);
+					expect.soft(s.runaway, `${r.where}, step ${s.step}: runaway check`).toBeNull();
 				}
 			}
 		});
