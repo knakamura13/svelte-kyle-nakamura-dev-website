@@ -49,17 +49,3 @@ export async function unlessStalled(page: Page, check: () => Promise<unknown>, m
 		throw error;
 	}
 }
-
-/**
- * Runs a check that waits for the camera to move, and on failure records the stage's frame rate in the test's annotations without
- * skipping. Used where the failure is not yet explained, so the report shows the rate the check ran at.
- */
-export async function annotatingFrameRate(page: Page, check: () => Promise<unknown>) {
-	try {
-		await check();
-	} catch (error) {
-		const fps = await framesPerSecond(page);
-		test.info().annotations.push({ type: 'frames', description: `The stage drew ${fps.toFixed(1)} frames a second when this check failed.` });
-		throw error;
-	}
-}

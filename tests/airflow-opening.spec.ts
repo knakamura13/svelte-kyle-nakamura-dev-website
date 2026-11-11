@@ -4,7 +4,7 @@ import { setupToHash } from '../src/lib/experiments/airflow/link';
 import { OPENING_END } from '../src/lib/experiments/airflow/scene/camera/opening';
 import { HOME_ZOOM } from '../src/lib/experiments/airflow/scene/camera/sims';
 import { blankSetup } from '../src/lib/experiments/airflow/state';
-import { annotatingFrameRate, requireWebGL2, unlessStalled } from './webgl';
+import { requireWebGL2, unlessStalled } from './webgl';
 
 /**
  * The first seconds of a visit (#81 and #82): the loading screen while the world loads, compiles and measures the device, then the
@@ -210,7 +210,7 @@ test.describe('a share link', () => {
 		await page.goto('/experiments/airflow');
 		await shown(page);
 		const first = await camera(page);
-		await annotatingFrameRate(page, () => expect.poll(async () => (await camera(page)).zoom, { timeout: 5_000 }).toBeLessThan(first.zoom - 0.03));
+		await unlessStalled(page, () => expect.poll(async () => (await camera(page)).zoom, { timeout: 5_000 }).toBeLessThan(first.zoom - 0.03));
 	});
 });
 
@@ -270,7 +270,7 @@ test.describe('the hint', () => {
 		await page.goto('/experiments/airflow?cell=0.3');
 		await shown(page);
 		const start = await camera(page);
-		await annotatingFrameRate(page, () => expect.poll(async () => (await camera(page)).zoom, { timeout: 5_000 }).toBeLessThan(start.zoom - 0.03));
+		await unlessStalled(page, () => expect.poll(async () => (await camera(page)).zoom, { timeout: 5_000 }).toBeLessThan(start.zoom - 0.03));
 		await expect(hint(page)).toBeVisible({ timeout: 6_000 });
 		await hint(page).getByRole('button', { name: 'Dismiss the hint' }).click();
 		await expect(hint(page)).toHaveCount(0);
