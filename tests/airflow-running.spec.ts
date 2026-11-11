@@ -69,32 +69,54 @@ const SPOTS = [
 	[0.64, 0.5]
 ];
 
+/** The two-bedroom's Rooms the cross-ventilation wind blows through, by name. */
+const WINDWARD = ['living', 'hall', 'bedroom-1', 'bedroom-2'].map((id) => planById('two-bedroom')!.rooms.find((room) => room.id === id)!.name);
+
 /**
- * Pins a Probe with the Probe tool: clicks spots of the world, far from `away`, until a new card shows. A click on furniture or the lawn
- * pins nothing. Returns where it pinned.
+ * Pins a Probe with the Probe tool: clicks spots of the world, far from `away`, until a new card shows, in one of `rooms` when they are
+ * given, and where the air moves at `fast` m/s or more when that is given (a probe that lands elsewhere is removed again). A click on
+ * furniture or the lawn pins nothing. Returns where it pinned.
  */
-async function pinProbe(page: Page, away?: { x: number; y: number }) {
+async function pinProbe(page: Page, { away, rooms, fast }: { away?: { x: number; y: number }; rooms?: string[]; fast?: number } = {}) {
 	await closePhysics(page);
 	await page.keyboard.press('3');
 	await expect(hud(page)).toHaveAttribute('data-tool', 'probe');
-	const before = await cards(page).count();
+	const ids = () => page.locator('.hud li[data-probe]').evaluateAll((items) => items.map((item) => item.getAttribute('data-probe')!));
 	const box = (await view(page).boundingBox())!;
 	for (const [fx, fy] of SPOTS) {
 		const at = { x: box.x + box.width * fx, y: box.y + box.height * fy };
 		if (away && Math.hypot(at.x - away.x, at.y - away.y) < 80) continue;
+		const before = await ids();
 		await page.mouse.click(at.x, at.y);
 		// The pin is made as the button comes up; a frame drawn in software can hold the card back for a second or two.
-		for (let wait = 0; wait < 12 && (await cards(page).count()) === before; wait++) await page.waitForTimeout(250);
-		if ((await cards(page).count()) > before) return at;
+		for (let wait = 0; wait < 12 && (await ids()).length === before.length; wait++) await page.waitForTimeout(250);
+		const added = (await ids()).find((id) => !before.includes(id));
+		if (!added) continue;
+		const card = page.locator(`.hud li[data-probe="${added}"]`);
+		const inRoom = !rooms || rooms.includes(((await card.locator('.room').textContent()) ?? '').trim());
+		// Where the air moves at `fast` m/s or more, read once the card has a speed.
+		const speed = async () => parseFloat((await card.locator('.speed').textContent().catch(() => '')) ?? '');
+		if (inRoom && fast) await expect(card.locator('.speed')).toHaveText(/\d/, { timeout: 30_000 });
+		if (inRoom && (!fast || (await speed()) >= fast)) return at;
+		await card.getByRole('button', { name: /^Remove/ }).click();
+		await expect(card).toHaveCount(0);
+		// Past the double click's half second, so the next click is one of its own.
+		await page.waitForTimeout(600);
 	}
-	throw new Error('No spot of the world took a probe.');
+	throw new Error(`No spot of the world took a probe${rooms ? ` in ${rooms.join(', ')}` : ''}.`);
 }
 
-/** Holds the mouse down on the air at `at` with the Smoke tool until `seconds` of simulated time have gone by, then lets go. */
+/**
+ * Holds the mouse down on the air at `at` with the Smoke tool, at its strongest source (a cooking burst, 10 mg a minute), until `seconds`
+ * of simulated time have gone by, then lets go.
+ */
 async function releaseSmoke(page: Page, at: { x: number; y: number }, seconds: number) {
 	await closePhysics(page);
 	await page.keyboard.press('4');
 	await expect(hud(page)).toHaveAttribute('data-tool', 'smoke');
+	const burst = page.locator('.hud [data-mark="burst"]');
+	await burst.click();
+	await expect(burst).toHaveAttribute('aria-pressed', 'true');
 	await page.mouse.move(at.x, at.y);
 	await page.mouse.down();
 	await expect(releasing(page), 'a held press releases smoke').toBeVisible({ timeout: 30_000 });
@@ -149,10 +171,10 @@ test.describe('the running simulation', () => {
 	});
 
 	test('a Probe pins where the Probe tool clicks, reads the air there as it moves, and goes when it is removed', async ({ page, browserName }) => {
-		// Cross-ventilation, the first Scenario, where the wind keeps the air moving.
+		// Cross-ventilation, the first Scenario: a Probe in a Room the wind blows through, where the air moves at 10 cm/s or more.
 		await openRunning(page);
 		await untilSim(page, 3);
-		const first = await pinProbe(page);
+		const first = await pinProbe(page, { rooms: WINDWARD, fast: 0.1 });
 		await expect(cards(page)).toHaveCount(1);
 		await expect(live(page)).toHaveText('Probe 1 pinned.');
 		const card = page.locator('.hud li[data-probe="p1"]');
@@ -164,20 +186,20 @@ test.describe('the running simulation', () => {
 		expect(temperature).toBeGreaterThanOrEqual(17.5);
 		expect(temperature).toBeLessThanOrEqual(21.5);
 		await expect(card.locator('.facts')).toContainText('PM2.5');
-		// It keeps reading the air there: over ten simulated seconds of the wind its speed changes.
+		// It keeps reading the air there: over ten simulated seconds of the wind its speed or direction changes.
 		const seen = new Set<string>();
 		const until = (await simTime(page)) + 10;
 		while ((await simTime(page)) < until) {
-			seen.add((await card.locator('.speed').textContent()) ?? '');
+			seen.add(`${await card.locator('.speed').textContent()} ${await card.locator('.direction').textContent()}`);
 			await page.waitForTimeout(250);
 		}
-		console.log(`${browserName}: probe 1 read ${[...seen].join(', ')}`);
+		console.log(`${browserName}: probe 1, in the ${await card.locator('.room').textContent()}, read ${[...seen].join(', ')}`);
 		expect(seen.size, 'the reading moves with the air').toBeGreaterThan(1);
 		// Pinned where it was clicked: its label is on the Stage near that point.
 		const label = (await view(page).locator('.stage-label[data-tone="probe"]').first().boundingBox())!;
 		expect(Math.hypot(label.x + label.width / 2 - first.x, label.y + label.height - first.y), 'the label stands over the click').toBeLessThan(150);
 
-		await pinProbe(page, first);
+		await pinProbe(page, { away: first });
 		await expect(cards(page)).toHaveCount(2);
 		await expect(live(page)).toHaveText('Probe 2 pinned.');
 		await page.getByRole('button', { name: 'Remove Probe 1' }).click();
@@ -194,7 +216,7 @@ test.describe('the running simulation', () => {
 		// A spot over the air, found with the Probe tool, which then gives its probe back.
 		const at = await pinProbe(page);
 		await page.getByRole('button', { name: 'Remove Probe 1' }).click();
-		await releaseSmoke(page, at, 5);
+		await releaseSmoke(page, at, 10);
 		await openPhysics(page);
 		const released = await readUntil(page, (r) => r.smoke.emitted > 0 && r.smoke.inAir > 0, 'the books show the smoke');
 		console.log(`${browserName}: at ${released.time} s, released ${released.smoke.emitted} mg, ${released.smoke.inAir} mg in the air`);

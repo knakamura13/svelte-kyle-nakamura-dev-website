@@ -101,14 +101,16 @@ async function halving(page: Page, room: string, browserName: string) {
 }
 
 test.describe('each Scenario does what its notice says', () => {
-	test.beforeEach(() => test.setTimeout(480_000));
+	// Up to a quarter of an hour: the smoky day needs over three simulated minutes, which a CI runner steps at about real time or slower.
+	test.beforeEach(() => test.setTimeout(900_000));
 
 	test('Cross-ventilation: the wind crosses the home from the living room to the bedrooms, and a closed bedroom door all but stops the flow through that bedroom', async ({ page, browserName }) => {
 		await load(page, 'cross-ventilation');
 		const open = await readAt(page, 30);
 		console.log(`${browserName}: cross-ventilation at ${open.time} s, air changes an hour: ${show(open, 'changes')}`);
-		// In at the living room, across the hall, out at both bedrooms: each room on the way changes its air several times an hour.
-		for (const room of ['living', 'hall', 'bedroom-1', 'bedroom-2']) expect(open.rooms[room].changes, `${room} has air through it`).toBeGreaterThan(5);
+		// In at the living room, across the hall, out at both bedrooms: each room on the way changes its air at least 20 times an hour
+		// (60 to 145 in every browser here).
+		for (const room of ['living', 'hall', 'bedroom-1', 'bedroom-2']) expect(open.rooms[room].changes, `${room} has air through it`).toBeGreaterThan(20);
 		// The bathroom, its door shut, is off the path.
 		expect(open.rooms.bathroom.changes, 'the bathroom is off the path').toBeLessThan(0.2 * open.rooms['bedroom-1'].changes);
 
@@ -141,8 +143,8 @@ test.describe('each Scenario does what its notice says', () => {
 		// A minute in, the living room is at least half a degree under the 21 °C it started at, and above the −5 °C outside.
 		expect(later.rooms.living.temperature).toBeLessThan(indoorTemp - 0.5);
 		expect(later.rooms.living.temperature).toBeGreaterThan(outdoorTemp);
-		// From the floor up: the air at the floor is at least a degree colder than the air 2.3 m up.
-		expect(floor, 'the floor is colder than the air near the ceiling').toBeLessThan(top - 1);
+		// From the floor up: the air at the floor is at least 3 °C colder than the air 2.3 m up (9 °C against 20.3 °C in every browser here).
+		expect(floor, 'the floor is colder than the air near the ceiling').toBeLessThan(top - 3);
 		// Air flows through the room with no wind to push it: in at the low windows, out at the clerestory.
 		expect(later.rooms.living.changes, 'the living room’s air changes').toBeGreaterThan(1);
 	});

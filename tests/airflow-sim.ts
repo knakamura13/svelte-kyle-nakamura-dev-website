@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
+import { requireWebGL2 } from './webgl';
 
 /**
  * What the end-to-end specs of the running simulation share (#61): opening the page on a running world, the simulated time, waiting for a
@@ -11,8 +12,12 @@ import { expect, test, type Page } from '@playwright/test';
 /** The coarsest grid, pinned, so no auto-tuner warm-up loads a busy machine or restarts a run, and the camera on the two-bedroom's own view. */
 export const PAGE = '/experiments/airflow?cell=0.3&camera=6,3.9,32,0.9,-10';
 
-/** How long a wait on the simulation may take: minutes, for a runner that steps the air at about real time and draws a frame a second. */
-export const SIM_WAIT = 300_000;
+/**
+ * How long one wait on the simulation may take. A frame asks for at most a tenth of a second times the clock's speed, so at the 2 frames
+ * a second of a CI runner drawing in software a 5× Scenario gets at most one simulated second a second, and the processor gives a 20×
+ * one about real time: the longest wait here, 100 simulated seconds, takes a few minutes there.
+ */
+export const SIM_WAIT = 480_000;
 
 export const view = (page: Page) => page.getByRole('application', { name: /^The air in the/ });
 export const hud = (page: Page) => page.locator('.hud');
@@ -20,14 +25,14 @@ export const live = (page: Page) => page.locator('.hud p[aria-live="polite"]');
 export const status = (page: Page) => page.locator('.sim-status');
 
 /**
- * Opens the page and waits until its air runs (or waits, paused). Firefox on GitHub's runners has no WebGL 2, so the Stage is
- * `unsupported` there and there is nothing to test: the spec skips, as tests/airflow.spec.ts does.
+ * Opens the page and waits until its air runs (or waits, paused). Firefox on GitHub's runners has no WebGL 2, so there is no world and
+ * nothing to test: the spec skips (`requireWebGL2`). Software WebGL compiles the world's shaders for many seconds, hence 90 s.
  */
 export async function openRunning(page: Page, path = PAGE) {
+	await requireWebGL2(page);
 	await page.goto(path);
-	await expect(view(page)).toHaveAttribute('data-state', /^(live|unsupported)$/, { timeout: 60_000 });
-	test.skip((await view(page).getAttribute('data-state')) === 'unsupported', 'This browser has no WebGL 2.');
-	await expect(status(page)).toHaveAttribute('data-status', /^(running|paused)$/, { timeout: 60_000 });
+	await expect(view(page)).toHaveAttribute('data-state', 'live', { timeout: 90_000 });
+	await expect(status(page)).toHaveAttribute('data-status', /^(running|paused)$/, { timeout: 90_000 });
 }
 
 /** The simulated time, seconds: the HUD's `data-sim-time`, which the clock shows to the whole second. */
