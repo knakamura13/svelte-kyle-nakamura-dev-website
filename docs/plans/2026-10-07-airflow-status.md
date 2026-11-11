@@ -149,6 +149,39 @@ This list is the plan, and the steps go in order. There is one branch, `knakamur
 16. The legend scrolls out of view beside the pinned Stage. From 1160 px wide the Dock is a column beside the Stage, and the legend is the Dock's first element, so it is out of sight when the View group is used lower down. Putting `<Legend />` in the pinned figure under the Stage (one line in `+page.svelte`, and about 60 px less Stage height at the widest Layer) or making it sticky at the top of the Dock column fixes it; a phone, where the Stage is pinned above the Dock, would need the legend kept out of the pinned part to leave room. It is for the visual pass (#63) unless it is wanted sooner.
 17. The smoke books drift on the GPU in a sealed, still room at coarse cells (found 2026-10-14 by #55, moderate confidence, not yet checked by anyone who owns the solver). A sealed Studio with no wind that loses smoke only by deposition: the GPU's error against the 1e-3 tolerance is +1.4e-3 at 0.3 m after 30 simulated minutes at one step per frame (1/60 s), -1.5e-4 at 0.15 m and +6.6e-4 at 0.1 m, and the CPU's is +4.5e-4 at 0.3 m (dt 0.05). A direct sum of the field agrees with the snapshot total to 1e-8, so the field and the (exact) tally really differ. With a purifier only (deposition off) the GPU ends at 1.1e-5, and with purifier and deposition at 6.8e-4. Probable cause: f32 storage rounds each small deposit (rate × dtau, about 5e-6) by up to about 1%, which is also the size of the first mass-balance test's whole error. The test that would falsify it: apply deposition once per step with a larger dtau, and the error should fall by that factor. If it is right, a phone-size 0.3 m grid can show the Physics panel's "out of balance" from rounding in a long sealed still run. It is a `test.fixme` in `tests/gpu/massbalance.gpu.ts` and no solver code was changed. The cause should be checked before the tolerance or the solver is changed.
 
+## Real devices
+
+Measured on 2026-11-11 on this Mac, an M3 Max on mains power (`pmset -g batt`: AC Power, 100%; `pmset -g` shows no low-power entry), with the 1-minute load average between 3.1 and 3.9 (`uptime`) for every run. Real phones, a tablet and screen readers were not measured: Kyle decided on 2026-11-10 to record those as not measured.
+
+Method: Playwright opens `/experiments/airflow` with no `?cell=` pin, so the page's own tuner picks the grid, in a fresh profile for each browser, one browser at a time. Chromium runs with `channel: 'chromium'`. A requestAnimationFrame watcher, installed before the page's scripts, records the first frame in which the status line reads "running" and the view reads `live`, in milliseconds from navigation. fps is the count of requestAnimationFrame calls over 5 s with the Advanced panel shut. The backend and cell size are read from the Physics panel. Memory is `performance.memory` where the browser exposes it. The scratch script is not committed.
+
+| Browser | Backend (Physics panel) | Cell size | Cells | fps at 1440×900 | First running | First live | Memory | Load (1 min) | Rate at 5× |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Chromium, `channel: 'chromium'` | WebGPU | 3 in (0.075 m) | 497,136 | 60.1 | 1.14 s | 1.88 s | JS heap 53 MB used | 3.9 | 4.7× |
+| WebKit (Playwright) | WebGPU | 3 in (0.075 m) | 497,136 | 60.1 | 1.28 s | 2.02 s | not exposed | 3.9 | 5.0× |
+| Firefox | CPU worker ("Processor reduced detail") | 8 in (0.2 m) | 26,270 | 60.8 | 1.37 s | 2.17 s | not exposed | 3.8 | 1.4× |
+
+At 2560×1440, the size the 1440p budget names, Chromium runs at 60.1 fps and WebKit at 60.2 fps, on the same 3 in cells. Firefox was not run at that size, since its worker is not a GPU path. The 5 s count cannot show headroom above the display's refresh rate, so 60 fps means the page keeps up with the display, not how much it has to spare.
+
+Budgets from the spec: 60 fps at 1440p on a laptop GPU is met on both GPU browsers. The first interactive frame within 8 s is met in all three browsers (1.9 to 2.2 s to live). The cold start here is about 2 s, not the about 6 s in the 2026-10 note. Each run used a new profile, and that difference is not explained.
+
+## First-load JavaScript
+
+Method: Chromium (`channel: 'chromium'`), a fresh profile, `/experiments/airflow` at 1440×900. Every script response was read as served by `vite preview` (decoded bytes, no transfer compression), and gzipped at level 9 to estimate transfer size. The first-load figure is the scripts requested before the first chunk that holds `WebGLRenderer`, which is the three.js chunk.
+
+- Before the three.js chunk: 38 files, 837,546 bytes (308,944 gzip).
+- The three.js chunk, `Ct61nPVc.js`: 626,612 bytes (158,454 gzip).
+- All scripts on the page: 39 files, 1,464,158 bytes (467,398 gzip).
+- The largest chunks before three.js: `ChKZnvJL.js`, 287,743 bytes, holds the scene and solver session (it contains WGSL shader code); `h3n8aku-.js`, 237,784 bytes, holds the physics and panel code; `Cqs9dUo6.js`, 124,454 bytes, is the stage; `Dliri9py.js`, 50,622 bytes, is the look assets with the GLTF loader.
+
+Lazy loading: the page's HTML has no modulepreload links. It starts the entry with dynamic `import()`, and the airflow engine (`engine.ts`) imports the stage and the scene dynamically when the page mounts. So three.js and the solver session are dynamic imports, but they are fetched on every visit before the first running frame, not on interaction.
+
+Open: the 81 KB in the earlier note is not reproduced by this method, and that note did not record its own. Kyle needs to decide what "first load" means here: the scripts before the engine mounts (1.46 MB across the page, 837 KB before three.js), or only the static import graph.
+
+## Hidden tab
+
+`tests/airflow-hidden.spec.ts` (commit 7c87064) sets `document.hidden` and `visibilityState` to hidden, fires `visibilitychange`, and checks that the clock reading stays put over 4 s. It then shows the tab again and checks that the clock moves. It passes in Chromium, Firefox and WebKit (16.9 s for the three together). A negative check with the hide step removed fails in Chromium: the clock went from 0:02 to 0:06 while the tab was "hidden".
+
 ## Re-running the harnesses
 
 - Dollhouse: `node scripts/airflow-qa/dollhouse/shoot.mjs <outDir> all` (also `sweep`, `state:<json>`, `--dpr=2`, `--browser=firefox|webkit`).
