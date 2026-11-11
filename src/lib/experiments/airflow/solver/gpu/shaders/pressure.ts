@@ -89,7 +89,8 @@ ${ENTRY} {
  * Exterior openings on one side of the box (cpu/pressure.ts `assemble`, `openings`): the orifice law, or a window
  * fan's curve, linearised about the room's pressure from the last solve, becomes the face's conductance and a source
  * in the cell beside it. One dispatch per side, in the CPU's side order, so a corner cell's right-hand side gains its
- * sides' terms in the same order. `ext` holds three values per slot, `qg` the linearisation (q, slope), which also gives
+ * sides' terms in the same order. `ext` holds three values per slot, `B.gust` a pressure added outside every opening on the side (a gusty
+ * wind's departure from its mean), `qg` the linearisation (q, slope), which also gives
  * the speed each face settled on last step, the one a window fan's face eases on from (`FAN_SPIN_UP`).
  */
 export const exterior: KernelSource = {
@@ -123,7 +124,7 @@ ${ENTRY} {
 		// The speed the face settled on last step: last step's law at the pressure it was solved for, which is still in p.
 		let last = qg[B.slotBase + slot];
 		let before = last.x - last.y * pressure;
-		let delta = ext[at] - pressure;
+		let delta = ext[at] + B.gust - pressure;
 		let fanSpeed = ext[at + 1];
 		let fanRise = ext[at + 2];
 		var speed: f32;

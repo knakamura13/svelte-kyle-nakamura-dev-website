@@ -158,8 +158,8 @@ export const LEVEL = new UniformLayout('Level', [
 	i('pad0')
 ]);
 
-/** One side of the box for the exterior-opening kernel: face index = base + strideA·a + strideB·b, the cell is `shift` before it. */
-export const SIDE = new UniformLayout('Side', [i('side'), i('axis'), i('sign'), i('na'), i('nb'), i('base'), i('strideA'), i('strideB'), i('shift'), i('slotBase'), i('pad0'), i('pad1')]);
+/** One side of the box for the exterior-opening kernel: face index = base + strideA·a + strideB·b, the cell is `shift` before it. `gust`, Pa, is added outside every opening on the side. */
+export const SIDE = new UniformLayout('Side', [i('side'), i('axis'), i('sign'), i('na'), i('nb'), i('base'), i('strideA'), i('strideB'), i('shift'), i('slotBase'), f('gust'), i('pad1')]);
 
 /** Small integer parameters for readouts and reductions; each kernel says what a, b, c and d mean. */
 export const COUNTS = new UniformLayout('Counts', [i('a'), i('b'), i('c'), i('d')]);

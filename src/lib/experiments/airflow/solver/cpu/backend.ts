@@ -36,6 +36,7 @@ export class CpuBackend implements FlowBackend {
 		const arrays = [geometry.au, geometry.av, geometry.aw];
 		for (const faces of change.faces ?? []) for (let n = 0; n < faces.indices.length; n++) arrays[faces.axis][faces.indices[n]] = faces.values[n];
 		if (change.exterior) this.solver.exterior = change.exterior;
+		if (change.gust) this.solver.gust.set(change.gust);
 		if (change.fans) this.solver.setFans(change.fans);
 		if (change.emitters) this.solver.setEmitters(change.emitters);
 		if (change.sinks) this.solver.setSinks(change.sinks);

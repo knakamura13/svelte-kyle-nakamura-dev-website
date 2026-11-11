@@ -18,7 +18,7 @@ import type { FaceUpdate } from '../backend';
 import { volumeCells, volumeSpec, type VolumeSpec } from '../volume';
 import type { GpuContext } from './context';
 import { GpuSolverError } from './errors';
-import { CONSTS, COUNTS, LEVEL, PARTICLES, SIDE as SIDE_LAYOUT, STEP, VOLUME, type UniformLayout } from './layout';
+import { CONSTS, COUNTS, LEVEL, PARTICLES, SIDE as SIDE_LAYOUT, STEP, VOLUME, type UniformLayout, type UniformWriter } from './layout';
 import { WG } from './shaders/common';
 import { ROOMS_PER_PASS, ROOM_CELLS_PER_THREAD } from './shaders/readouts';
 import { BufferUsage, type GpuBindGroup, type GpuBuffer, type GpuCommandEncoder, type GpuComputePassEncoder, type GpuQuerySet } from './webgpu';
@@ -290,6 +290,10 @@ export class GpuSolver {
 	readonly consts: GpuBuffer;
 	readonly step: GpuBuffer;
 	readonly sideUniforms: GpuBuffer[];
+	/** What each side's uniform holds, so a gust rewrites it whole: the gust is the one field that changes. */
+	private readonly sideWriters: UniformWriter[] = [];
+	/** The gust each side's uniform holds, Pa (`setGust`). */
+	private readonly gust = new Float32Array(6);
 	readonly counts = new Map<string, GpuBuffer>();
 
 	// Fans.
@@ -423,8 +427,10 @@ export class GpuSolver {
 				.set('strideA', walk.strideA)
 				.set('strideB', walk.strideB)
 				.set('shift', walk.shift)
-				.set('slotBase', this.slotBase[s]);
+				.set('slotBase', this.slotBase[s])
+				.set('gust', 0);
 			device.queue.writeBuffer(buffer, 0, w.data);
+			this.sideWriters.push(w);
 			return buffer;
 		});
 
@@ -866,6 +872,20 @@ export class GpuSolver {
 		this.device.queue.writeBuffer(this.ext, 0, packed);
 		this.outlet = hasOutlet(this.grid, this.geometry, exterior, this.fluid.cd);
 		this.writeConsts();
+	}
+
+	/**
+	 * The pressure added outside every opening on each side of the box, Pa (`BackendUpdate.gust`): each side's uniform, which the
+	 * exterior kernel reads as `B.gust`. A side whose value has not changed is not written. Each step is its own submit, so a write
+	 * between two steps lands between them, as on the CPU.
+	 */
+	setGust(gust: ArrayLike<number>) {
+		for (let s = 0; s < 6; s++) {
+			const value = Math.fround(gust[s] ?? 0);
+			if (this.gust[s] === value) continue;
+			this.gust[s] = value;
+			this.device.queue.writeBuffer(this.sideUniforms[s], 0, this.sideWriters[s].set('gust', value).data);
+		}
 	}
 
 	/**
