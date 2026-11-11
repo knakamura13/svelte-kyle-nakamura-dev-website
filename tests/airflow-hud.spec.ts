@@ -245,11 +245,13 @@ test.describe('the HUD', () => {
 		const before = await worldShot(page, stage);
 		await walls.getByRole('button', { name: 'Walls up' }).click();
 		await expect(walls.getByRole('button', { name: 'Walls up' })).toHaveAttribute('aria-pressed', 'true');
-		await expect.poll(async () => changedShare(page, before, await worldShot(page, stage)), { message: 'the walls stand up', timeout: 10_000 }).toBeGreaterThan(0.01);
+		// One picture and its comparison take 6 to 9 s with WebGL in software on CI's 4-core runner (measured 2026-11-11, run 42994808018),
+		// so each wait allows several of them.
+		await expect.poll(async () => changedShare(page, before, await worldShot(page, stage)), { message: 'the walls stand up', timeout: 30_000 }).toBeGreaterThan(0.01);
 		await walls.getByRole('button', { name: 'Walls down' }).click();
 		const down = await worldShot(page, stage);
 		await walls.getByRole('button', { name: 'Cutaway' }).click();
-		await expect.poll(async () => changedShare(page, down, await worldShot(page, stage)), { message: 'cut away again', timeout: 10_000 }).toBeGreaterThan(0.01);
+		await expect.poll(async () => changedShare(page, down, await worldShot(page, stage)), { message: 'cut away again', timeout: 30_000 }).toBeGreaterThan(0.01);
 
 		// An overlay colours the air and shows its legend, in the page's units.
 		const overlay = page.getByRole('group', { name: 'Overlay' });

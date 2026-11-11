@@ -83,37 +83,23 @@ export async function framesSince(page: Page, since: number): Promise<{ frames: 
 /** The page's clock (`performance.now()`, ms): where a span for `framesSince` starts. */
 export const pageNow = (page: Page) => page.evaluate(() => performance.now());
 
-/** The stage's frame rate over two seconds, counted from its camera readouts (`data-zoom`), which it writes each time it draws a frame. */
-async function framesPerSecond(page: Page): Promise<number> {
-	return page.getByRole('application', { name: /^The air in the/ }).evaluate(
-		(view) =>
-			new Promise<number>((resolve) => {
-				let writes = 0;
-				const observer = new MutationObserver((records) => {
-					for (const record of records) if (record.attributeName === 'data-zoom') writes++;
-				});
-				observer.observe(view, { attributes: true, attributeFilter: ['data-zoom'] });
-				setTimeout(() => {
-					observer.disconnect();
-					resolve(writes / 2);
-				}, 2000);
-			})
-	);
-}
-
 /**
- * Runs a check that waits for the camera to move. If it fails, the stage's frame rate is measured. When the stage draws fewer than
- * `minFps` frames a second, the test is skipped with that rate in the reason, because a camera that moves a few times in several
- * seconds cannot show a drift; otherwise the failure stands. Only a failing check is measured, so a browser that draws well is timed
- * as before.
+ * Runs a check, and if it fails, skips the test when the page drew fewer than `minFps` frames a second while the check waited, as
+ * `countFrames` counts them (it must be installed before the page loads). `because` says why the check cannot hold below that rate,
+ * from the page's design. The rate goes in the reason and in an annotation, so a skip on CI says what CI drew. Otherwise the failure
+ * stands. A check that passes is never measured or skipped.
  */
-export async function unlessStalled(page: Page, check: () => Promise<unknown>, minFps = 2) {
+export async function unlessDrawnUnder(page: Page, minFps: number, because: string, check: () => Promise<unknown>) {
+	const since = await pageNow(page);
 	try {
 		await check();
 	} catch (error) {
-		const fps = await framesPerSecond(page);
-		test.info().annotations.push({ type: 'frames', description: `The stage drew ${fps.toFixed(1)} frames a second when this check failed.` });
-		if (fps < minFps) test.skip(true, `The stage drew ${fps.toFixed(1)} frames a second with WebGL in software here, under ${minFps}, so the camera's movement cannot be seen in the time the test allows.`);
+		const drawn = await framesSince(page, since).catch(() => null);
+		if (!drawn) throw error;
+		const rate = `${drawn.frames} frames in ${drawn.seconds.toFixed(1)} s (${drawn.fps.toFixed(1)} a second, the longest gap ${drawn.longest.toFixed(2)} s)`;
+		test.info().annotations.push({ type: 'frames', description: `The page drew ${rate} while a failing check waited.` });
+		test.skip(drawn.fps < minFps, `The page drew ${rate} here, under ${minFps} a second: ${because}`);
 		throw error;
 	}
 }
+

@@ -4,7 +4,7 @@ import { setupToHash } from '../src/lib/experiments/airflow/link';
 import { OPENING_END } from '../src/lib/experiments/airflow/scene/camera/opening';
 import { HOME_ZOOM } from '../src/lib/experiments/airflow/scene/camera/sims';
 import { blankSetup } from '../src/lib/experiments/airflow/state';
-import { requireWebGL2, unlessStalled } from './webgl';
+import { countFrames, requireWebGL2, unlessDrawnUnder } from './webgl';
 
 /**
  * The first seconds of a visit (#81 and #82): the loading screen while the world loads, compiles and measures the device, then the
@@ -28,12 +28,21 @@ async function shown(page: Page) {
 /** Where the drift ends in the two-bedroom: the living room's middle (2.4, 5.4) moved as `OPENING_END` says. */
 const END = { zoom: OPENING_END.zoom, yaw: OPENING_END.heading, focus: `${(2.4 + OPENING_END.dx).toFixed(2)},${(5.4 + OPENING_END.dz).toFixed(2)}` };
 
+/**
+ * The drift keeps to the clock only while the page draws at least 4 frames a second: the host moves it on by at most a quarter of a
+ * second each frame (`AirflowStage.tick`), so a tab that was hidden does not jump. Below that it runs slower than the clock, and a
+ * check that times it, or waits a few seconds for it to move, cannot hold. Such a check, if it fails, skips with the rate it measured.
+ */
+const unlessSlow = (page: Page, check: () => Promise<unknown>) =>
+	unlessDrawnUnder(page, 4, 'the opening moves the camera at most a quarter of a second each frame, so below 4 frames a second it runs slower than the clock this check waits by.', check);
+
 test.use({ viewport: { width: 1280, height: 800 } });
 
 // Software WebGL (the headless CI browsers) compiles the world's shaders for many seconds, so a test that waits for the world gets 90 s.
 test.beforeEach(async ({ page }) => {
 	test.setTimeout(90_000);
 	await requireWebGL2(page);
+	await countFrames(page);
 });
 
 test.describe('the loading screen', () => {
@@ -111,13 +120,15 @@ test.describe('the opening', () => {
 		const start = await camera(page);
 		expect(start.zoom, 'it starts on the default view, or just past it').toBeGreaterThan(END.zoom + 0.1);
 		expect(start.zoom).toBeLessThanOrEqual(HOME_ZOOM + 1e-9);
-		const began = Date.now();
-		await unlessStalled(page, () => expect.poll(async () => (await camera(page)).zoom, { message: 'it moves', timeout: 5_000 }).toBeLessThan(start.zoom - 0.05));
-		await expect.poll(() => camera(page), { message: 'and arrives', timeout: 15_000 }).toEqual(END);
-		// Seconds after it was first seen, so it is a drift and not a cut, and on time however fast the browser draws.
-		const took = (Date.now() - began) / 1000;
-		expect(took).toBeGreaterThan(3.5);
-		expect(took).toBeLessThan(10);
+		await unlessSlow(page, async () => {
+			const began = Date.now();
+			await expect.poll(async () => (await camera(page)).zoom, { message: 'it moves', timeout: 5_000 }).toBeLessThan(start.zoom - 0.05);
+			await expect.poll(() => camera(page), { message: 'and arrives', timeout: 15_000 }).toEqual(END);
+			// Seconds after it was first seen, so it is a drift and not a cut, and on time however fast the browser draws.
+			const took = (Date.now() - began) / 1000;
+			expect(took).toBeGreaterThan(3.5);
+			expect(took).toBeLessThan(10);
+		});
 		await page.waitForTimeout(1500);
 		expect(await camera(page), 'and stays there').toEqual(END);
 		await expect(page.locator('.sim-status')).toHaveAttribute('data-status', 'running');
@@ -127,7 +138,7 @@ test.describe('the opening', () => {
 		await page.goto('/experiments/airflow');
 		await shown(page);
 		const start = await camera(page);
-		await unlessStalled(page, () => expect.poll(async () => (await camera(page)).zoom, { timeout: 5_000 }).toBeLessThan(start.zoom - 0.03));
+		await unlessSlow(page, () => expect.poll(async () => (await camera(page)).zoom, { timeout: 5_000 }).toBeLessThan(start.zoom - 0.03));
 		await page.keyboard.press('Shift');
 		const held = await camera(page);
 		expect(held.zoom, 'stopped part way').toBeGreaterThan(END.zoom + 0.02);
@@ -139,7 +150,7 @@ test.describe('the opening', () => {
 		await page.goto('/experiments/airflow');
 		await shown(page);
 		const start = await camera(page);
-		await unlessStalled(page, () => expect.poll(async () => (await camera(page)).zoom, { timeout: 5_000 }).toBeLessThan(start.zoom - 0.03));
+		await unlessSlow(page, () => expect.poll(async () => (await camera(page)).zoom, { timeout: 5_000 }).toBeLessThan(start.zoom - 0.03));
 		const box = (await view(page).boundingBox())!;
 		await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.5);
 		await page.mouse.wheel(0, -120);
@@ -157,7 +168,7 @@ test.describe('the opening', () => {
 		test.setTimeout(90_000);
 		await page.goto('/experiments/airflow');
 		await shown(page);
-		await unlessStalled(page, () => expect.poll(async () => (await camera(page)).zoom, { timeout: 5_000 }).toBeLessThan(HOME_ZOOM - 0.05));
+		await unlessSlow(page, () => expect.poll(async () => (await camera(page)).zoom, { timeout: 5_000 }).toBeLessThan(HOME_ZOOM - 0.05));
 		await page.reload();
 		await shown(page);
 		expect(await camera(page)).toEqual(END);
@@ -210,7 +221,7 @@ test.describe('a share link', () => {
 		await page.goto('/experiments/airflow');
 		await shown(page);
 		const first = await camera(page);
-		await unlessStalled(page, () => expect.poll(async () => (await camera(page)).zoom, { timeout: 5_000 }).toBeLessThan(first.zoom - 0.03));
+		await unlessSlow(page, () => expect.poll(async () => (await camera(page)).zoom, { timeout: 5_000 }).toBeLessThan(first.zoom - 0.03));
 	});
 });
 
@@ -270,7 +281,7 @@ test.describe('the hint', () => {
 		await page.goto('/experiments/airflow?cell=0.3');
 		await shown(page);
 		const start = await camera(page);
-		await unlessStalled(page, () => expect.poll(async () => (await camera(page)).zoom, { timeout: 5_000 }).toBeLessThan(start.zoom - 0.03));
+		await unlessSlow(page, () => expect.poll(async () => (await camera(page)).zoom, { timeout: 5_000 }).toBeLessThan(start.zoom - 0.03));
 		await expect(hint(page)).toBeVisible({ timeout: 6_000 });
 		await hint(page).getByRole('button', { name: 'Dismiss the hint' }).click();
 		await expect(hint(page)).toHaveCount(0);
