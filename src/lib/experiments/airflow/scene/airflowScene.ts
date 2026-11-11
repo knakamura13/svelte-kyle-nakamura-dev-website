@@ -130,7 +130,8 @@ export function createAirflowScene(host: WorldHost, params: AirflowSceneParams, 
 		scene.add(home.group);
 		lighting.fit(home.bounds);
 		const rooms: Label[] = home.roomAnchors.map((anchor) => {
-			const label = host.labels.add({ name: anchor.name, tone: 'room', side: 'above' });
+			// The Rooms' names never cover one another: one that would is put below its point, or beside it, or left out until there is room.
+			const label = host.labels.add({ name: anchor.name, tone: 'room', side: 'above', group: 'rooms' });
 			label.position.copy(anchor.position);
 			return label;
 		});
