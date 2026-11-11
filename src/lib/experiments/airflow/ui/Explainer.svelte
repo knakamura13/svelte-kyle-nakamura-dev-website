@@ -71,6 +71,11 @@
 			<li>There are no heat sources, no sunlight through windows, no heat through walls, and no humidity. Warm and cold air come only from the temperatures you set.</li>
 			<li>The four homes are single-story and rectangular, with fixed furniture. Doors and windows stay where they are drawn.</li>
 			<li>
+				The homes are airtight: with every window and door shut, no air comes in or goes out. Real homes leak through cracks, about 0.4 air changes an hour in a typical
+				US home with the windows shut, from under 0.2 in a new, tight one to about 1 in an old, leaky one. An open window or a running purifier moves several to many times
+				that, so the leaks matter little while one is open or on. They matter most in a home shut against smoke outside, which in a real home slowly comes back in.
+			</li>
+			<li>
 				A window’s free area is less than its frame. Published figures put a double-hung or sliding window at about 40 to 50&nbsp;% of its frame and a single casement sash
 				at about 80&nbsp;%. The model uses half of the frame for a double-hung window and a sliding door, about 80&nbsp;% for a casement, and all of it for a door. The
 				casement figure is one maker’s measurement, on Australian aluminium windows, and the open sash can funnel or shield the opening in a wind, which the model does not
@@ -210,6 +215,16 @@
 				Klote, “<a href="https://nvlpubs.nist.gov/nistpubs/Legacy/IR/nistir4588.pdf" target="_blank" rel="noopener noreferrer">A General Routine for Analysis of Stack Effect</a
 				>,” NISTIR 4588, National Institute of Standards and Technology (1991): the flow through two openings at different heights, and where the neutral level sits. The equations
 				were re-derived as a check.
+			</li>
+			<li>
+				U.S. Environmental Protection Agency, “<a href="https://www.epa.gov/sites/default/files/2015-09/documents/efh-chapter19.pdf" target="_blank" rel="noopener noreferrer"
+					>Exposure Factors Handbook, Chapter 19: Building Characteristics</a
+				>” (2011): air change rates measured in about 3,000 US homes, a median of 0.45 per hour and a tenth of homes under 0.18. Some homes had windows open.
+			</li>
+			<li>
+				Persily, Musser and Emmerich, “<a href="https://tsapps.nist.gov/publication/get_pdf.cfm?pub_id=904946" target="_blank" rel="noopener noreferrer"
+					>Modeled Infiltration Rate Distributions for U.S. Housing</a
+				>,” <i>Indoor Air</i> 20, 473–485 (2010): leakage alone, windows shut, about 0.4 per hour in the median US home, and under 0.25 for much of the year in the newest.
 			</li>
 			<li>
 				Dols and Polidoro,
