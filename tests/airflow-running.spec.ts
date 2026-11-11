@@ -114,11 +114,14 @@ async function closeWeather(page: Page) {
 const fastest = (reading: Readings) => Math.max(...Object.values(reading.rooms).map((room) => room.speed));
 
 test.describe('the running simulation', () => {
-	test.beforeEach(() => test.setTimeout(300_000));
+	// Minutes: Chromium's headless shell steps the air on the processor at about real time here, and a runner drawing in software slower.
+	test.beforeEach(() => test.setTimeout(480_000));
 
 	test('a fan placed from the Build catalog stirs the still air of its room, and the Room averages fall back once it is off', async ({ page, browserName }) => {
 		// The two-bedroom closed up, on a still day: nothing moves the air.
 		await openRunning(page, `${PAGE}${setupToHash(blankSetup('two-bedroom'))}`);
+		// At 20×: a frame asks for at most a tenth of a second times the clock's speed, and a runner drawing in software makes a few a second.
+		await page.getByRole('group', { name: 'Speed' }).getByRole('button', { name: /^20×/ }).click();
 		await openPhysics(page);
 		const still = await readUntil(page, (r) => r.time >= 5 && Object.values(r.rooms).every((room) => Number.isFinite(room.speed)), 'the Rooms read');
 		console.log(`${browserName}: still air at ${still.time} s, m/s: ${JSON.stringify(Object.fromEntries(Object.entries(still.rooms).map(([id, r]) => [id, r.speed])))}`);
