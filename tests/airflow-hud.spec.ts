@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { focusRing, worldShot } from './dock';
-import { requireWebGL2 } from './webgl';
+import { requireWebGL2, unlessStalled } from './webgl';
 import { DEVICE_MODELS } from '../src/lib/experiments/airflow/devices/catalog';
 import { plans } from '../src/lib/experiments/airflow/homes/plans';
 
@@ -245,7 +245,7 @@ test.describe('the HUD', () => {
 		const before = await worldShot(page, stage);
 		await walls.getByRole('button', { name: 'Walls up' }).click();
 		await expect(walls.getByRole('button', { name: 'Walls up' })).toHaveAttribute('aria-pressed', 'true');
-		await expect.poll(async () => changedShare(page, before, await worldShot(page, stage)), { message: 'the walls stand up', timeout: 10_000 }).toBeGreaterThan(0.01);
+		await unlessStalled(page, () => expect.poll(async () => changedShare(page, before, await worldShot(page, stage)), { message: 'the walls stand up', timeout: 10_000 }).toBeGreaterThan(0.01));
 		await walls.getByRole('button', { name: 'Walls down' }).click();
 		const down = await worldShot(page, stage);
 		await walls.getByRole('button', { name: 'Cutaway' }).click();
