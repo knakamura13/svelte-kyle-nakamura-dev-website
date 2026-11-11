@@ -227,7 +227,16 @@ export function createAirflowScene(host: WorldHost, params: AirflowSceneParams, 
 		return point && !selection.walled(point) ? point : null;
 	};
 	let openings = '';
+	/**
+	 * When the last frame ran, ms, or 0 when the next one starts afresh. It is cleared when the frames stop: the tab is hidden, or the
+	 * world asks for no more (a paused clock that has caught up). The first frame back then counts as one frame, not as the time the
+	 * frames were stopped, which the clock did not run through.
+	 */
 	let lastUpdate = 0;
+	const onVisibility = () => {
+		if (document.hidden) lastUpdate = 0;
+	};
+	document.addEventListener('visibilitychange', onVisibility);
 
 	/** The height the pointer reads the air at, pins a probe and releases smoke: the cell layer the slice snapped to, or the height asked for before the first slice. Nothing is drawn there. */
 	const planeY = () => session.latest.slice?.y ?? params.view.sliceHeight;
@@ -361,9 +370,12 @@ export function createAirflowScene(host: WorldHost, params: AirflowSceneParams, 
 			markers.update(dt, reduced);
 
 			if (input.tick()) moving = true;
-			return moving || turning || easing || markers.animating;
+			const more = moving || turning || easing || markers.animating;
+			if (!more) lastUpdate = 0;
+			return more;
 		},
 		dispose() {
+			document.removeEventListener('visibilitychange', onVisibility);
 			input.reset();
 			readout.hover = null;
 			air.dispose();

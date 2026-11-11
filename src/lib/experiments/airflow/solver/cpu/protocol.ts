@@ -20,8 +20,8 @@ export type WorkerRequest =
 
 export type WorkerReply =
 	| { type: 'created'; id: number; fluidCells: number }
-	/** One per `step` request, once the step is done: how the page knows how many are unfinished. */
-	| { type: 'stepped' }
+	/** One per `step` request, once the step is done: how the page knows how many are unfinished, and how long the step took in the worker, ms. */
+	| { type: 'stepped'; ms: number }
 	/** One per `stepParticles` request. */
 	| { type: 'particlesStepped' }
 	| { type: 'snapshot'; id: number; snapshot: Snapshot }

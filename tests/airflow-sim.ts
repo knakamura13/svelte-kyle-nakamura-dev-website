@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 import { requireWebGL2 } from './webgl';
 
 /**
@@ -13,9 +13,9 @@ import { requireWebGL2 } from './webgl';
 export const PAGE = '/experiments/airflow?cell=0.3&camera=6,3.9,32,0.9,-10';
 
 /**
- * How long one wait on the simulation may take. A frame asks for at most a tenth of a second times the clock's speed, so at the 2 frames
- * a second of a CI runner drawing in software a 5× Scenario gets at most one simulated second a second, and the processor gives a 20×
- * one about real time: the longest wait here, 100 simulated seconds, takes a few minutes there.
+ * How long one wait on the simulation may take. A CI runner draws in software at a few frames a second, and its worker steps the air on
+ * the processor at about real time at 1× and a few times real time at 5× and 20× (#105): the longest wait here, 100 simulated seconds,
+ * takes well under the 8 minutes even at 1×.
  */
 export const SIM_WAIT = 480_000;
 
@@ -37,26 +37,6 @@ export async function openRunning(page: Page, path = PAGE) {
 
 /** The simulated time, seconds: the HUD's `data-sim-time`, which the clock shows to the whole second. */
 export const simTime = async (page: Page) => Number(await hud(page).getAttribute('data-sim-time'));
-
-/**
- * Skips the test before it asserts anything when this browser, here, steps the air too slowly to reach the simulated time the test needs
- * within its own waits. It measures the simulated time per wall-clock second over `sample` ms, so the decision is made on the measured
- * rate, not on the browser's name or the environment. The page sends solver steps once per drawn frame, so a browser that draws in
- * software at a frame or two a second (WebKit on CI's runners, about 0.1× real time) cannot reach a purifier's halving inside any
- * reasonable budget, while Chromium there (about 0.25×) and every browser on a desktop GPU can. Unlike a skip on a failure, this runs
- * before the first assertion, so a wrong result can never turn into a skip.
- */
-export async function requireSimRate(page: Page, needed: number, budget: number, sample = 20_000) {
-	const start = { sim: await simTime(page), wall: Date.now() };
-	await page.waitForTimeout(sample);
-	const rate = ((await simTime(page)) - start.sim) / ((Date.now() - start.wall) / 1000);
-	const wanted = needed / (budget / 1000);
-	test.skip(
-		rate < wanted,
-		`The air runs at ${rate.toFixed(2)}× real time in this browser here, and this test needs ${needed} simulated seconds within ${(budget / 60_000).toFixed(0)} minutes of waits, ${wanted.toFixed(2)}× or more.`
-	);
-	return rate;
-}
 
 /** Waits until the simulated time is at least `seconds`. */
 export async function untilSim(page: Page, seconds: number, timeout = SIM_WAIT) {

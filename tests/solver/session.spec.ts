@@ -543,10 +543,14 @@ test.describe('simulation session', () => {
 		session.dispose();
 	});
 
-	/** Stands in for the worker: its steps do no work and finish only when the test says so, and it keeps what it was given. */
+	/**
+	 * Stands in for the worker: its steps do no work and finish only when the test says so, and it keeps what it was given. Given a
+	 * `stepTime`, it says that is how long a step takes it, as the worker does once it has timed one.
+	 */
 	class Background extends CpuBackend {
 		inFlight = 0;
 		steps: number[] = [];
+		stepTime: number | undefined;
 		get stepsInFlight() {
 			return this.inFlight;
 		}
@@ -558,10 +562,11 @@ test.describe('simulation session', () => {
 			this.inFlight = Math.max(0, this.inFlight - count);
 		}
 	}
-	const background = () => {
+	const background = (stepTime?: number) => {
 		const made: Background[] = [];
 		const factory: BackendFactory = (config, initial) => {
 			const backend = new Background(config, initial);
+			backend.stepTime = stepTime;
 			made.push(backend);
 			return backend;
 		};
@@ -693,6 +698,87 @@ test.describe('simulation session', () => {
 				await settle();
 			}
 			expect(readout.physics.rate).toBeGreaterThan(0.9);
+			session.dispose();
+		});
+
+		/** A page drawing in software, as on CI's runners: four frames a second, and nothing sent between them. */
+		const SLOW_FRAME = 0.25;
+		/** Draws `frames` slow frames, the worker finishing `finishes` steps before each (all of them when Infinity). Returns the simulated seconds sent per real second, and the deepest queue seen. */
+		const slowly = (worker: Background, session: SimulationSession, frames: number, finishes: number) => {
+			const from = worker.steps.length;
+			let deepest = 0;
+			for (let frame = 0; frame < frames; frame++) {
+				worker.finish(finishes);
+				session.update(SLOW_FRAME);
+				deepest = Math.max(deepest, worker.inFlight);
+			}
+			return { speed: sum(worker.steps.slice(from)) / (frames * SLOW_FRAME), deepest };
+		};
+		/** Draws slow frames until the readout has caught up with them, the worker finishing `finishes` steps before each. */
+		const settleSlowly = async (worker: Background, session: SimulationSession, finishes: number) => {
+			for (let frame = 0; frame < 12; frame++) {
+				worker.finish(finishes);
+				session.update(SLOW_FRAME);
+				await settle();
+			}
+		};
+
+		test('on slow frames, a worker that times its steps is left a frame’s worth of them, and the air keeps to the clock as far as it can', async () => {
+			// Before (#105), a frame asked for at most a tenth of a second times the clock, and the worker had two steps of 0.05 s: 0.4 times
+			// real time at four frames a second, whatever the clock. A step here takes the worker 5 ms, so it gets through 50 in a frame.
+			for (const [clock, reached] of [
+				[1, 1],
+				[5, 5],
+				[20, 10]
+			] as const) {
+				const { made, factory } = background(0.005);
+				const { session, readout } = makeSession((p) => (p.clock.speed = clock), factory);
+				await start(session);
+				const worker = made[0];
+				const { speed, deepest } = slowly(worker, session, 40, Infinity);
+				expect(speed, `at ${clock}× the air runs at ${reached}× real time`).toBeGreaterThan(0.95 * reached);
+				expect(speed).toBeLessThanOrEqual(reached + 1e-6);
+				expect(deepest, 'no more unfinished than it works through in a frame').toBeLessThanOrEqual(SLOW_FRAME / 0.005);
+				expect(Math.max(...worker.steps), 'no step longer than a stable one').toBeLessThanOrEqual(0.05 + 1e-9);
+				expect(session.simTime).toBeCloseTo(sum(worker.steps), 9);
+				await settleSlowly(worker, session, Infinity);
+				expect(readout.physics.rate, `the readout says ${reached}×`).toBeGreaterThan(0.9 * reached);
+				expect(readout.physics.rate).toBeLessThan(1.05 * reached);
+				session.dispose();
+			}
+		});
+
+		test('on slow frames, a worker too slow for the clock still runs slower than real time and says so, with no more than two unfinished', async () => {
+			// A step takes it 200 ms, so it fits one in a frame of 250 ms and is left its two. It finishes one a frame: 0.2 times real time.
+			const { made, factory } = background(0.2);
+			const { session, readout } = makeSession(undefined, factory);
+			await start(session);
+			const worker = made[0];
+			const { speed, deepest } = slowly(worker, session, 40, 1);
+			expect(speed).toBeGreaterThan(0.18);
+			expect(speed).toBeLessThan(0.22);
+			expect(deepest, 'never more than two unfinished').toBeLessThanOrEqual(2);
+			await settleSlowly(worker, session, 1);
+			expect(readout.physics.rate, 'the status line says it runs at a fifth of real time').toBeGreaterThan(0.15);
+			expect(readout.physics.rate).toBeLessThan(0.25);
+			session.dispose();
+		});
+
+		test('a frame of a page held up for longer than two seconds is not counted in full: the air does not leap when it comes back', async () => {
+			const { made, factory } = background(0.001);
+			const { session } = makeSession((p) => (p.clock.speed = 20), factory);
+			await start(session);
+			const worker = made[0];
+			worker.finish(Infinity);
+			session.update(SLOW_FRAME);
+			worker.finish(Infinity);
+			const before = session.simTime;
+			session.update(30);
+			expect(session.simTime - before, 'a held frame counts as a tenth of a second').toBeLessThanOrEqual(0.1 * 20 + 0.05 + 1e-6);
+			worker.finish(Infinity);
+			const slow = session.simTime;
+			session.update(1.5);
+			expect(session.simTime - slow, 'a slow frame of a second and a half counts in full').toBeGreaterThan(1.5 * 20 - 1e-6);
 			session.dispose();
 		});
 	});

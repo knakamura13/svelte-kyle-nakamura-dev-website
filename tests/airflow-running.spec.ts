@@ -16,7 +16,6 @@ import {
 	openPhysics,
 	openRunning,
 	readUntil,
-	requireSimRate,
 	simTime,
 	status,
 	untilSim,
@@ -143,11 +142,9 @@ test.describe('the running simulation', { tag: '@slow' }, () => {
 	test('a fan placed from the Build catalog stirs the still air of its room, and the Room averages fall back once it is off', async ({ page, browserName }) => {
 		// The two-bedroom closed up, on a still day: nothing moves the air.
 		await openRunning(page, `${PAGE}${setupToHash(blankSetup('two-bedroom'))}`);
-		// At 20×: a frame asks for at most a tenth of a second times the clock's speed, and a runner drawing in software makes a few a second.
+		// At 20×, so the runs below take minutes, not quarter hours, on a runner that steps the air on the processor.
 		await page.getByRole('group', { name: 'Speed' }).getByRole('button', { name: /^20×/ }).click();
-		// About 85 simulated seconds and a quarter more, within its quarter of an hour (two minutes kept for the page and the catalog).
 		test.setTimeout(900_000);
-		await requireSimRate(page, 106, 780_000);
 		await openPhysics(page);
 		const still = await readUntil(page, (r) => r.time >= 5 && Object.values(r.rooms).every((room) => Number.isFinite(room.speed)), 'the Rooms read');
 		console.log(`${browserName}: still air at ${still.time} s, m/s: ${JSON.stringify(Object.fromEntries(Object.entries(still.rooms).map(([id, r]) => [id, r.speed])))}`);
@@ -214,15 +211,12 @@ test.describe('the running simulation', { tag: '@slow' }, () => {
 	});
 
 	test('Smoke released into the moving air shows in the books and the Rooms, then leaves by the open windows', async ({ page, browserName }) => {
-		// Under half the smoke is left at about 130 simulated seconds. CI's runners step the air at about a quarter of real time even at 20×
-		// (0.26× in WebKit in run 43026931941), so that takes some 8 minutes there, and the 8 minutes the other tests get ran out in both
-		// Chromium and WebKit.
+		// Under half the smoke is left at about 130 simulated seconds. Before #105, CI's runners stepped the air at about a quarter of real
+		// time even at 20× (0.26× in WebKit in run 43026931941), and the 8 minutes the other tests get ran out in both Chromium and WebKit.
 		test.setTimeout(900_000);
 		await openRunning(page);
 		await page.getByRole('group', { name: 'Speed' }).getByRole('button', { name: /^20×/ }).click();
 		await untilSim(page, 3);
-		// About 130 simulated seconds and a quarter more, within the 12-minute wait for the smoke to leave.
-		await requireSimRate(page, 163, 720_000);
 		// A spot over the air, found with the Probe tool, which then gives its probe back.
 		const at = await pinProbe(page);
 		await page.getByRole('button', { name: 'Remove Probe 1' }).click();
