@@ -10,8 +10,8 @@ import { plans } from '../src/lib/experiments/airflow/homes/plans';
  * and a runaway notice (#59, which has no state of its own in #62's first part). Chromium runs it at 1440, 768 and 390 px; Firefox and WebKit
  * at 1440 px. The grid is pinned at the coarsest cell and the camera is on the Home's default view, as the HUD specs pin them.
  *
- * A violation fails the spec with the state it is in, its rule and its element. A colour-contrast finding that a colour fix would change is
- * not fixed here (the HUD's colours are the look); it is listed in `KNOWN_CONTRAST` with its measured ratio, and the notes say where.
+ * A violation fails the spec with the state it is in, its rule and its element. Nothing is allowed through. Each scan first waits for the
+ * page's animations to finish, so that a panel still fading in is not measured at half its opacity.
  */
 
 const HUD = '/experiments/airflow?cell=0.3&camera=6,3.9,32,0.9,-10';
@@ -23,18 +23,6 @@ const WIDTHS = [
 	{ width: 768, height: 1024 },
 	{ width: 390, height: 844 }
 ] as const;
-
-/**
- * Each colour-contrast finding that stays, as `state | rule at element`, with its measured ratio in notes/98.md. A colour fix would change the
- * HUD's look, so the finding is reported, not fixed.
- */
-const KNOWN_CONTRAST: readonly string[] = [
-	// Measured by axe in the full sweep at 1440 px in Chromium (notes/98.md): the notice's Reset button, and three selected chips.
-	'the runaway notice | color-contrast at .primary',
-	'the runaway notice | color-contrast at .tool.svelte-1idetoq[data-tool="select"] > .tool-label.svelte-1idetoq',
-	'the runaway notice | color-contrast at button[aria-label="5×, five times real time"]',
-	'the runaway notice | color-contrast at button:nth-child(1) > .seg-text.svelte-1g3rnyk'
-];
 
 interface Scan {
 	state: string;
@@ -107,8 +95,22 @@ async function watchWorkers(page: Page) {
 	});
 }
 
+/**
+ * Waits until no animation or transition on the page is running. The HUD fades its panels in (`hud-in`, 360 ms), and axe reads the colour
+ * under the text at the instant it looks, so a scan in the middle of a fade measures a ratio no visitor sees once the panel has settled.
+ */
+async function settle(page: Page) {
+	await page.evaluate(async () => {
+		const deadline = performance.now() + 5000;
+		// Looping animations (a pulse) never finish and a paused one waits for a play: only a finite, running animation is waited for.
+		const pending = () => document.getAnimations().filter((a) => a.playState === 'running' && a.effect?.getTiming().iterations !== Infinity);
+		while (pending().length > 0 && performance.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 50));
+	});
+}
+
 /** Runs axe in the current state and records it. Its time is kept for the report. */
 async function scan(page: Page, state: string, found: Scan[]) {
+	await settle(page);
 	const started = Date.now();
 	const { violations } = await new AxeBuilder({ page }).withTags(TAGS).analyze();
 	// A colour-contrast finding is logged with axe's measured ratio, for notes/98.md.
@@ -121,7 +123,6 @@ async function scan(page: Page, state: string, found: Scan[]) {
 		violations: violations.flatMap((v) =>
 			v.nodes
 				.map((n) => `${v.id} at ${n.target.join(' ')}`)
-				.filter((line) => !KNOWN_CONTRAST.includes(`${state} | ${line}`))
 		)
 	});
 }
@@ -187,11 +188,13 @@ async function sweep(page: Page, width: number, found: Scan[]) {
 	await page.keyboard.press('Enter');
 	// The count is "1 of 6 placed" on a desktop and "1/of6placed" in a phone's text, where a separator stands between the words.
 	await expect(page.getByRole('region', { name: 'Build' })).toContainText(/1\W*of\W*6\W*placed/);
-	// On a phone the Inspector is in the View sheet. As in tests/airflow-phone.spec.ts, Select comes first, then the toolbar's View opens it.
+	// On a phone the Inspector's button is in the View sheet, below the fold of its peek: Select comes first (as in tests/airflow-phone.spec.ts,
+	// so the Build sheet gives way), the toolbar's View opens the sheet, and its grip shows all of it.
 	if (phone) {
 		const tools = page.getByRole('toolbar', { name: 'Tools' });
 		await tools.locator('[data-tool="select"]').click();
 		await tools.getByRole('button', { name: 'View' }).click();
+		await page.getByRole('button', { name: 'Show all of View' }).click();
 	}
 	await page.getByRole('button', { name: 'Inspector', exact: true }).first().click({ timeout: 10_000 });
 	await expect(page.getByRole('region', { name: boxFan.name })).toBeVisible();
@@ -201,7 +204,8 @@ async function sweep(page: Page, width: number, found: Scan[]) {
 	await page.getByRole('button', { name: 'Back to everything in the home' }).click();
 	await expect(page.getByRole('region', { name: twoBedroom.name })).toBeVisible();
 	await scan(page, 'Inspector on the home', found);
-	if (phone) await closeWith('Escape');
+	// On a phone the Inspector is a sheet that covers the probe cards and the window menu, so the visitor closes it with its button.
+	if (phone) await page.getByRole('button', { name: 'Close the Inspector' }).click();
 
 	// A window's menu, opened by a click on the window in the world.
 	const at = await pointAtWindow(page);
@@ -214,10 +218,19 @@ async function sweep(page: Page, width: number, found: Scan[]) {
 	await page.keyboard.press('3');
 	await expect(page.locator('.hud')).toHaveAttribute('data-tool', 'probe');
 	await scan(page, 'the Probe tool', found);
-	await page.locator('.panel .btn').first().focus();
-	await page.keyboard.press('Enter');
-	await expect(view(page)).toBeFocused();
-	await page.keyboard.press('Enter');
+	if (phone) {
+		// The panel's "Pin from the keyboard" button is not in a phone's peek, so the 3D view is focused directly and Enter pins at its cursor.
+		await view(page).focus();
+		await page.keyboard.press('Enter');
+		await expect(page.getByText('Probe 1 pinned.')).toHaveCount(1);
+		// The Probe tool's sheet covers the probe cards on a phone, so the visitor goes back to Select to read and open them.
+		await page.getByRole('toolbar', { name: 'Tools' }).locator('[data-tool="select"]').click();
+	} else {
+		await page.locator('.panel .btn').first().focus();
+		await page.keyboard.press('Enter');
+		await expect(view(page)).toBeFocused();
+		await page.keyboard.press('Enter');
+	}
 	await expect(page.getByRole('list', { name: 'Probes' }).getByRole('listitem')).toHaveCount(1);
 	await scan(page, 'a probe pinned', found);
 	await page.getByRole('button', { name: /: open its menu$/ }).click();
