@@ -136,6 +136,51 @@ test.describe('simulation session', () => {
 		session.dispose();
 	});
 
+	test("paused, the page goes quiet once its picture has caught up, though each read takes longer than a frame, as a worker's does", async () => {
+		// Before, a read of a stopped clock kept the Stage drawing until the read throttle asked again, so a paused page drew about ten
+		// frames a second and polled the worker for as long as it stayed paused (found by #62's keyboard spec, slowed by every round trip).
+		let reads = 0;
+		const slow: BackendFactory = (config, initial) => {
+			const backend = make(config, initial);
+			const snapshot = backend.snapshot.bind(backend);
+			backend.snapshot = async (request) => {
+				reads++;
+				const shot = await snapshot(request);
+				await pause(40);
+				return shot;
+			};
+			return backend;
+		};
+		const stage = { dirty: false, more: true };
+		const { session, params, readout } = makeSession((p) => (p.clock.paused = true), slow, () => 0.2, { invalidate: () => (stage.dirty = true) });
+		/** The Stage's loop: a frame about every 16 ms while the session asks for one or was told something changed. Returns the frames drawn. */
+		const run = async (ms: number) => {
+			let frames = 0;
+			for (const end = Date.now() + ms; Date.now() < end; ) {
+				if (stage.more || stage.dirty) {
+					stage.dirty = false;
+					stage.more = session.update(FRAME);
+					frames++;
+				}
+				await pause(16);
+			}
+			return frames;
+		};
+		await start(session);
+		await run(1500);
+		expect(session.latest.slice, 'the first picture arrives while paused').not.toBeNull();
+		const before = reads;
+		expect(await run(1000), 'a second on a stopped clock draws nothing').toBe(0);
+		expect(reads, 'and reads nothing').toBe(before);
+		// A probe pinned while paused is read and drawn, and then the page is quiet again.
+		params.probes = [{ id: 'p1', x: 2, y: 1.1, z: 2 }];
+		stage.dirty = true;
+		await run(500);
+		expect(readout.probes.map((r) => r.id)).toEqual(['p1']);
+		expect(await run(500)).toBe(0);
+		session.dispose();
+	});
+
 	test('the slice, the hover reading, a pinned probe and the per-room numbers all arrive from the solver', async () => {
 		const { session, params, readout } = makeSession((p) => (p.probes = [{ id: 'p1', x: 5.1, y: 1.1, z: 2.7 }]));
 		await start(session);

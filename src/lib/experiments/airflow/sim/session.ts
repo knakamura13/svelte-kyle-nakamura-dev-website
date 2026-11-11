@@ -157,6 +157,13 @@ export class SimulationSession {
 	private appliedSignature = '';
 	private generation = 0;
 	private pending = false;
+	/**
+	 * Whether the read on its way is one the picture waits for: one asked for, or any while the clock runs. A read of a stopped clock
+	 * that only the throttle asked for shows nothing new, so it neither keeps the page drawing nor draws again when it comes back.
+	 * Before, it did both: in a browser a read takes longer than a frame, so the throttle asked again, and a paused page drew about
+	 * ten frames a second and polled the solver for as long as it stayed paused.
+	 */
+	private awaited = false;
 	private sinceSnapshot = 1;
 	private sinceRooms = 1;
 	private sinceVolume = 1;
@@ -534,7 +541,7 @@ export class SimulationSession {
 		this.requestSnapshot(world, dtReal);
 		this.tune(world, wanted, dtReal);
 		// A paused simulation still wants frames while its picture is catching up.
-		return !paused || this.pending || this.building !== null;
+		return !paused || (this.pending && this.awaited) || this.building !== null;
 	}
 
 	/**
@@ -654,6 +661,8 @@ export class SimulationSession {
 		const at = this.simTime;
 		const revision = world.revision;
 		this.pending = true;
+		const awaited = asked || !paused;
+		this.awaited = awaited;
 		const snapshot = world.backend.snapshot({ sliceY: params.view.sliceHeight, particles: this.options.particles !== false, rooms: wantRooms, volume });
 		const sampled = probes.length ? world.backend.samplePoints(points) : Promise.resolve(new Float32Array(0));
 		void Promise.all([snapshot, sampled])
@@ -671,7 +680,7 @@ export class SimulationSession {
 				// order of the fans the world had when the read was asked for, so they are only matched to devices if the setup is still that one.
 				this.take(world, shot, probes, values, asked || params.clock.paused, at, revision === world.revision);
 				// A paused page draws a frame only when told something changed, and a new reading is a change.
-				this.options.invalidate();
+				if (awaited) this.options.invalidate();
 			})
 			.catch((error) => {
 				// A read that fails because the page is leaving (a buffer unmapped under it) is not news, and nor is one of a world that was
