@@ -3,6 +3,13 @@ import { planById } from '../src/lib/experiments/airflow/homes/plans';
 import { setupToHash } from '../src/lib/experiments/airflow/link';
 import { blankSetup } from '../src/lib/experiments/airflow/state';
 import { live, openAirflow, status } from './dock';
+import { requireWebGL2 } from './webgl';
+
+// Software WebGL (the headless CI browsers) compiles the world's shaders for many seconds, so a test that waits for the world gets 90 s.
+test.beforeEach(async ({ page }) => {
+	test.setTimeout(90_000);
+	await requireWebGL2(page);
+});
 
 /**
  * The page picks the grid for the device and says so. Where the browser has WebGPU the simulation runs on it, and where it has not

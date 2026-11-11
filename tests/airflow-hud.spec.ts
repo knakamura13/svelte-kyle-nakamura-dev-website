@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { focusRing, worldShot } from './dock';
+import { requireWebGL2 } from './webgl';
 import { DEVICE_MODELS } from '../src/lib/experiments/airflow/devices/catalog';
 import { plans } from '../src/lib/experiments/airflow/homes/plans';
 
@@ -19,6 +20,12 @@ const twoBedroom = plans.find((plan) => plan.id === 'two-bedroom')!;
 const boxFan = DEVICE_MODELS.find((model) => model.kind === 'box-fan')!;
 
 test.use({ locale: 'en-US' });
+
+// Software WebGL (the headless CI browsers) compiles the world's shaders for many seconds, so a test that waits for the world gets 90 s.
+test.beforeEach(async ({ page }) => {
+	test.setTimeout(90_000);
+	await requireWebGL2(page);
+});
 
 const hud = (page: Page) => page.locator('.hud');
 const live = (page: Page) => page.locator('.hud p[aria-live="polite"]');

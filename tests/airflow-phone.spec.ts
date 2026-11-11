@@ -2,6 +2,13 @@ import AxeBuilder from '@axe-core/playwright';
 import { chromium, devices, expect, test, type CDPSession, type Page } from '@playwright/test';
 import { setupToHash } from '../src/lib/experiments/airflow/link';
 import { blankSetup } from '../src/lib/experiments/airflow/state';
+import { requireWebGL2 } from './webgl';
+
+// Software WebGL (the headless CI browsers) compiles the world's shaders for many seconds, so a test that waits for the world gets 90 s.
+test.beforeEach(async ({ page }) => {
+	test.setTimeout(90_000);
+	await requireWebGL2(page);
+});
 
 /**
  * The airflow page on a phone (#83): the world keeps most of the screen with a sheet at its peek and no panel covers another, every

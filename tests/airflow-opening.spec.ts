@@ -4,6 +4,7 @@ import { setupToHash } from '../src/lib/experiments/airflow/link';
 import { OPENING_END } from '../src/lib/experiments/airflow/scene/camera/opening';
 import { HOME_ZOOM } from '../src/lib/experiments/airflow/scene/camera/sims';
 import { blankSetup } from '../src/lib/experiments/airflow/state';
+import { requireWebGL2 } from './webgl';
 
 /**
  * The first seconds of a visit (#81 and #82): the loading screen while the world loads, compiles and measures the device, then the
@@ -28,6 +29,12 @@ async function shown(page: Page) {
 const END = { zoom: OPENING_END.zoom, yaw: OPENING_END.heading, focus: `${(2.4 + OPENING_END.dx).toFixed(2)},${(5.4 + OPENING_END.dz).toFixed(2)}` };
 
 test.use({ viewport: { width: 1280, height: 800 } });
+
+// Software WebGL (the headless CI browsers) compiles the world's shaders for many seconds, so a test that waits for the world gets 90 s.
+test.beforeEach(async ({ page }) => {
+	test.setTimeout(90_000);
+	await requireWebGL2(page);
+});
 
 test.describe('the loading screen', () => {
 	test('is in the page from its first paint, fills one bar as the world fetches, compiles and warms up, then fades into the world and leaves', async ({ page }) => {
