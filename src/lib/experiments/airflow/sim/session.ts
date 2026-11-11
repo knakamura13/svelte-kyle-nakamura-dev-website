@@ -72,6 +72,8 @@ const RATE_WINDOW = 0.5;
  */
 const MAX_FRAME = 2;
 const HELD_FRAME = 0.1;
+/** How much each frame moves the usual frame time the worker's queue is sized by (`typicalFrame`): a page that turns slow is followed within about ten frames. */
+const TYPICAL_WEIGHT = 0.2;
 /** Largest time step, s, and the cell-crossing count a step may have: semi-Lagrangian advection stays accurate to a few cells per step. */
 const MAX_STEP = 1 / 20;
 const MAX_CELLS_PER_STEP = 3;
@@ -185,8 +187,14 @@ export class SimulationSession {
 	private volumeKey = '';
 	private sinceReadout = 1;
 	private stepCost = 0.002;
-	/** The real time of the last drawn frame, as the clock counted it, s: how far ahead a background backend that times its steps is kept busy (`depth`). */
+	/**
+	 * How far ahead a background backend that times its steps is kept busy (`depth`), s: this frame's real time, or the frames' usual time
+	 * before it (`typicalFrame`, a running average) if that is shorter. So a page that always draws slowly keeps its worker busy through
+	 * each frame, while one long frame (the thread held for a moment) queues no more than a usual frame's work, and the next read is not
+	 * left waiting behind that long frame's worth of steps.
+	 */
 	private frame = 1 / 60;
+	private typicalFrame = 1 / 60;
 	private rate = 0;
 	private lastEmission = '';
 	private emitPoint: { x: number; y: number; z: number } | null = null;
@@ -639,7 +647,8 @@ export class SimulationSession {
 		const maxSpeed = Math.max(this.options.readout.physics.maxSpeed, 0.5);
 		const stable = Math.min(MAX_STEP, (MAX_CELLS_PER_STEP * h) / maxSpeed);
 		const background = backend.stepsInFlight !== undefined;
-		this.frame = real;
+		this.frame = Math.min(real, this.typicalFrame);
+		this.typicalFrame += TYPICAL_WEIGHT * (real - this.typicalFrame);
 		this.owed += budget;
 		const wanted = Math.max(1, Math.ceil(this.owed / stable));
 		const room = background ? this.depth(backend) - backend.stepsInFlight! : Math.max(1, Math.floor(FRAME_BUDGET / Math.max(this.stepCost, 1e-4)));
@@ -662,8 +671,8 @@ export class SimulationSession {
 	}
 
 	/**
-	 * The most unfinished steps a background backend may have: its `maxInFlight`, or as many as it works through in a frame like the last
-	 * one, if it says how long a step takes (`stepTime`) and that is more. A page drawing in software holds its thread for most of each
+	 * The most unfinished steps a background backend may have: its `maxInFlight`, or as many as it works through in a usual frame (`frame`),
+	 * if it says how long a step takes (`stepTime`) and that is more. A page drawing in software holds its thread for most of each
 	 * frame, so nothing can be sent between frames: a worker given only two steps would finish them early and wait for the next frame.
 	 * Given a frame's worth, it is busy until then, a snapshot asked for behind them is back about when the next frame comes, and a worker
 	 * whose steps are too slow to fit still gets its `maxInFlight`.

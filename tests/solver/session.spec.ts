@@ -735,6 +735,8 @@ test.describe('simulation session', () => {
 				const { session, readout } = makeSession((p) => (p.clock.speed = clock), factory);
 				await start(session);
 				const worker = made[0];
+				// The page has been drawing slowly for a while: the session sizes the worker's queue by its usual frame, which it has learnt by now.
+				slowly(worker, session, 20, Infinity);
 				const { speed, deepest } = slowly(worker, session, 40, Infinity);
 				expect(speed, `at ${clock}× the air runs at ${reached}× real time`).toBeGreaterThan(0.95 * reached);
 				expect(speed).toBeLessThanOrEqual(reached + 1e-6);
@@ -764,7 +766,7 @@ test.describe('simulation session', () => {
 			session.dispose();
 		});
 
-		test('a frame of a page held up for longer than two seconds is not counted in full: the air does not leap when it comes back', async () => {
+		test('a frame of a page held up for longer than two seconds is not counted in full, and a page that draws a frame every second and a half keeps to the clock', async () => {
 			const { made, factory } = background(0.001);
 			const { session } = makeSession((p) => (p.clock.speed = 20), factory);
 			await start(session);
@@ -775,11 +777,98 @@ test.describe('simulation session', () => {
 			const before = session.simTime;
 			session.update(30);
 			expect(session.simTime - before, 'a held frame counts as a tenth of a second').toBeLessThanOrEqual(0.1 * 20 + 0.05 + 1e-6);
+			for (let frame = 0; frame < 20; frame++) {
+				worker.finish(Infinity);
+				session.update(1.5);
+			}
 			worker.finish(Infinity);
 			const slow = session.simTime;
 			session.update(1.5);
-			expect(session.simTime - slow, 'a slow frame of a second and a half counts in full').toBeGreaterThan(1.5 * 20 - 1e-6);
+			expect(session.simTime - slow, 'each frame of a second and a half sends 30 s of air at 20×').toBeGreaterThan(1.5 * 20 - 1e-6);
 			session.dispose();
+		});
+
+		/**
+		 * Stands in for the worker more closely: it works through what it was sent in order, a step taking `step` real seconds, and a read
+		 * waits behind the steps sent before it. `work` lets real time pass in it, as the time between two frames does.
+		 */
+		class Fifo extends CpuBackend {
+			queue: { dt?: number; done?: () => void }[] = [];
+			private spare = 0;
+			constructor(
+				config: ConstructorParameters<typeof CpuBackend>[0],
+				initial: ConstructorParameters<typeof CpuBackend>[1],
+				readonly stepTime: number
+			) {
+				super(config, initial);
+			}
+			get stepsInFlight() {
+				return this.queue.filter((item) => item.dt !== undefined).length;
+			}
+			override step(dt: number) {
+				this.queue.push({ dt });
+			}
+			private behind<T>(read: () => Promise<T>) {
+				return new Promise<T>((resolve, reject) => this.queue.push({ done: () => read().then(resolve, reject) }));
+			}
+			override snapshot(request: Parameters<CpuBackend['snapshot']>[0]) {
+				return this.behind(() => super.snapshot(request));
+			}
+			override samplePoints(points: Float32Array) {
+				return this.behind(() => super.samplePoints(points));
+			}
+			override readFields() {
+				return this.behind(() => super.readFields());
+			}
+			work(seconds: number) {
+				this.spare += seconds;
+				while (this.queue.length) {
+					const next = this.queue[0];
+					if (next.dt !== undefined) {
+						if (this.spare < this.stepTime) break;
+						this.spare -= this.stepTime;
+						super.step(next.dt);
+					} else next.done!();
+					this.queue.shift();
+				}
+				if (!this.queue.length) this.spare = 0;
+			}
+		}
+
+		test('after one long frame, the picture comes back within a few frames: the worker was not handed that long frame’s worth of steps', async () => {
+			// Review of #105: sized by the frame that just ran, one 1.9 s frame queued 1.9 s of steps, and every read waited behind them: no new
+			// picture for 68 frames at 60 a second (1.1 s), then a jump. Sized by the usual frame, the reads come back as they did before.
+			for (const [step, clock] of [
+				[0.03, 1],
+				[0.005, 5]
+			] as const) {
+				const made: Fifo[] = [];
+				const factory: BackendFactory = (config, initial) => {
+					const backend = new Fifo(config, initial, step);
+					made.push(backend);
+					return backend;
+				};
+				const { session } = makeSession((p) => (p.clock.speed = clock), factory);
+				const frame = async (dt: number) => {
+					for (const backend of made) backend.work(dt);
+					await settle();
+					session.update(dt);
+					await settle();
+				};
+				while (!session.world) await frame(FRAME);
+				for (let n = 0; n < 120; n++) await frame(FRAME);
+				await frame(1.9);
+				let still = 0;
+				let longest = 0;
+				let version = session.latest.version;
+				for (let n = 0; n < 150; n++) {
+					await frame(FRAME);
+					if (session.latest.version === version) longest = Math.max(longest, ++still);
+					else [still, version] = [0, session.latest.version];
+				}
+				expect(longest, `${step * 1000} ms steps at ${clock}×: frames at 60 a second with no new picture after the long one`).toBeLessThanOrEqual(6);
+				session.dispose();
+			}
 		});
 	});
 
