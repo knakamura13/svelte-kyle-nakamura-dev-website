@@ -1,7 +1,8 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page } from '@playwright/test';
+import { expect as baseExpect, test, type Page } from '@playwright/test';
 import { DEVICE_MODELS } from '../src/lib/experiments/airflow/devices/catalog';
 import { plans } from '../src/lib/experiments/airflow/homes/plans';
+import { requireWebGL2 } from './webgl';
 
 /**
  * The accessibility sweep of the Airflow page (#98): axe with the WCAG 2.1 A and AA rules runs in each main state, one after another in
@@ -13,6 +14,10 @@ import { plans } from '../src/lib/experiments/airflow/homes/plans';
  * A violation fails the spec with the state it is in, its rule and its element. Nothing is allowed through. Each scan first waits for the
  * page's animations to finish, so that a panel still fading in is not measured at half its opacity.
  */
+
+/** Each wait and each action fails in 30 s and names its step, so a control a visitor could not reach fails the spec in seconds, not at the test's own timeout. */
+const STEP_MS = 30_000;
+const expect = baseExpect.configure({ timeout: STEP_MS });
 
 const HUD = '/experiments/airflow?cell=0.3&camera=6,3.9,32,0.9,-10';
 const twoBedroom = plans.find((plan) => plan.id === 'two-bedroom')!;
@@ -28,11 +33,16 @@ interface Scan {
 	state: string;
 	ms: number;
 	violations: string[];
+	/** The lowest colour-contrast ratio axe measured among the elements that passed, with the element and its colours. */
+	lowestContrast?: string;
 }
 
 /** The test hook the watched worker exposes; typed here, not globally, so it does not clash with tests/airflow-runaway.spec.ts. */
 type RunawayHook = { workers: number; inject(): Promise<void> };
-const runawayHook = (page: Page) => page.evaluate(() => (window as unknown as { airflowRunaway: RunawayHook }).airflowRunaway.inject());
+const runawayHook = (page: Page) =>
+	page.evaluate(() =>
+		(window as unknown as { airflowRunaway: RunawayHook }).airflowRunaway.inject()
+	);
 
 const view = (page: Page) => page.getByRole('application', { name: /^The air in the/ });
 const phoneWidth = (width: number) => width < 700;
@@ -46,7 +56,11 @@ async function watchWorkers(page: Page) {
 		Object.defineProperty(navigator, 'gpu', { value: undefined, configurable: true });
 		type Message = { type?: string; id?: number; fields?: { u: Float32Array } };
 		const Native = window.Worker;
-		const send = Native.prototype.postMessage as (this: Worker, message: unknown, transfer?: Transferable[] | StructuredSerializeOptions) => void;
+		const send = Native.prototype.postMessage as (
+			this: Worker,
+			message: unknown,
+			transfer?: Transferable[] | StructuredSerializeOptions
+		) => void;
 		const all: Watched[] = [];
 		class Watched extends Native {
 			holding = false;
@@ -103,8 +117,12 @@ async function settle(page: Page) {
 	await page.evaluate(async () => {
 		const deadline = performance.now() + 5000;
 		// Looping animations (a pulse) never finish and a paused one waits for a play: only a finite, running animation is waited for.
-		const pending = () => document.getAnimations().filter((a) => a.playState === 'running' && a.effect?.getTiming().iterations !== Infinity);
-		while (pending().length > 0 && performance.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 50));
+		const pending = () =>
+			document
+				.getAnimations()
+				.filter((a) => a.playState === 'running' && a.effect?.getTiming().iterations !== Infinity);
+		while (pending().length > 0 && performance.now() < deadline)
+			await new Promise((resolve) => setTimeout(resolve, 50));
 	});
 }
 
@@ -112,18 +130,32 @@ async function settle(page: Page) {
 async function scan(page: Page, state: string, found: Scan[]) {
 	await settle(page);
 	const started = Date.now();
-	const { violations } = await new AxeBuilder({ page }).withTags(TAGS).analyze();
+	const { violations, passes } = await new AxeBuilder({ page }).withTags(TAGS).analyze();
 	// A colour-contrast finding is logged with axe's measured ratio, for notes/98.md.
 	for (const v of violations)
 		if (v.id === 'color-contrast')
-			for (const n of v.nodes) console.log(`contrast | ${state} | ${n.target.join(' ')} | ${n.any.map((c) => `${c.data?.contrastRatio}:1 expected ${c.data?.expectedContrastRatio} ${c.data?.fgColor ?? ''} on ${c.data?.bgColor ?? ''}`).join('; ')}`);
+			for (const n of v.nodes)
+				console.log(
+					`contrast | ${state} | ${n.target.join(' ')} | ${n.any.map((c) => `${c.data?.contrastRatio}:1 expected ${c.data?.expectedContrastRatio} ${c.data?.fgColor ?? ''} on ${c.data?.bgColor ?? ''}`).join('; ')}`
+				);
+	const ratios = (passes.find((p) => p.id === 'color-contrast')?.nodes ?? []).flatMap((n) =>
+		n.any
+			.filter((c) => typeof c.data?.contrastRatio === 'number')
+			.map((c) => ({
+				ratio: c.data.contrastRatio as number,
+				target: n.target.join(' '),
+				fg: c.data.fgColor,
+				bg: c.data.bgColor
+			}))
+	);
+	const lowest = ratios.sort((a, b) => a.ratio - b.ratio)[0];
 	found.push({
 		state,
 		ms: Date.now() - started,
-		violations: violations.flatMap((v) =>
-			v.nodes
-				.map((n) => `${v.id} at ${n.target.join(' ')}`)
-		)
+		lowestContrast: lowest
+			? `${lowest.ratio}:1 at ${lowest.target} (${lowest.fg} on ${lowest.bg})`
+			: undefined,
+		violations: violations.flatMap((v) => v.nodes.map((n) => `${v.id} at ${n.target.join(' ')}`))
 	});
 }
 
@@ -137,6 +169,12 @@ async function pickBuild(page: Page, phone: boolean) {
 		await tools.locator('[data-tool="select"]').click();
 		await tools.locator('[data-tool="build"]').click();
 	} else await page.keyboard.press('2');
+}
+
+/** On a phone the walls, the Inspector, About and Advanced are in the View sheet's full height: the toolbar's View opens it, and its grip shows all of it. */
+async function openViewInFull(page: Page) {
+	await page.getByRole('toolbar', { name: 'Tools' }).getByRole('button', { name: 'View' }).click();
+	await page.getByRole('button', { name: 'Show all of View' }).click();
 }
 
 /** Moves the mouse over the world until the HUD says a window is under it, and returns that point. */
@@ -164,7 +202,15 @@ async function sweep(page: Page, width: number, found: Scan[]) {
 
 	// Loading: the page's first frame, before the engine has taken the Stage.
 	await page.goto(HUD, { waitUntil: 'domcontentloaded' });
-	await scan(page, `loading (${(await view(page).getAttribute('data-state').catch(() => null)) ?? 'no stage yet'})`, found);
+	await scan(
+		page,
+		`loading (${
+			(await view(page)
+				.getAttribute('data-state')
+				.catch(() => null)) ?? 'no stage yet'
+		})`,
+		found
+	);
 	await expect(view(page)).toHaveAttribute('data-state', 'live', { timeout: 90_000 });
 	await expect(status).toHaveAttribute('data-status', /^(running|paused)$/, { timeout: 90_000 });
 	if ((await status.getAttribute('data-status')) === 'paused') await page.keyboard.press('p');
@@ -191,12 +237,13 @@ async function sweep(page: Page, width: number, found: Scan[]) {
 	// On a phone the Inspector's button is in the View sheet, below the fold of its peek: Select comes first (as in tests/airflow-phone.spec.ts,
 	// so the Build sheet gives way), the toolbar's View opens the sheet, and its grip shows all of it.
 	if (phone) {
-		const tools = page.getByRole('toolbar', { name: 'Tools' });
-		await tools.locator('[data-tool="select"]').click();
-		await tools.getByRole('button', { name: 'View' }).click();
-		await page.getByRole('button', { name: 'Show all of View' }).click();
+		await page.getByRole('toolbar', { name: 'Tools' }).locator('[data-tool="select"]').click();
+		await openViewInFull(page);
 	}
-	await page.getByRole('button', { name: 'Inspector', exact: true }).first().click({ timeout: 10_000 });
+	await page
+		.getByRole('button', { name: 'Inspector', exact: true })
+		.first()
+		.click({ timeout: 10_000 });
 	await expect(page.getByRole('region', { name: boxFan.name })).toBeVisible();
 	await scan(page, 'Inspector on a fan', found);
 
@@ -234,7 +281,7 @@ async function sweep(page: Page, width: number, found: Scan[]) {
 	await expect(page.getByRole('list', { name: 'Probes' }).getByRole('listitem')).toHaveCount(1);
 	await scan(page, 'a probe pinned', found);
 	await page.getByRole('button', { name: /: open its menu$/ }).click();
-	await scan(page, "a probe pinned and its menu", found);
+	await scan(page, 'a probe pinned and its menu', found);
 	await closeWith('Escape');
 
 	// Smoke releasing from the Smoke tool: Enter starts it and Enter stops it.
@@ -249,8 +296,16 @@ async function sweep(page: Page, width: number, found: Scan[]) {
 
 	// The weather open: its details, which list the wind and the outdoor air.
 	await page.keyboard.press('1');
-	await page.getByRole('button', { name: 'Weather details' }).first().click();
-	await expect(page.locator('#hud-weather-details').or(page.locator('.weather-sheet')).first()).toBeVisible();
+	if (phone) {
+		// On a phone the weather is a pill that opens a sheet, as tests/airflow-phone.spec.ts opens it.
+		await page.getByRole('button', { name: /^Weather:/ }).click();
+		await expect(page.getByRole('dialog', { name: 'Weather' })).toBeVisible();
+	} else {
+		await page.getByRole('button', { name: 'Weather details' }).first().click();
+		await expect(
+			page.locator('#hud-weather-details').or(page.locator('.weather-sheet')).first()
+		).toBeVisible();
+	}
 	await scan(page, 'the weather open', found);
 	await closeWith('Escape');
 
@@ -265,10 +320,12 @@ async function sweep(page: Page, width: number, found: Scan[]) {
 	await closeWith('Escape');
 
 	// Advanced, then About. Escape closes Advanced; About closes itself.
+	if (phone) await openViewInFull(page);
 	await page.getByRole('button', { name: 'Advanced', exact: true }).click();
 	await expect(page.getByRole('dialog', { name: 'Advanced' })).toBeVisible();
 	await scan(page, 'Advanced', found);
 	await closeWith('Escape');
+	if (phone) await openViewInFull(page);
 	await page.getByRole('button', { name: 'About this simulation' }).click();
 	const about = page.getByRole('dialog', { name: 'Airflow, room by room.' });
 	await expect(about).toBeVisible();
@@ -304,30 +361,54 @@ async function sweep(page: Page, width: number, found: Scan[]) {
 async function runawayNotice(page: Page, found: Scan[]) {
 	await watchWorkers(page);
 	await page.goto(HUD);
-	await expect(view(page)).toHaveAttribute('data-state', /^(live|unsupported)$/, { timeout: 90_000 });
+	await expect(view(page)).toHaveAttribute('data-state', /^(live|unsupported)$/, {
+		timeout: 90_000
+	});
 	// As tests/airflow-runaway.spec.ts opens it: on the worker, running, before the air is written.
-	await expect(page.locator('.sim-status')).toHaveAttribute('data-status', /^(running|paused)$/, { timeout: 90_000 });
+	await expect(page.locator('.sim-status')).toHaveAttribute('data-status', /^(running|paused)$/, {
+		timeout: 90_000
+	});
 	await expect(page.locator('.sim-status')).toContainText('the processor');
 	await runawayHook(page);
-	await expect(page.getByRole('group', { name: 'The simulation ran away' })).toBeVisible({ timeout: 30_000 });
+	await expect(page.getByRole('group', { name: 'The simulation ran away' })).toBeVisible({
+		timeout: 30_000
+	});
 	await scan(page, 'the runaway notice', found);
 }
 
 for (const { width, height } of WIDTHS)
 	test.describe(`at ${width} by ${height}`, () => {
-		test.use({ viewport: { width, height }, locale: 'en-US' });
+		test.use({ viewport: { width, height }, locale: 'en-US', actionTimeout: STEP_MS });
 
-		test('axe finds no WCAG 2.1 A/AA violation in the states of the Airflow page', async ({ page, browserName }) => {
+		test('axe finds no WCAG 2.1 A/AA violation in the states of the Airflow page', async ({
+			page,
+			browserName
+		}) => {
 			// Chromium runs every width. Firefox and WebKit run the desktop width, to keep to the time the sweep takes.
-			test.skip(browserName !== 'chromium' && width !== 1440, 'Firefox and WebKit are swept at 1440 px.');
-			test.setTimeout(900_000);
+			test.skip(
+				browserName !== 'chromium' && width !== 1440,
+				'Firefox and WebKit are swept at 1440 px.'
+			);
+			// The sweep takes about 1.5 minutes here. CI runs one worker on software rendering at about 2 fps, which the waits for the stage
+			// and the runaway notice feel most, so the test has 12 minutes. Each step has its own 30 s limit, so a hang fails sooner.
+			test.setTimeout(720_000);
+			// A browser without WebGL 2 (Firefox on CI) has no world to sweep: the stage says it is unsupported.
+			await requireWebGL2(page);
 			await page.emulateMedia({ reducedMotion: 'reduce' });
 			const found: Scan[] = [];
 			await sweep(page, width, found);
 			const total = found.reduce((sum, s) => sum + s.ms, 0);
-			test.info().annotations.push({ type: 'axe', description: `${found.length} states, ${(total / 1000).toFixed(1)} s in axe` });
-			await test.info().attach('axe-states.json', { body: JSON.stringify(found, null, 2), contentType: 'application/json' });
-			const failing = found.filter((s) => s.violations.length > 0).map((s) => `${s.state}: ${s.violations.join(' | ')}`);
+			test.info().annotations.push({
+				type: 'axe',
+				description: `${found.length} states, ${(total / 1000).toFixed(1)} s in axe`
+			});
+			await test.info().attach('axe-states.json', {
+				body: JSON.stringify(found, null, 2),
+				contentType: 'application/json'
+			});
+			const failing = found
+				.filter((s) => s.violations.length > 0)
+				.map((s) => `${s.state}: ${s.violations.join(' | ')}`);
 			expect(failing, 'the states with a violation').toEqual([]);
 
 			// The runaway notice, in a page of its own, on the CPU worker.
@@ -338,6 +419,12 @@ for (const { width, height } of WIDTHS)
 			await runaway.close();
 			const last = found.at(-1)!;
 			expect(last.violations, `${last.state}: the notice's violations`).toEqual([]);
+			await test
+				.info()
+				.attach('axe-runaway.json', {
+					body: JSON.stringify(last, null, 2),
+					contentType: 'application/json'
+				});
 			expect(found.length, 'the states swept').toBe(19);
 		});
 	});
