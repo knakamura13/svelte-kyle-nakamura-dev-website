@@ -30,6 +30,13 @@ export interface FlowBackend {
 	readonly maxInFlight?: number;
 
 	/**
+	 * How long a step takes where the backend works, s, as measured lately: for a backend that reports `stepsInFlight` and can time its
+	 * steps itself (the worker; a GPU's queue cannot). The page may then leave it more than `maxInFlight` unfinished, as many as it works
+	 * through in one drawn frame, so a page that draws slowly does not leave it idle until the next frame. Undefined until it knows.
+	 */
+	readonly stepTime?: number;
+
+	/**
 	 * Calls `listener` once if the backend can no longer run: the GPU device was lost, or the worker crashed. Whatever it is
 	 * asked afterwards does nothing or rejects. Returns the function that stops listening. Absent on a backend that cannot fail.
 	 */

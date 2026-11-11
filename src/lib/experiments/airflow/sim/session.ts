@@ -2,7 +2,7 @@ import type { DeviceModel } from '../devices/types';
 import type { HomePlan } from '../homes/types';
 import { emissionRate } from '../emission';
 import type { AirflowReadout, HoverReading, ProbeReading, RoomReading } from '../readouts';
-import { BackendUnavailable, type BackendFailure, type Snapshot } from '../solver/backend';
+import { BackendUnavailable, type BackendFailure, type FlowBackend, type Snapshot } from '../solver/backend';
 import { POINT_FIELDS, type MassBalance, type Slice } from '../solver/types';
 import type { Volume } from '../solver/volume';
 import type { Clock, Pin, Setup, View } from '../state';
@@ -57,10 +57,21 @@ export interface SessionOptions {
 
 /** Longest real time one frame's steps may take before the session lets the simulation run slower than real time, s. */
 const FRAME_BUDGET = 0.012;
-/** Most steps a backend that works in the background may have unfinished, when it does not say (`FlowBackend.maxInFlight`): what the worker needs. */
+/**
+ * Most steps a backend that works in the background may have unfinished, when it does not say (`FlowBackend.maxInFlight`): what the
+ * worker needs. One that says how long its steps take (`stepTime`) may have as many as it works through in a drawn frame, if more.
+ */
 const MAX_IN_FLIGHT = 2;
 /** Real seconds over which the rate readout averages, so it does not jump between frames that sent a step and frames that did not. */
 const RATE_WINDOW = 0.5;
+/**
+ * Longest drawn frame whose real time the clock counts in full, s. A browser drawing in software, or a slow phone, takes up to a second
+ * or so a frame, and the air keeps to the clock through it. A longer frame is the page held up (the machine slept, the thread was busy)
+ * and counts as `HELD_FRAME`, so the air does not leap on its return. A hidden tab is not one: its frames stop, and the Stage's first
+ * frame back counts as a fresh one (airflowScene.ts).
+ */
+const MAX_FRAME = 2;
+const HELD_FRAME = 0.1;
 /** Largest time step, s, and the cell-crossing count a step may have: semi-Lagrangian advection stays accurate to a few cells per step. */
 const MAX_STEP = 1 / 20;
 const MAX_CELLS_PER_STEP = 3;
@@ -174,6 +185,8 @@ export class SimulationSession {
 	private volumeKey = '';
 	private sinceReadout = 1;
 	private stepCost = 0.002;
+	/** The real time of the last drawn frame, as the clock counted it, s: how far ahead a background backend that times its steps is kept busy (`depth`). */
+	private frame = 1 / 60;
 	private rate = 0;
 	private lastEmission = '';
 	private emitPoint: { x: number; y: number; z: number } | null = null;
@@ -547,7 +560,8 @@ export class SimulationSession {
 				this.rate = params.clock.speed;
 				readout.physics = { ...readout.physics, rate: this.rate };
 			}
-			this.advance(world, Math.min(dtReal, 0.1) * params.clock.speed, Math.min(dtReal, 0.1));
+			const real = dtReal > MAX_FRAME ? HELD_FRAME : dtReal;
+			this.advance(world, real * params.clock.speed, real);
 		}
 		this.wasPaused = paused;
 		this.lastSpeed = params.clock.speed;
@@ -609,7 +623,9 @@ export class SimulationSession {
 	 * and records how fast it went. How many that is depends on the backend. One that does its work inside `step` (the CPU in
 	 * the page) is timed: a frame may spend `FRAME_BUDGET` on steps. One that works in the background (the worker, and the GPU,
 	 * whose steps only queue) says how many steps it has not finished (`stepsInFlight`), and gets no more than its `maxInFlight`
-	 * unfinished, so a backend that cannot keep up is not buried.
+	 * unfinished, so a backend that cannot keep up is not buried. The worker also says how long a step takes it (`stepTime`), and is then
+	 * left as many as it works through in one frame, if that is more (`depth`): the air then keeps to the clock however slowly the page
+	 * draws, as far as the worker can.
 	 *
 	 * Time the backend could not take stays owed to the next frame, which then sends a longer step, up to the stable one: a
 	 * worker that needs 30 ms a step is sent a step about every 30 ms that covers that long, not one of 17 ms every frame that it
@@ -623,9 +639,10 @@ export class SimulationSession {
 		const maxSpeed = Math.max(this.options.readout.physics.maxSpeed, 0.5);
 		const stable = Math.min(MAX_STEP, (MAX_CELLS_PER_STEP * h) / maxSpeed);
 		const background = backend.stepsInFlight !== undefined;
+		this.frame = real;
 		this.owed += budget;
 		const wanted = Math.max(1, Math.ceil(this.owed / stable));
-		const room = background ? (backend.maxInFlight ?? MAX_IN_FLIGHT) - backend.stepsInFlight! : Math.max(1, Math.floor(FRAME_BUDGET / Math.max(this.stepCost, 1e-4)));
+		const room = background ? this.depth(backend) - backend.stepsInFlight! : Math.max(1, Math.floor(FRAME_BUDGET / Math.max(this.stepCost, 1e-4)));
 		const steps = Math.max(0, Math.min(wanted, room));
 		const dt = steps > 0 ? Math.min(stable, this.owed / steps) : 0;
 		const started = performance.now();
@@ -642,6 +659,19 @@ export class SimulationSession {
 		if (this.options.particles !== false) backend.stepParticles(Math.min(real, 0.05));
 		// Simulated seconds sent per real second, averaged over `RATE_WINDOW`: what the Physics panel and the clock show.
 		if (real > 0) this.rate += (1 - Math.exp(-real / RATE_WINDOW)) * ((steps * dt) / real - this.rate);
+	}
+
+	/**
+	 * The most unfinished steps a background backend may have: its `maxInFlight`, or as many as it works through in a frame like the last
+	 * one, if it says how long a step takes (`stepTime`) and that is more. A page drawing in software holds its thread for most of each
+	 * frame, so nothing can be sent between frames: a worker given only two steps would finish them early and wait for the next frame.
+	 * Given a frame's worth, it is busy until then, a snapshot asked for behind them is back about when the next frame comes, and a worker
+	 * whose steps are too slow to fit still gets its `maxInFlight`.
+	 */
+	private depth(backend: FlowBackend) {
+		const limit = backend.maxInFlight ?? MAX_IN_FLIGHT;
+		const time = backend.stepTime;
+		return time === undefined ? limit : Math.max(limit, Math.floor(this.frame / Math.max(time, 1e-4)));
 	}
 
 	private requestSnapshot(world: World, dtReal: number) {

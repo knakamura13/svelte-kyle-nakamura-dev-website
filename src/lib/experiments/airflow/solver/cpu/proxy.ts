@@ -27,8 +27,9 @@ export function portOfWorker(worker: Worker): WorkerPort {
 /** Particle steps the page asks for while the worker is still on the last one are added together, up to this much simulated time, s. */
 const MAX_PARTICLE_STEP = 0.1;
 /**
- * Most steps the page leaves unfinished with the worker (`FlowBackend.maxInFlight`). Two keep it busy: the next step is already
- * waiting when it finishes one, and a snapshot asked for now is not behind more than two steps. More would only make the picture late.
+ * Fewest steps the page may leave unfinished with the worker (`FlowBackend.maxInFlight`). Two keep it busy: the next step is already
+ * waiting when it finishes one, and a snapshot asked for now is not behind more than two steps. The page leaves it more only when its
+ * steps are quick enough that it works through them all within a drawn frame (`stepTime`), so the picture is not made later than a frame.
  */
 export const WORKER_MAX_IN_FLIGHT = 2;
 
@@ -72,6 +73,8 @@ export class WorkerBackend implements FlowBackend {
 	readonly grid: Grid;
 	private cells = 0;
 	private unfinished = 0;
+	/** How long a step takes in the worker lately, s, averaged over the last few; undefined until the first is done. */
+	private seconds: number | undefined;
 	private moving = false;
 	private unmoved = 0;
 	private nextId = 1;
@@ -118,6 +121,10 @@ export class WorkerBackend implements FlowBackend {
 
 	get stepsInFlight() {
 		return this.unfinished;
+	}
+
+	get stepTime() {
+		return this.seconds;
 	}
 
 	onFailure(listener: (failure: BackendFailure) => void) {
@@ -204,6 +211,7 @@ export class WorkerBackend implements FlowBackend {
 		switch (reply.type) {
 			case 'stepped':
 				this.unfinished = Math.max(0, this.unfinished - 1);
+				this.seconds = this.seconds === undefined ? reply.ms / 1000 : 0.8 * this.seconds + 0.2 * (reply.ms / 1000);
 				return;
 			case 'particlesStepped':
 				this.moving = false;

@@ -28,10 +28,12 @@ export class SolverHost {
 					this.backend = this.make(request.config, request.initial);
 					this.post({ type: 'created', id: request.id, fluidCells: this.backend.fluidCells });
 					break;
-				case 'step':
+				case 'step': {
+					const started = performance.now();
 					this.solver().step(request.dt);
-					this.post({ type: 'stepped' });
+					this.post({ type: 'stepped', ms: performance.now() - started });
 					break;
+				}
 				case 'update':
 					this.solver().update(request.change);
 					break;
