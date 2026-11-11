@@ -305,6 +305,8 @@ export function createAirflowScene(host: WorldHost, params: AirflowSceneParams, 
 				house.home.update(look(), view.walls, 0, true);
 				openings = '';
 			}
+			// Smoke outdoors hazes the sky and the far lawn and dims and warms the sun (`look/smokyDay.ts`).
+			lighting.setSmoke(setup.conditions.outdoorPm25);
 			// A new tool forgets what the last one was doing, unless a key or a press since has already done so.
 			input.syncMode();
 			const reduced = host.reducedMotion();
