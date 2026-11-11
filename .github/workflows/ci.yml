@@ -40,6 +40,7 @@ jobs:
 
   e2e:
     name: end-to-end ${{ matrix.project }} ${{ matrix.shard }} of ${{ matrix.total }}
+    if: false # TEMPORARY (#95): off while the diagnose job runs.
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
@@ -87,3 +88,46 @@ jobs:
             playwright-report
             test-results
           retention-days: 14
+
+  # TEMPORARY (#95): measures CI's browsers. Not for merging.
+  diagnose:
+    name: diagnose ${{ matrix.project }} workers ${{ matrix.workers }} repeat ${{ matrix.repeat }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { project: chromium, workers: 1, repeat: 1 }
+          - { project: chromium, workers: 2, repeat: 2 }
+          - { project: webkit, workers: 1, repeat: 1 }
+          - { project: webkit, workers: 2, repeat: 2 }
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
+    env:
+      HOME: /root
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: yarn
+      - run: yarn install --frozen-lockfile
+      - name: Machine
+        run: |
+          nproc; free -m; head -20 /proc/cpuinfo | sed -n '/model name/p'; df -h / | tail -1
+      - name: Diagnose
+        env:
+          PLAYWRIGHT_HTML_OPEN: never
+        run: |
+          (while true; do date +%T; free -m | sed -n 2p; head -1 /proc/loadavg; sleep 5; done) > machine.log 2>&1 &
+          yarn test:e2e tests/ci-diagnose.spec.ts --project=${{ matrix.project }} --workers=${{ matrix.workers }} --repeat-each=${{ matrix.repeat }} --retries=0 --reporter=list,html
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagnose-${{ matrix.project }}-w${{ matrix.workers }}
+          path: |
+            playwright-report
+            test-results
+            machine.log
+          retention-days: 7
