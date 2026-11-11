@@ -14,7 +14,7 @@ import { advectVelocity, type Velocity } from '$lib/experiments/airflow/solver/c
 import { boxGeometry } from '$lib/experiments/airflow/solver/geometry';
 import { rasterizeFan } from '$lib/experiments/airflow/solver/fan';
 import { Grid } from '$lib/experiments/airflow/solver/grid';
-import { AIR, DEFAULT_PRESSURE, sideConditions, type SideCondition, type SolverConfig } from '$lib/experiments/airflow/solver/types';
+import { AIR, DEFAULT_PRESSURE, FAN_SPIN_UP, sideConditions, type SideCondition, type SolverConfig } from '$lib/experiments/airflow/solver/types';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -178,7 +178,7 @@ async function pressureParity(seed: number, nx: number, ny: number, nz: number) 
 	const input = randomVelocity(grid, config, seed);
 	const cpuVel = copy(input);
 	const pressure = new PressureSolver(grid, { ...DEFAULT_PRESSURE });
-	pressure.assemble(half, config.fluid.rho, config.fluid.cd, config.geometry, emptyExterior(grid), cpuVel);
+	pressure.assemble(half, dt / (dt + FAN_SPIN_UP), config.fluid.rho, config.fluid.cd, config.geometry, emptyExterior(grid), cpuVel);
 	pressure.solve();
 	pressure.project(half, config.fluid.rho, config.geometry, cpuVel);
 	const solver = await GpuSolver.create(await context(), config);

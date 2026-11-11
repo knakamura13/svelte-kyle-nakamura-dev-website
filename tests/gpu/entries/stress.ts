@@ -13,7 +13,8 @@ import { deviceMap, devicesFor, openingsFor, random, setupFor } from '../../solv
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const DT = 1 / 20;
+/** The step, s: 1/20 s unless the spec sets another (`setStep`), as it does to run the random setups at 1/60 s too. */
+let DT = 1 / 20;
 
 const finite = (array: Float32Array) => {
 	for (let n = 0; n < array.length; n++) if (!Number.isFinite(array[n])) return false;
@@ -71,7 +72,7 @@ async function randomOpenings(planId: string, seed: number, h: number, backend: 
 	world.dispose();
 	const c = setup.conditions;
 	const open = (o: Record<string, number>) => Object.entries(o).filter(([, v]) => v > 0).map(([k, v]) => `${k}=${v}`).join(' ');
-	return { ...result, where: `${planId}, seed ${seed}, h ${h} m, wind ${c.windSpeed} m/s from ${c.windFrom}°, ${c.outdoorTemp} °C out / ${c.indoorTemp} °C in, furniture ${setup.furniture}, open [${open(setup.openings)}] then [${open(changed.openings)}]` };
+	return { ...result, where: `${planId}, seed ${seed}, h ${h} m, step 1/${Math.round(1 / DT)} s, wind ${c.windSpeed} m/s from ${c.windFrom}°, ${c.outdoorTemp} °C out / ${c.indoorTemp} °C in, furniture ${setup.furniture}, open [${open(setup.openings)}] then [${open(changed.openings)}]` };
 }
 
 /** robustness.spec.ts, second test: random fans and purifiers, power, aim and openings changed after 40 steps, 60 more. */
@@ -100,7 +101,7 @@ async function randomDevices(planId: string, seed: number, h: number, backend: '
 	const result = { ...(await verdict(world, ['u', 'v', 'w', 'p', 'theta', 'particulates'])), stoppedAt };
 	world.dispose();
 	const list = setup.devices.map((d) => `${d.model}${d.opening ? ` in ${d.opening}` : ` at ${d.x.toFixed(1)},${d.z.toFixed(1)}`} power ${d.power.toFixed(2)}`).join('; ');
-	return { ...result, where: `${planId}, seed ${seed}, h ${h} m, wind ${setup.conditions.windSpeed} m/s from ${setup.conditions.windFrom}°, ${setup.conditions.outdoorTemp} °C out, devices: ${list}` };
+	return { ...result, where: `${planId}, seed ${seed}, h ${h} m, step 1/${Math.round(1 / DT)} s, wind ${setup.conditions.windSpeed} m/s from ${setup.conditions.windFrom}°, ${setup.conditions.outdoorTemp} °C out, devices: ${list}` };
 }
 
 /**
@@ -155,5 +156,14 @@ async function traceDevices(planId: string, seed: number, h: number, backend: 'g
 	return trace;
 }
 
-(window as any).stress = { traceDevices, randomOpenings, randomDevices, longRun, planIndex: (id: string) => plans.findIndex((p) => p.id === id) };
+(window as any).stress = {
+	traceDevices,
+	randomOpenings,
+	randomDevices,
+	longRun,
+	planIndex: (id: string) => plans.findIndex((p) => p.id === id),
+	setStep: (dt: number) => {
+		DT = dt;
+	}
+};
 (window as any).harnessReady = true;

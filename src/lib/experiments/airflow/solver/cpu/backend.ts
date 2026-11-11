@@ -82,6 +82,7 @@ export class CpuBackend implements FlowBackend {
 		this.solver.vel.v.set(fields.v);
 		this.solver.vel.w.set(fields.w);
 		this.solver.pressure.pressure.set(fields.p);
+		this.solver.pressure.settleOn(this.solver.vel);
 		this.solver.theta.set(fields.theta);
 		this.solver.c.set(fields.particulates);
 		// The diagnostics describe the air there is now, as the GPU's (measured at each snapshot) do: a snapshot before the next step reads this air.

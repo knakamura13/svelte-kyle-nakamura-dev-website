@@ -719,7 +719,7 @@ export class GpuSolver {
 		for (let s = 0; s < 6; s++) {
 			const slots = this.grid.sideSize(s as SideIndex);
 			if (!slots) continue;
-			this.run(pass, 'exterior', { C: this.consts, B: this.sideUniforms[s], ext: this.ext, p: fine.p, geo: this.geo, coef: fine.coef, qg: this.qg }, this.groups(slots));
+			this.run(pass, 'exterior', { C: this.consts, B: this.sideUniforms[s], S: this.step, ext: this.ext, p: fine.p, geo: this.geo, coef: fine.coef, qg: this.qg }, this.groups(slots));
 		}
 		for (let l = 0; l + 1 < this.levels.length; l++) {
 			const level = this.levels[l];
@@ -866,6 +866,22 @@ export class GpuSolver {
 		this.device.queue.writeBuffer(this.ext, 0, packed);
 		this.outlet = hasOutlet(this.grid, this.geometry, exterior, this.fluid.cd);
 		this.writeConsts();
+	}
+
+	/**
+	 * cpu/pressure.ts `settleOn`: the speeds on the box's faces of velocities written in become the speeds the openings settled on last
+	 * step (`qg` as speed into the box and no slope), so a window fan eases on from the speed its face has.
+	 */
+	settleOn(u: Float32Array, v: Float32Array, w: Float32Array) {
+		const packed = new Float32Array(this.qg.size / 4);
+		const fields = [u, v, w];
+		for (let s = 0; s < 6; s++) {
+			const walk = sideWalk(this.grid, s as SideIndex);
+			const sign = walk.shift === 0 ? 1 : -1;
+			for (let b = 0; b < walk.nb; b++)
+				for (let a = 0; a < walk.na; a++) packed[2 * (this.slotBase[s] + a + walk.na * b)] = sign * fields[walk.axis][walk.base + walk.strideA * a + walk.strideB * b];
+		}
+		this.device.queue.writeBuffer(this.qg, 0, packed);
 	}
 
 	/** The fans' disks: cells to measure each fan's flow, and the faces it pushes, merged per index so no two threads push one face. */

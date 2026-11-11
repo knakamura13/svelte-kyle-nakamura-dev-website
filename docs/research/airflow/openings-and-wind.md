@@ -4,7 +4,7 @@
 - Scope: single-story home, outdoors not simulated. Wind reaches open windows and doors through wall pressure coefficients (Cp) by facade and wind angle; flow through each opening follows the orifice equation.
 - Verification method: pages fetched with WebFetch; scanned PDFs (FSEC-CR-163-86, AIVC TN 44, NISTIR 6585) read from the saved PDF through the OCR text layer (PyMuPDF) or tesseract, then checked by eye against rendered page images. Every table value labelled "computed" and every code block below was executed with node 20.19.0 (TypeScript transpiled with esbuild); the check script is not stored in the repo.
 - ASHRAE Handbook text was not read (paywalled; ASHRAE terms bar entering its content into AI tools). Every "ASHRAE" value below comes from a document that cites it.
-- Labels. CONFIRMED: two or more independent sources agree, or a primary source was read directly and cross-checked numerically. SINGLE-SOURCE: one source read directly. UNCONFIRMED: not verified; reason given. Tags [S1] to [S28] resolve in section 6 ([S10] is unused).
+- Labels. CONFIRMED: two or more independent sources agree, or a primary source was read directly and cross-checked numerically. SINGLE-SOURCE: one source read directly. UNCONFIRMED: not verified; reason given. Tags [S1] to [S36] resolve in section 6 ([S10] is unused).
 
 ## 1. Wall pressure coefficients (Cp) for a low-rise rectangular building
 
@@ -280,6 +280,40 @@ Used in the model (2026-10-14, issue 47): 0.8 for a casement (`OPENING_LIMITS` i
 
 Angle dependence for a side-hung casement (geometry, derived, not sourced and not executed): with sash width W and height H opened to angle theta, the gap between the free edge and the opposite jamb is H * 2 * W * sin(theta/2); it equals the frame width at theta = 60 degrees. The sash obstructs the stream, so Cd must fall with angle ([S12], [S11]).
 
+### 3d. One open window and a temperature difference, no wind (added 2026-11-10, issue 93)
+
+```
+Q = (Cd / 3) * A * sqrt(g * H * dT / Tm)          flow each way: in through the lower half, out through the upper half
+```
+
+A is the whole opening's area, H its height, dT the inside-minus-outside temperature difference and Tm the mean of the two absolute temperatures. It comes from integrating the orifice equation of section 3a over a pressure difference that grows linearly with height from a neutral plane at mid-height: each half carries the flow one way, and the 1/3 is that integral. Q is the flow in one direction (in equals out), not the sum of both.
+
+| Point | Finding | Sources | Status |
+|---|---|---|---|
+| Form and the 1/3 factor | Q = (1/3) Cd A sqrt(g H dT / Tm), attributed to Warren and Parkins (1985) | [S29] eq. (1), PDF p. 3, which defines Tm as "Average temperature [K]" and A as the total area of the opening; [S30] eq. (13) derives it from the orifice law and eq. (15) states it, saying that with the neutral plane at mid-height it and Warren's model "are exactly the same" | CONFIRMED |
+| One direction, not the total | The neutral plane comes from Q_in = Q_out and the integral runs over one half | [S30] eq. (9) and (13); [S31] p. 3, eq. (7), V = W H v_max / 3 over 0 to the neutral height | CONFIRMED |
+| Cd for this case | about 0.6 (the sharp-orifice value) | [S30] p. 5 (0.6, citing Swami and Chandra 1987); [S31] p. 3 (0.61 widely used; Kiel and Wilson's water-model data agree with 0.6) | CONFIRMED |
+| Kiel and Wilson full-scale doorway Cd | 0.40 + 0.0045 dT (dT in K) | [S31] p. 3 | SINGLE-SOURCE. Section 3b gives 0.4 + 0.0075 dT from [S11] Table 1; the two disagree and neither original was read |
+| Measured agreement | Warren's model averaged 14.7 % error over 50 measured buoyancy-driven cases in an apartment; it slightly overestimates at low dT and low wind against EN 16798-7 | [S30] p. 13; [S32] pp. 16 to 17 | SINGLE-SOURCE each |
+| ASHRAE Fundamentals form | Q = Cd A sqrt(2 g dH_npl (Ti - To) / Ti) | only a garbled Wikipedia page | UNCONFIRMED; not relied on |
+
+Not read (paywalled): CIBSE AM10 (2005), BS 5925:1991, Allard (1998), Warren and Parkins (1985) itself, and the journal version of Larsen and Heiselberg (2008).
+
+How the model meets it. The solver is Boussinesq: the pressure outside an opening is the hydrostatic rho g beta dT y of `homes/weather.ts` with beta = 1/T_room, so the model's own form has T_room where the formula has Tm, 0.9 % less flow at 20 and 10 °C. Worked example (computed): Cd 0.62, a window 0.9 m wide and 1.2 m tall, 20 °C inside and 10 °C outside: Q = 0.62/3 x 1.08 x sqrt(9.80665 x 1.2 x 10 / 288.15) = 0.1426 m^3/s each way. `tests/solver/single-opening.spec.ts` and `tests/gpu/single-opening.gpu.ts` hold the model to it, from 10 % below to 2 % above. Measured on a 4 x 2.7 x 4 m room with that window, its sill 0.9 m up (2026-11-10): 94.6 %, 92.5 % and 91.3 % of the formula on 0.15, 0.1 and 0.075 m cells with the room kept at one temperature, 93.1 %, 92.3 % and 91.9 % with the cold air coming in cold, CPU and GPU agreeing to four digits at 0.1 m. The opening's law is not the cause: applied to the pressure in the cells beside the window it gives the solver's flow to 0.2 %. Air leaving through the upper half speeds up toward the window inside the room, so the pressure beside the window is lower than the still room's by about rho u^2 / 2 (0.03 to 0.05 Pa against differences of up to 0.24 Pa), while the formula's Cd already counts that speeding up from rest. The two-opening benchmark is 1 to 4 % low for the same reason. Removing the double count would mean applying the orifice law to the stagnation pressure of the cell beside each opening, which would change every opening; it was not done.
+
+### 3e. Air leakage with every opening shut (added 2026-11-10, issue 93)
+
+The model's homes have no leaks. Kyle decided on 2026-11-10 to keep them sealed and to say so in the explainer. For that sentence:
+
+| Population | Air changes per hour, windows shut unless stated | Source | Status |
+|---|---|---|---|
+| US homes, measured (tracer gas, 2,971 measurements, occupied, some with windows open) | median 0.45; 10th percentile 0.18; mean 0.63; 90th percentile 1.26; regional medians 0.35 (Midwest) to 0.49 (Northeast, South) | [S33] section 19.2 and Table 19-24, p. 19-45 (Koontz and Rector 1995; Murray and Burmaster 1995 reanalysed 2,844 of them) | CONFIRMED with [S34] |
+| US homes, modelled infiltration alone (209 homes standing for 80 % of the stock, no window opening) | regional medians 0.40 to 0.42; homes built after 1970 tighter; the newest under 0.25 about half the year, pre-1970 homes about a tenth of it | [S34] pp. 15, 21. The authors note measured values elsewhere run about twice as high, partly from open windows | CONFIRMED with [S33] |
+| Natural rate from a blower-door test | rate at 50 Pa divided by about 10 to 30, 12 as a national best fit; the UK uses 20 | [S35] eq. (11) to (12), pp. 38 to 39; [S36] p. 10 (divisors from 10 to 58) | CONFIRMED as a range |
+| UK houses, measured | 0.41, or 0.28 in a terrace; below 0.2 to 1 with the wind | [S36] pp. 13 to 14 | SINGLE-SOURCE |
+
+Summary used in the explainer: about 0.4 per hour in a typical US home with the windows shut, under 0.2 in a new, tight one, about 1 in an old, leaky one. For scale (computed): one 0.9 x 1.2 m window at a 10 K difference moves 0.14 m^3/s, which is 2 air changes an hour in a 250 m^3 home and 13 in a 40 m^3 bedroom; a purifier's 0.1 m^3/s is 9 an hour in that bedroom.
+
 ## 4. Typical dimensions
 
 | Item | Inches | Metres | Sources agreeing | Status |
@@ -375,6 +409,14 @@ Leads seen only in search-result summaries (pages not opened; do not use as data
 - [S26] Breezway Technical Bulletin, "Comparative Ventilation Openings Of Various Window Types", 9 August 2012 (vendor bulletin, 5 pages, Australian aluminium windows; read from the saved PDF text layer). https://www.breezway.com.au/downloads/hawaii/TB_Ventilation_Openings.pdf
 - [S27] The Foothill Catalog Foundation fact sheets hosted by LA County Planning (read from the saved PDF text layers): Garfield IV https://planning.lacounty.gov/wp-content/uploads/2026/07/2026-06-11_Garfield-Factsheet-4.pdf ; Daisy https://planning.lacounty.gov/wp-content/uploads/2025/11/2025-11-14-Daisy-Fact-Sheet.pdf ; Billy https://planning.lacounty.gov/wp-content/uploads/2025/12/BILLY-FACT-SHEET.pdf ; Lewis https://planning.lacounty.gov/wp-content/uploads/2025/06/2025-04-25-2501-The-Lewis-Fact-Sheet.pdf ; Palm https://planning.lacounty.gov/wp-content/uploads/2025/06/2025-04-25-2501-The-Palm-Fact-Sheet.pdf
 - [S28] The Plan Collection, plan 109-1098 (read through WebFetch). https://www.theplancollection.com/house-plans/plan-1500-square-feet-3-bedroom-2-bathroom-ranch-style-14403
+- [S29] Larsen, T.S. and Heiselberg, P., "Single-sided Natural Ventilation Driven by a Combination of Wind Pressure and Temperature Difference", Proceedings of IAQVEC 2007, Sendai, p. 145 (Aalborg University repository copy; eq. (1) on PDF p. 3, nomenclature on PDF p. 9). https://vbn.aau.dk/ws/files/13402435/Single-sided_Natural_Ventilation_Driven_by_a_Combination_of_Wind_Pressure_and_Temperature_ (the path ends so, with no extension)
+- [S30] Pan, W., Liu, S., Li, S., Cheng, X., Zhang, H., Long, Z., Zhang, T. and Chen, Q., "A model for calculating single-sided natural ventilation rate in an urban residential apartment", Building and Environment 147 (2019), pp. 372 to 381. https://engineering.purdue.edu/~yanchen/paper/2019-1.pdf
+- [S31] van der Maas, J., Roulet, C.-A. and Hertig, J.-A., "Some Aspects of Gravity Driven Air Flow through Large Apertures in Buildings", ASHRAE Transactions 95(2), 1989, preprint VA-89-6-1. https://aivc.org/sites/default/files/airbase_3521.pdf
+- [S32] Larsen, T.S. and others, "Calculation methods for single-sided natural ventilation - now and ahead", Energy and Buildings 177 (2018), pp. 279 to 289 (same group as [S29], so not independent of it). https://vbn.aau.dk/ws/files/284948171/Calculation_methods_for_single_sided_natural_ventilation_now_and_ahead.pdf
+- [S33] U.S. Environmental Protection Agency, Exposure Factors Handbook, 2011 edition, Chapter 19, Building Characteristics. https://www.epa.gov/sites/default/files/2015-09/documents/efh-chapter19.pdf
+- [S34] Persily, A., Musser, A. and Emmerich, S.J., "Modeled Infiltration Rate Distributions for U.S. Housing", Indoor Air 20 (2010), pp. 473 to 485 (NIST preprint). https://tsapps.nist.gov/publication/get_pdf.cfm?pub_id=904946
+- [S35] Chan, W.R., Price, P.N., Sohn, M.D. and Gadgil, A.J., "Analysis of U.S. Residential Air Leakage Database", LBNL-53367 (2003), the report behind Chan et al., Atmospheric Environment 39 (2005). https://www.osti.gov/servlets/purl/816784
+- [S36] Roberts, Mourkos and Lomas, airtightness in the UK housing stock, methodology and evidence, Department for Energy Security and Net Zero research paper 2025/002 (2025). https://assets.publishing.service.gov.uk/media/68db99fbc487360cc70c9ef3/airtightness-in-uk-housing-stock-methodology-evidence.pdf
 - Unfetched leads: Home Depot interior door guide https://www.homedepot.com/c/ab/interior-door-buying-guide/9ba683603be9fa5395fab90ba405845 ; Lowe's interior door guide https://www.lowes.com/n/buying-guide/interior-doors-buying-guide ; Milgard sliding doors https://www.milgard.com/patio-doors/sliding-glass-doors (HTTP 403 on fetch) ; NatHERS technical note https://www.homeenergyrating.gov.au/sites/default/files/2024-07/NatHERS%20Tech%20Note%2020220901.pdf (fetch timed out)
 
 ## Gaps and uncertainty

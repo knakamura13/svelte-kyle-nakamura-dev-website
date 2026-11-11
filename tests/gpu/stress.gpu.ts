@@ -6,7 +6,8 @@ import { openHarness } from './harness';
 /**
  * The random-setup stress of tests/solver/robustness.spec.ts on GpuBackend at the cell sizes the GPU path runs, with
  * the same seeds (plan index · 1000 + trial + 1 for openings and weather, 50000 + plan index · 1000 + trial for fans
- * and purifiers) and thresholds, plus long runs where growth would compound. A failing case is rerun on CpuBackend
+ * and purifiers) and thresholds, at a step of 1/20 s and of 1/60 s (a frame at 1×, where an intake window fan used to run away:
+ * issue 91), plus long runs where growth would compound. A failing case is rerun on CpuBackend
  * and both results are logged. Run with `STRESS=1 yarn test:gpu stress`; `STRESS_PLANS=studio,one-bedroom` and
  * `STRESS_TRIALS=5` choose the sweep.
  */
@@ -47,10 +48,14 @@ async function check(kind: 'randomOpenings' | 'randomDevices', plan: string, see
 for (const plan of PLANS)
 	for (const h of sizesFor(plan)) {
 		test(`${plan} at ${h} m: random openings and weather, and random fans and purifiers, on GpuBackend`, async () => {
-			test.setTimeout(600_000);
+			test.setTimeout(1_200_000);
 			const index = await call('planIndex', plan);
-			for (let trial = 0; trial < TRIALS; trial++) await check('randomOpenings', plan, index * 1000 + trial + 1, h);
-			for (let trial = 0; trial < TRIALS; trial++) await check('randomDevices', plan, 50000 + index * 1000 + trial, h);
+			for (const dt of [1 / 20, 1 / 60]) {
+				await call('setStep', dt);
+				for (let trial = 0; trial < TRIALS; trial++) await check('randomOpenings', plan, index * 1000 + trial + 1, h);
+				for (let trial = 0; trial < TRIALS; trial++) await check('randomDevices', plan, 50000 + index * 1000 + trial, h);
+			}
+			await call('setStep', 1 / 20);
 		});
 
 		test(`${plan} at ${h} m: 30 s with a 3 m/s west wind, and 30 s still at −5 °C outside, on GpuBackend`, async () => {
