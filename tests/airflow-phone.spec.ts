@@ -4,12 +4,6 @@ import { setupToHash } from '../src/lib/experiments/airflow/link';
 import { blankSetup } from '../src/lib/experiments/airflow/state';
 import { requireWebGL2 } from './webgl';
 
-// Software WebGL (the headless CI browsers) compiles the world's shaders for many seconds, so a test that waits for the world gets 90 s.
-test.beforeEach(async ({ page }) => {
-	test.setTimeout(90_000);
-	await requireWebGL2(page);
-});
-
 /**
  * The airflow page on a phone (#83): the world keeps most of the screen with a sheet at its peek and no panel covers another, every
  * sheet folds to its peek and opens in full, the camera frames the whole home above the sheets, the first frame's hint points at Build
@@ -173,8 +167,12 @@ for (const phone of PHONES) {
 			userAgent: phone.userAgent,
 			locale: 'en-US'
 		});
-		// The pointer's search for a window, and WebGL drawn in software, take a while.
-		test.beforeEach(() => test.setTimeout(120_000));
+		// The pointer's search for a window, and WebGL drawn in software, take a while. Each test here needs the world, so it skips without
+		// WebGL 2.
+		test.beforeEach(async ({ page }) => {
+			test.setTimeout(120_000);
+			await requireWebGL2(page);
+		});
 
 		test('the world keeps at least 55% of the screen with a tool’s sheet, the View sheet or the weather at its peek, and no panel covers another', async ({ page }) => {
 			test.setTimeout(120_000);
