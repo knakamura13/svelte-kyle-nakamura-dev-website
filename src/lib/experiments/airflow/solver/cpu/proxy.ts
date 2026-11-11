@@ -32,6 +32,27 @@ const MAX_PARTICLE_STEP = 0.1;
  */
 export const WORKER_MAX_IN_FLIGHT = 2;
 
+/** How often the watchdog looks at the worker, ms. */
+export const WATCHDOG_TICK = 500;
+/** A tick that comes this much later than the last one, ms, came after the machine slept or the page was held up, and the silence before it is not counted. */
+export const WATCHDOG_LATE = 2.5 * WATCHDOG_TICK;
+/** How long a worker may leave what it was asked unanswered, ms, counted from ticks that came on time, before it is taken to have died. */
+export const WATCHDOG_SILENCE = 8000;
+
+/** What the watchdog keeps time with: a clock, ms, and a timer that calls `tick` every `ms` until it is cancelled. A test passes its own, to move time by hand. */
+export interface WatchdogTimer {
+	now(): number;
+	every(ms: number, tick: () => void): () => void;
+}
+
+const systemTimer: WatchdogTimer = {
+	now: () => performance.now(),
+	every: (ms, tick) => {
+		const timer = setInterval(tick, ms);
+		return () => clearInterval(timer);
+	}
+};
+
 /**
  * The CPU solver in a Web Worker, behind the backend interface (host.ts is the worker's end). Nothing here computes: every
  * call becomes a message, so a step never blocks the page, and what comes back (snapshots, samples, fields) is a promise.
@@ -39,6 +60,11 @@ export const WORKER_MAX_IN_FLIGHT = 2;
  * `step` returns at once, so the page cannot learn how long a step takes by timing the call. The worker says when each is
  * done instead, and `stepsInFlight` is how many it has not. Particle steps are coalesced: only one is ever in flight, and
  * those asked for meanwhile arrive as a single step of their summed time, so a worker that is behind is not buried in them.
+ *
+ * A worker the browser kills sends no error event: it just stops answering. A watchdog notices. While a step, a particle step or a
+ * read is unanswered, it counts the time since the worker last replied, and after `WATCHDOG_SILENCE` it fails the backend as `crashed`.
+ * The silence is counted only from timer ticks that come on time: a tick that comes late means the machine slept or the page was
+ * held up, and then the worker was not given the time to answer either, so the count starts again.
  */
 export class WorkerBackend implements FlowBackend {
 	readonly kind = 'cpu';
@@ -54,6 +80,10 @@ export class WorkerBackend implements FlowBackend {
 	private failure: BackendFailure | null = null;
 	/** Set when the backend has failed or been disposed: nothing is sent after that. */
 	private stopped = false;
+	/** How long the worker has left something unanswered, ms, counted from on-time ticks, and when the last tick came. */
+	private silence = 0;
+	private lastTick = 0;
+	private unwatch: (() => void) | null = null;
 
 	private constructor(
 		private readonly port: WorkerPort,
@@ -62,8 +92,11 @@ export class WorkerBackend implements FlowBackend {
 		this.grid = new Grid(config.grid);
 	}
 
-	/** Has the worker build the solver for `config`, with the air at `initial` (as `CpuBackend`). Rejects if it cannot, and then the worker is stopped. */
-	static async create(port: WorkerPort, config: SolverConfig, initial?: { theta?: number; particulates?: number }) {
+	/**
+	 * Has the worker build the solver for `config`, with the air at `initial` (as `CpuBackend`). Rejects if it cannot, and then the worker is
+	 * stopped. The watchdog starts once the solver is built, so a worker script that is slow to load is not taken for a dead one.
+	 */
+	static async create(port: WorkerPort, config: SolverConfig, initial?: { theta?: number; particulates?: number }, { timer = systemTimer }: { timer?: WatchdogTimer } = {}) {
 		const backend = new WorkerBackend(port, config);
 		port.listen({ message: (reply) => backend.receive(reply), error: (message) => backend.fail('crashed', message) });
 		try {
@@ -71,6 +104,10 @@ export class WorkerBackend implements FlowBackend {
 		} catch (error) {
 			backend.stop(error instanceof Error ? error : new Error(describeError(error)));
 			throw error;
+		}
+		if (!backend.stopped) {
+			backend.lastTick = timer.now();
+			backend.unwatch = timer.every(WATCHDOG_TICK, () => backend.tick(timer.now()));
 		}
 		return backend;
 	}
@@ -163,6 +200,7 @@ export class WorkerBackend implements FlowBackend {
 
 	private receive(reply: WorkerReply) {
 		if (this.stopped) return;
+		this.silence = 0;
 		switch (reply.type) {
 			case 'stepped':
 				this.unfinished = Math.max(0, this.unfinished - 1);
@@ -187,6 +225,19 @@ export class WorkerBackend implements FlowBackend {
 		act(waiter);
 	}
 
+	/** The watchdog's look at the worker, at `now`, ms. */
+	private tick(now: number) {
+		const gap = now - this.lastTick;
+		this.lastTick = now;
+		const waiting = this.unfinished > 0 || this.moving || this.waiting.size > 0;
+		if (!waiting || gap > WATCHDOG_LATE) {
+			this.silence = 0;
+			return;
+		}
+		this.silence += gap;
+		if (this.silence >= WATCHDOG_SILENCE) this.fail('crashed', `The solver worker stopped answering: nothing came back from it for ${Math.round(this.silence / 1000)} seconds.`);
+	}
+
 	/** The worker stopped on its own. Whoever is waiting is told, and so is whoever listens for failure. */
 	private fail(reason: BackendFailure['reason'], message: string) {
 		if (this.stopped) return;
@@ -201,6 +252,8 @@ export class WorkerBackend implements FlowBackend {
 		if (this.stopped) return;
 		this.stopped = true;
 		this.unfinished = 0;
+		this.unwatch?.();
+		this.unwatch = null;
 		const waiting = [...this.waiting.values()];
 		this.waiting.clear();
 		for (const waiter of waiting) waiter.reject(reason);
