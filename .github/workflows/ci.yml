@@ -13,9 +13,9 @@ permissions:
 
 jobs:
   check:
-    name: yarn check and yarn test:e2e
+    name: yarn check
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 20
     # Browsers and their system libraries come preinstalled. Keep the tag equal to @playwright/test in yarn.lock.
     container:
       image: mcr.microsoft.com/playwright:v1.63.0-noble
@@ -38,5 +38,63 @@ jobs:
       - name: Check
         run: yarn run check
 
+  e2e:
+    name: end-to-end ${{ matrix.project }} ${{ matrix.shard }} of ${{ matrix.total }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      # One shard failing does not cancel the others, so every failure is reported in the same run.
+      fail-fast: false
+      matrix:
+        # Each browser is split on its own. The airflow specs are the slow ones (WebGL drawn in software), and they sort early, so
+        # Chromium and WebKit get more shards than their test counts alone would need.
+        include:
+          - { project: chromium, shard: 1, total: 8 }
+          - { project: chromium, shard: 2, total: 8 }
+          - { project: chromium, shard: 3, total: 8 }
+          - { project: chromium, shard: 4, total: 8 }
+          - { project: chromium, shard: 5, total: 8 }
+          - { project: chromium, shard: 6, total: 8 }
+          - { project: chromium, shard: 7, total: 8 }
+          - { project: chromium, shard: 8, total: 8 }
+          - { project: webkit, shard: 1, total: 4 }
+          - { project: webkit, shard: 2, total: 4 }
+          - { project: webkit, shard: 3, total: 4 }
+          - { project: webkit, shard: 4, total: 4 }
+          - { project: firefox, shard: 1, total: 1 }
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
+    env:
+      HOME: /root
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: yarn
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
       - name: End-to-end tests
-        run: yarn test:e2e
+        # One worker: the runner has 4 cores, and one airflow page drawing WebGL in software, with its simulation on a worker, keeps them
+        # busy. Two pages at once drew about 1 frame a second each against 2.7 for one alone, and a trivial page.evaluate took 1.1 to 1.4 s
+        # against 0.12 s (run 42994808018). Memory is not the limit: at most 4.2 of 16 GB was in use.
+        # The HTML report is written for the upload below.
+        env:
+          PLAYWRIGHT_HTML_OPEN: never
+        run: yarn test:e2e --project=${{ matrix.project }} --shard=${{ matrix.shard }}/${{ matrix.total }} --workers=1 --reporter=list,html
+
+      # Always, so a green run's report still says which tests skipped and why (each skip's reason and measured frame rate).
+      - name: Upload the report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ matrix.project }}-${{ matrix.shard }}-of-${{ matrix.total }}
+          path: |
+            playwright-report
+            test-results
+          retention-days: 14

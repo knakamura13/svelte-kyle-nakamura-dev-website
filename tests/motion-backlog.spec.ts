@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { focusUntilActive } from './focus';
 
 test.describe('motion backlog', () => {
 	test.use({ viewport: { width: 1440, height: 900 } });
@@ -17,8 +18,8 @@ test.describe('motion backlog', () => {
 	test('the promoted Korean card darkens the second syllable', async ({ page }) => {
 		await page.goto('/');
 		const syllable = page.locator('.stack-korean .hangul > span');
-		await page.locator('.stack-korean').focus();
-		await expect.poll(() => page.locator('.stack-korean').getAttribute('data-active')).toBe('true');
+		await focusUntilActive(page.locator('.stack-korean'));
+		await expect(page.locator('.stack-korean')).toHaveAttribute('data-active', 'true');
 		await expect.poll(() => syllable.evaluate((el) => getComputedStyle(el).color)).toBe('rgb(49, 83, 59)');
 	});
 
