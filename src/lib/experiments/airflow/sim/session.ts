@@ -154,6 +154,8 @@ export class SimulationSession {
 	private lastSpeed = 0;
 	/** What the last snapshot request was made for (the slice height and the probes), so a change asks for another at once. */
 	private requestKey = '';
+	/** The running world's `revision` (its setup applied in place) when the last snapshot was asked for. */
+	private requestRevision = -1;
 	private appliedSignature = '';
 	private generation = 0;
 	private pending = false;
@@ -161,7 +163,8 @@ export class SimulationSession {
 	 * Whether the read on its way is one the picture waits for: one asked for, or any while the clock runs. A read of a stopped clock
 	 * that only the throttle asked for shows nothing new, so it neither keeps the page drawing nor draws again when it comes back.
 	 * Before, it did both: in a browser a read takes longer than a frame, so the throttle asked again, and a paused page drew about
-	 * ten frames a second and polled the solver for as long as it stayed paused.
+	 * ten frames a second and polled the solver for as long as it stayed paused. A read asked for while one the throttle sent is on its
+	 * way makes that one awaited, so the page keeps drawing until it is back and the next frame sends the read asked for.
 	 */
 	private awaited = false;
 	private sinceSnapshot = 1;
@@ -644,10 +647,18 @@ export class SimulationSession {
 		const volume = this.options.volume === true && moment !== this.volumeKey && (paused || this.volumeKey === '' || this.sinceVolume >= VOLUME_INTERVAL);
 		// What the visitor has just asked to see (a probe pinned, the slice moved, a new world's first picture, the air where it stopped) is
 		// read at once. The throttle below counts drawn frames, and a paused page draws none, so it would never get there.
+		// While paused, a change of setup applied in place (a fan added, a window opened) is asked for too: the last read was of the old one.
 		const wants = `${params.view.sliceHeight}|${params.probes.map((p) => `${p.id}@${p.x},${p.y},${p.z}`).join(';')}`;
-		const asked = wants !== this.requestKey || (paused && volume);
-		if (this.pending || (!asked && this.sinceSnapshot < SNAPSHOT_INTERVAL)) return;
+		const asked = wants !== this.requestKey || (paused && (volume || world.revision !== this.requestRevision));
+		if (this.pending) {
+			// A read the throttle asked for is on its way. This one waits for it, and the picture waits too: the page keeps drawing frames,
+			// and the read draws one when it comes back, so the next frame asks again. Otherwise a paused page would go quiet with it unread.
+			if (asked) this.awaited = true;
+			return;
+		}
+		if (!asked && this.sinceSnapshot < SNAPSHOT_INTERVAL) return;
 		this.requestKey = wants;
+		this.requestRevision = world.revision;
 		this.sinceSnapshot = 0;
 		const wantRooms = this.sinceRooms >= ROOM_INTERVAL;
 		if (wantRooms) this.sinceRooms = 0;
@@ -661,8 +672,7 @@ export class SimulationSession {
 		const at = this.simTime;
 		const revision = world.revision;
 		this.pending = true;
-		const awaited = asked || !paused;
-		this.awaited = awaited;
+		this.awaited = asked || !paused;
 		const snapshot = world.backend.snapshot({ sliceY: params.view.sliceHeight, particles: this.options.particles !== false, rooms: wantRooms, volume });
 		const sampled = probes.length ? world.backend.samplePoints(points) : Promise.resolve(new Float32Array(0));
 		void Promise.all([snapshot, sampled])
@@ -679,8 +689,9 @@ export class SimulationSession {
 				// Readouts are throttled while frames come; a paused page asks for few reads, so each one is shown. The fan flows are in the
 				// order of the fans the world had when the read was asked for, so they are only matched to devices if the setup is still that one.
 				this.take(world, shot, probes, values, asked || params.clock.paused, at, revision === world.revision);
-				// A paused page draws a frame only when told something changed, and a new reading is a change.
-				if (awaited) this.options.invalidate();
+				// A paused page draws a frame only when told something changed, and a new reading is a change. So is a read that was asked
+				// for while this one was on its way (`awaited` is set then), which the next frame sends.
+				if (this.awaited) this.options.invalidate();
 			})
 			.catch((error) => {
 				// A read that fails because the page is leaving (a buffer unmapped under it) is not news, and nor is one of a world that was
