@@ -33,8 +33,9 @@
 				suburb: its speed spreads by about a third of the mean either way, and in ten minutes its strongest three seconds are about 1.85 times the mean, a little under
 				the 1.87 that Eurocode&nbsp;1 gives for suburban ground. A gust passes in about 32&nbsp;m of wind, so at a fresh breeze gusts and lulls last several seconds, and in
 				a light wind half a minute. The direction wobbles by about 19° either way. Each opening’s pressure follows the gust every step, so the flow through a
-				window surges and slackens. The wall averages the model uses were measured in gusty wind, so the gusts’ pressure is scaled to keep its long-run average that of
-				the steady wind. Flow goes as the square root of pressure, so over an hour a gusty wind moves about 93&nbsp;% of the steady wind’s air through a room open on two
+				window surges and slackens. The wall averages the model uses were measured in gusty wind, so they already hold the gusts’ average push. The model takes the gusts’
+				own long-run average out of each gust’s push, so on every wall and from every direction the average is the steady wind’s, and only the rise and fall are added. Flow goes
+				as the square root of pressure, so over an hour a gusty wind moves about 92&nbsp;% of the steady wind’s air through a room open on two
 				sides, while any one minute moves more or less as that minute’s gusts run strong or weak. The gusts are the same on every run, so a shared link shows the same ones.
 			</li>
 			<li>
@@ -82,9 +83,8 @@
 				The gusts are a model of the wind’s statistics, not of eddies. Their sizes come from Eurocode&nbsp;1’s figures for suburban ground, taken at its lowest height
 				of 5&nbsp;m, which it applies all the way down. Each wall’s pressure follows the gust at once, as if the wind were steady at each moment. That holds for gusts
 				that last seconds; it does not for the small, quick eddies a building makes at its corners, which the model leaves out, along with eddies shorter than about a
-				second. The wall averages also already contain the wind’s wobble in direction, and the model wobbles it again, which leaves the windward wall about 7&nbsp;% under
-				the steady wind’s average push and the leeward wall’s pull about 8&nbsp;% over it; the difference across a room, which drives the flow through it, is within
-				3&nbsp;%. A room open on one side only gets no exchange at all from gusts. Real gusts pump air in and out of such a room, but here the wind’s pressure rises and
+				second. Each gust’s pressure uses the wall averages as if they held at that moment’s speed and direction, which is the usual quasi-steady guess; only its
+				long-run average is pinned to the measurements. A room open on one side only gets no exchange at all from gusts. Real gusts pump air in and out of such a room, but here the wind’s pressure rises and
 				falls the same over a whole wall and the air cannot be squeezed, so nothing is pumped. That is a limit of the model, like its airtight walls.
 			</li>
 			<li>
@@ -257,7 +257,7 @@
 				Wu and Kopp, “<a href="https://www.frontiersin.org/articles/10.3389/fbuil.2016.00005" target="_blank" rel="noopener noreferrer"
 					>Estimation of Wind-Induced Pressures on a Low-Rise Building Using Quasi-Steady Theory</a
 				>,” <i>Frontiers in Built Environment</i> 2:5 (2016): a wall’s pressure as the gust’s dynamic pressure times a coefficient, and the measured average as average
-				pressure over average dynamic pressure, which is why the gusts’ pressure is scaled. Read as a web page, whose equations did not come through.
+				pressure over average dynamic pressure, which is why the gusts’ own average is taken out of their pressure. Read as a web page, whose equations did not come through.
 			</li>
 			<li>
 				Klote, “<a href="https://nvlpubs.nist.gov/nistpubs/Legacy/IR/nistir4588.pdf" target="_blank" rel="noopener noreferrer">A General Routine for Analysis of Stack Effect</a
