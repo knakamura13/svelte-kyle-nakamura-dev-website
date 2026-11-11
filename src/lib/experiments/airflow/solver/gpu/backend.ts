@@ -43,8 +43,8 @@ interface Moment {
  * finished here in double.
  *
  * The scalar substep count comes from the largest CFL speed read back lately (`GpuSolver.scalarSubsteps`), refreshed
- * by a small read after a step whenever none is in flight, and by every snapshot. Fields written in (`writeFields`) are
- * their own reading, taken here from the arrays.
+ * by a small read after every step, and by every snapshot. Fields written in (`writeFields`) are their own reading, taken
+ * here from the arrays.
  *
  * A step is submitted at once, so a device that cannot keep up would be given work faster than it finishes it. Each submit is
  * followed by a wait for the queue (`onSubmittedWorkDone`), and `stepsInFlight` counts the steps still waiting: the page sends no
@@ -62,10 +62,16 @@ export class GpuBackend implements FlowBackend {
 	private cflSpeed = 0;
 	/** The step the CFL speed in `cflSpeed` was measured at; −∞ until the first reading arrives. */
 	private cflMeasuredAt = -Infinity;
-	private cflPending = false;
 	/** Times the fields were written in. A reading encoded before a write is of air that is gone, and is dropped when it arrives. */
 	private writes = 0;
-	private readonly cflStaging: GpuBuffer;
+	/**
+	 * The CFL reads' staging buffers: every one made (`dispose` destroys them), and those not on their way back. Each step reads the CFL
+	 * speed into one of its own, so there are about as many as steps in flight. With a single buffer a step could only read when the last
+	 * read was back, and a reading was up to two queues old (16 steps) when it was used: the 1.1-a-step enlargement then reached 3.5 times
+	 * real air of 17 m/s at the finest grid, and the substep cap, under a contended GPU (#104).
+	 */
+	private readonly cflBuffers: GpuBuffer[] = [];
+	private readonly cflFree: GpuBuffer[] = [];
 	/** Steps whose tally slots have been read back and added to `tally`. */
 	private logged = 0;
 	private readonly tally = { inflow: 0, outflow: 0, emitted: 0, removed: 0, deposited: 0 };
@@ -84,9 +90,7 @@ export class GpuBackend implements FlowBackend {
 	private constructor(
 		readonly solver: GpuSolver,
 		private readonly ownedContext: GpuContext | null
-	) {
-		this.cflStaging = solver.device.createBuffer({ label: 'cfl readback', size: 16, usage: READBACK });
-	}
+	) {}
 
 	/**
 	 * Builds the solver for `config` with the air at `initial` (as `CpuBackend`). Pass a `context` to share one device
@@ -152,16 +156,13 @@ export class GpuBackend implements FlowBackend {
 		s.writeStep(dt, substeps, s.diffusionSubsteps(dt), slot);
 		const encoder = device.createCommandEncoder({ label: 'step' });
 		s.encodeStep(encoder, dt, substeps, slot, s.querySet ? this.steps % PROFILE_STEPS : -1);
-		const readCfl = !this.cflPending;
 		const measuredAt = this.steps + 1;
 		const writes = this.writes;
-		if (readCfl) {
-			const pass = encoder.beginComputePass({ label: 'cfl' });
-			s.measure(pass);
-			pass.end();
-			encoder.copyBufferToBuffer(s.measureResult, 0, this.cflStaging, 0, 16);
-			this.cflPending = true;
-		}
+		const staging = this.cflFree.pop() ?? this.cflBuffer();
+		const pass = encoder.beginComputePass({ label: 'cfl' });
+		s.measure(pass);
+		pass.end();
+		encoder.copyBufferToBuffer(s.measureResult, 0, staging, 0, 16);
 		device.queue.submit([encoder.finish()]);
 		// The queue runs in order, so this resolves once this step, and everything submitted before it, is done. A device that was lost
 		// never finishes the work, and a rejection is how some browsers say so: the session has dropped the world by then, so both count alike.
@@ -170,19 +171,20 @@ export class GpuBackend implements FlowBackend {
 			if (!this.disposed) this.unfinished = Math.max(0, this.unfinished - 1);
 		};
 		device.queue.onSubmittedWorkDone().then(finished, finished);
-		if (readCfl)
-			this.cflStaging.mapAsync(MapMode.READ).then(
-				() => {
-					const speed = new Float32Array(this.cflStaging.getMappedRange())[0];
-					this.cflStaging.unmap();
-					this.cflPending = false;
-					if (writes === this.writes && measuredAt > this.cflMeasuredAt) {
-						this.cflSpeed = speed;
-						this.cflMeasuredAt = measuredAt;
-					}
-				},
-				() => (this.cflPending = false)
-			);
+		// A buffer whose map failed (a lost device, or one destroyed by `dispose`) is not used again.
+		staging.mapAsync(MapMode.READ).then(
+			() => {
+				const speed = new Float32Array(staging.getMappedRange())[0];
+				staging.unmap();
+				if (this.disposed) return;
+				this.cflFree.push(staging);
+				if (writes === this.writes && measuredAt > this.cflMeasuredAt) {
+					this.cflSpeed = speed;
+					this.cflMeasuredAt = measuredAt;
+				}
+			},
+			() => {}
+		);
 		this.time += dt;
 		this.steps++;
 		this.lastDt = dt;
@@ -398,10 +400,17 @@ export class GpuBackend implements FlowBackend {
 		this.disposed = true;
 		this.unfinished = 0;
 		for (const buffers of this.roomBuffers) buffers.uniform.destroy();
-		this.cflStaging.destroy();
+		for (const buffer of this.cflBuffers) buffer.destroy();
 		this.volumeStaging?.destroy();
 		this.solver.dispose();
 		this.ownedContext?.dispose();
+	}
+
+	/** A new staging buffer for a step's CFL read. */
+	private cflBuffer() {
+		const buffer = this.solver.device.createBuffer({ label: 'cfl readback', size: 16, usage: READBACK });
+		this.cflBuffers.push(buffer);
+		return buffer;
 	}
 
 	private copy(encoder: GpuCommandEncoder, source: GpuBuffer, bytes: number, offset = 0): Pending {

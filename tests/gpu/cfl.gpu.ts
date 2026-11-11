@@ -4,8 +4,8 @@ import { openHarness } from './harness';
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 /**
- * The GPU sizes each step's scalar substeps from a CFL reading it reads back without waiting (`GpuBackend.step`): a reading more than a
- * step old is enlarged by 1.1 a step, and with none at all a step takes the 64-substep cap. Its particulate log holds 8,192 steps, which
+ * The GPU sizes each step's scalar substeps from a CFL reading it reads back without waiting (`GpuBackend.step`): every step reads one, a
+ * reading more than a step old is enlarged by 1.1 a step, and with none at all a step takes the 64-substep cap. Its particulate log holds 8,192 steps, which
  * a read must take before they wrap. These run the page's own session on the real device through every state of the clock, and check what
  * the page's frame loop does with those rules (known issue 10 of the status doc, #60).
  */
@@ -92,7 +92,8 @@ function print(scenario: string, r: Run) {
 /**
  * What the page must do with the rules: a step goes without a reading, and so takes the cap, only as the first step of a world built from still
  * air (nothing has been read back yet, and its air has no speed to read); a world that carries another's air sizes even its first step from
- * it; every other step's reading is at most two queues old; nothing is stepped while the clock is paused; and a read takes the log long
+ * it; every other step's reading is at most one queue old, because every step reads one back (a reading up to two queues old, when a
+ * step read only once the last read was back, was enlarged 3.5 times and took the cap on air of 17 m/s at the finest grid, #104); nothing is stepped while the clock is paused; and a read takes the log long
  * before it wraps.
  */
 function check(r: Run) {
@@ -110,7 +111,7 @@ function check(r: Run) {
 		const capped = steps.filter((s) => s.substeps >= CAP && s.age !== null);
 		expect(capped, `world ${world.world}: no step with a reading reached the ${CAP}-substep cap`).toEqual([]);
 		const later = steps.filter((s) => s.phase !== 'warm-up');
-		expect(Math.max(0, ...later.map((s) => s.age ?? 0)), `world ${world.world}: a reading is never more than two queues old`).toBeLessThanOrEqual(2 * LIMIT);
+		expect(Math.max(0, ...later.map((s) => s.age ?? 0)), `world ${world.world}: a reading is never more than one queue old`).toBeLessThanOrEqual(LIMIT);
 		expect(Math.max(0, ...later.map((s) => s.unlogged)), `world ${world.world}: the log is read every few dozen steps`).toBeLessThanOrEqual(64);
 	}
 	expect(r.steps.filter((s) => s.phase.startsWith('paused')), 'no step while the clock is paused').toEqual([]);
