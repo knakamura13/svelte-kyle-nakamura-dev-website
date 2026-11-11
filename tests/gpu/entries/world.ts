@@ -166,6 +166,29 @@ async function houseStepTime(h: number, steps: number, mode: 'tight' | 'paced' =
 	return result;
 }
 
+/**
+ * The house plan at 0.2 m stepped `steps` times back to back with nothing awaited, as `houseStepTime`'s tight mode and the sealed room
+ * do: how many CFL read buffers the backend made, against its in-flight limit. Then the queue is awaited and the page's thread let go,
+ * and one more step is sent and read back, to show the reads go on once a caller yields.
+ */
+async function tightCflReads(steps: number) {
+	const world = await World.create(blankSetup('house'), { plans, models, make: gpu, h: 0.2 });
+	const backend = world.backend as any;
+	const device = backend.solver.device;
+	for (let s = 0; s < steps; s++) backend.step(0.05);
+	const buffers = backend.cflBuffers.length;
+	const settle = async () => {
+		await device.queue.onSubmittedWorkDone();
+		await new Promise((resolve) => setTimeout(resolve, 50));
+	};
+	await settle();
+	backend.step(0.05);
+	await settle();
+	const result = { buffers, limit: backend.limit as number, steps: backend.steps as number, measuredAt: backend.cflMeasuredAt as number };
+	world.dispose();
+	return result;
+}
+
 /** GpuBackend's profiling readout on the house plan: per kernel group, ms, averaged over the profiled steps. */
 async function houseProfile(h: number) {
 	const setup = blankSetup('house');
@@ -181,5 +204,5 @@ async function houseProfile(h: number) {
 	return { validation: error ? error.message : '', groups };
 }
 
-(window as any).world = { windyHome, crossVentilation, houseStepTime, houseProfile };
+(window as any).world = { windyHome, crossVentilation, houseStepTime, houseProfile, tightCflReads };
 (window as any).harnessReady = true;

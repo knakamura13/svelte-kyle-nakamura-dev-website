@@ -53,6 +53,13 @@ test('step time of the house plan on the GPU backend', async () => {
 		}
 });
 
+test('a caller that steps without yielding leaves the GPU backend at most twice its in-flight limit of CFL read buffers, and reads go on after it yields', async () => {
+	const r = await call('tightCflReads', 200);
+	console.log(`200 steps back to back: ${r.buffers} CFL read buffers, limit ${r.limit}; after a yield the reading is of step ${r.measuredAt} of ${r.steps}`);
+	expect(r.buffers, 'the read buffers are bounded').toBeLessThanOrEqual(2 * r.limit);
+	expect(r.measuredAt, 'the step sent after the yield was read back').toBe(r.steps);
+});
+
 test('GpuBackend profiling readout on the house plan (timestamp queries, 256-byte slots)', async () => {
 	const r = await call('houseProfile', 0.1);
 	console.log(`house h 0.1 m profile: ${r.groups ? Object.entries(r.groups).map(([g, ms]) => `${g} ${(ms as number).toFixed(3)} ms`).join(', ') : 'timestamp-query not offered'}`);
