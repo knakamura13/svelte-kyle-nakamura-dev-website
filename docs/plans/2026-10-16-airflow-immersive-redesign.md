@@ -477,4 +477,4 @@ Kyle asked on 2026-11-10 to take #30 to completion. The work ran in agent worktr
 
 **Measured:** this Mac's three browsers hold 60 fps at 1440×900, and the air is live in about 2 s. The page's first load is 838 KB of JavaScript (309 KB gzip) before three.js, and this branch adds 8 KB gzip to it. The 81 KB in #64 traces to an unmeasured note from 2026-10-12 (status doc, "First-load JavaScript").
 
-**Stills:** the smoke stills are in `airflow-checkins/2026-11-10-smoke/`. The runaway notice, the room labels, the sheet grabber, the Gusty switch and the landing card were sent to Kyle on 2026-11-10 and 11, and are not committed.
+**Stills:** the smoke stills are in `airflow-checkins/2026-11-10-smoke/`. The runaway notice, the room labels and the sheet grabber (before and after at 390 px), the Gusty switch and the landing card are in `airflow-checkins/2026-11-11-launch/`.
