@@ -68,28 +68,31 @@
 		{#if placement?.notch && !ui.phone}
 			<span class="notch" data-side={placement.side} style:left="{placement.notch.x}px" style:top="{placement.notch.y}px" aria-hidden="true"></span>
 		{/if}
-		<header class="head">
-			<span class="kind" data-kind={menu.kind} aria-hidden="true"><Icon name={KIND_ICONS[menu.kind]} size={20} /></span>
-			<div class="titles">
-				<p class="title">{menu.title}</p>
-				<p class="subtitle">{menu.subtitle}</p>
-			</div>
-			<button type="button" class="ibtn close" aria-label="Close the menu" onclick={() => experience.closeMenu()}><Icon name="close" size={18} /></button>
-		</header>
-		<MenuBody {target} {menu} compact />
-		<!-- On a phone one sheet shows at a time, so the menu gives way to the Inspector, which keeps the choice. -->
-		<button
-			type="button"
-			class="btn quiet details"
-			class:sheet-more={ui.phone}
-			onclick={() => {
-				ui.inspector = true;
-				if (ui.phone) experience.closeMenu();
-			}}
-		>
-			<Icon name="details" size={16} />
-			<span>All settings</span>
-		</button>
+		<!-- What scrolls in a phone's sheet, so the sheet itself does not clip its grabber. Beside the world it is no box at all. -->
+		<div class="contents" class:scroll={ui.phone}>
+			<header class="head">
+				<span class="kind" data-kind={menu.kind} aria-hidden="true"><Icon name={KIND_ICONS[menu.kind]} size={20} /></span>
+				<div class="titles">
+					<p class="title">{menu.title}</p>
+					<p class="subtitle">{menu.subtitle}</p>
+				</div>
+				<button type="button" class="ibtn close" aria-label="Close the menu" onclick={() => experience.closeMenu()}><Icon name="close" size={18} /></button>
+			</header>
+			<MenuBody {target} {menu} compact />
+			<!-- On a phone one sheet shows at a time, so the menu gives way to the Inspector, which keeps the choice. -->
+			<button
+				type="button"
+				class="btn quiet details"
+				class:sheet-more={ui.phone}
+				onclick={() => {
+					ui.inspector = true;
+					if (ui.phone) experience.closeMenu();
+				}}
+			>
+				<Icon name="details" size={16} />
+				<span>All settings</span>
+			</button>
+		</div>
 	</div>
 {/if}
 
@@ -167,17 +170,25 @@
 		color: var(--hud-muted);
 		font-size: 12px;
 	}
+	.contents {
+		display: contents;
+	}
+	/* The sheet keeps its grabber, which reaches above it; its contents scroll, with room round them for a focus ring. */
 	.menu.sheet {
 		left: calc(10px + env(safe-area-inset-left));
 		right: calc(10px + env(safe-area-inset-right));
 		bottom: calc(86px + env(safe-area-inset-bottom));
-		gap: 10px;
+		grid-template-rows: minmax(0, 1fr);
 		width: auto;
 		max-height: 60vh;
-		padding: 22px 14px 10px;
-		overflow-y: auto;
-		overscroll-behavior: contain;
+		padding: 18px 4px 6px;
 		animation-name: hud-rise;
+	}
+	.menu.sheet .contents {
+		display: grid;
+		gap: 10px;
+		min-height: 0;
+		padding: 4px 10px;
 	}
 	/* At its peek, the title and the presets (or a probe's reading); the fine control, the notes and the actions wait for the grabber. */
 	:global(.hud.phone[data-sheet-size='peek']) .menu.sheet :global(:is(.fine, .caption, .note, .actions)) {

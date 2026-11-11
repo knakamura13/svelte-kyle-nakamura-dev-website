@@ -316,6 +316,43 @@ for (const phone of PHONES) {
 			await expect(hud(page), 'closing the catalog puts the Build tool down').toHaveAttribute('data-tool', 'select');
 		});
 
+		test('every sheet’s grabber is a 44 px target that takes a finger just above the sheet, as well as on it', async ({ page, browserName }) => {
+			await page.emulateMedia({ reducedMotion: 'reduce' });
+			await openPhone(page);
+			/** What a finger meets 10 px above the sheet and 10 px inside it, over the middle of its grabber, and the grabber's height. */
+			const reach = (sheet: ReturnType<Page['locator']>) =>
+				sheet.evaluate((el) => {
+					const grip = el.querySelector<HTMLElement>(':scope > .grip')!;
+					const box = el.getBoundingClientRect();
+					const x = grip.getBoundingClientRect().left + grip.getBoundingClientRect().width / 2;
+					const hits = (y: number) => grip.contains(document.elementFromPoint(x, y));
+					return { height: grip.getBoundingClientRect().height, above: hits(box.top - 10), inside: hits(box.top + 10) };
+				});
+			const expected = { height: 44, above: true, inside: true };
+			// The three sheets whose contents scroll, and the catalog.
+			await page.getByRole('button', { name: /^Weather:/ }).tap();
+			await expect(page.getByRole('dialog', { name: 'Weather' })).toBeVisible();
+			expect(await reach(page.locator('#hud-weather-details')), 'the weather').toEqual(expected);
+			await page.getByRole('button', { name: 'Show all of the weather' }).tap();
+			expect(await reach(page.locator('#hud-weather-details')), 'the weather in full').toEqual(expected);
+			await page.keyboard.press('Escape');
+			await page.getByRole('button', { name: /^Home:/ }).tap();
+			expect(await reach(page.locator('#hud-homes')), 'the homes').toEqual(expected);
+			await page.getByRole('button', { name: 'Close the homes' }).tap();
+			await page.getByRole('button', { name: /^Scenario:/ }).tap();
+			expect(await reach(page.locator('#hud-scenarios')), 'the scenarios').toEqual(expected);
+			await page.getByRole('button', { name: 'Close the scenarios' }).tap();
+			await toolbar(page).locator('[data-tool="build"]').tap();
+			expect(await reach(page.getByRole('region', { name: 'Build' })), 'the catalog').toEqual(expected);
+			if (browserName === 'firefox') return; // NO_HOVER: the window is found with the mouse.
+			await toolbar(page).locator('[data-tool="select"]').tap();
+			const window = await findWindow(page);
+			await page.touchscreen.tap(window.x, window.y);
+			const menu = page.getByRole('dialog', { name: /window/ });
+			await menu.getByRole('button', { name: /^Show all of / }).tap();
+			expect(await reach(menu), "a window's menu in full").toEqual(expected);
+		});
+
 		test('a tap on a window opens its menu', async ({ page, browserName }) => {
 			test.skip(browserName === 'firefox', NO_HOVER);
 			await page.emulateMedia({ reducedMotion: 'reduce' });

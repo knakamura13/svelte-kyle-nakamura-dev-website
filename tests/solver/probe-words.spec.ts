@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { AVERAGE_WINDOW, NOT_IN_AIR, WAITING, describePlace, describeSpot, probeName } from '../../src/lib/experiments/airflow/probeWords';
+import { AVERAGE_WINDOW, NOT_IN_AIR, WAITING, describeCursor, describePlace, describeRefusal, describeSpot, probeName } from '../../src/lib/experiments/airflow/probeWords';
 import type { AirReading } from '../../src/lib/experiments/airflow/readouts';
 import { UNIT_SPACE } from '../../src/lib/experiments/airflow/units';
 
@@ -146,5 +146,25 @@ test.describe('a Probe', () => {
 	test('is named by its id the way the scene labels its readings', () => {
 		expect(probeName('p1')).toBe('Probe 1');
 		expect(probeName('p4')).toBe('Probe 4');
+	});
+});
+
+test.describe('the keyboard cursor, for a screen reader (#62)', () => {
+	test('says the Room and the height, then what the air does there, in the unit system the visitor has', () => {
+		expect(describeCursor('Kitchen', spot, air(), 'metric')).toBe('Kitchen, at a height of 1.10 metres. Air moving toward the east, level, at 0.20 metres per second.');
+		expect(describeCursor('Kitchen', spot, air(), 'imperial')).toBe('Kitchen, at a height of 3 feet 7 inches. Air moving toward the east, level, at 0.45 miles per hour.');
+		expect(describeCursor('Kitchen', spot, air({ u: 0, speed: 0 }), 'metric')).toMatch(/^Kitchen, at a height of 1\.10 metres\. Air is still, at [\d.]+ metres per second\.$/);
+	});
+
+	test('says when there is no air under it, or no reading yet', () => {
+		expect(describeCursor('Bedroom 1', spot, air({ inAir: false }), 'metric')).toBe('Bedroom 1, at a height of 1.10 metres. Furniture or a wall here, so there is no air to read.');
+		expect(describeCursor(null, spot, air({ inAir: false }), 'metric')).toBe('Not in a room, at a height of 1.10 metres. There is no air to read here.');
+		expect(describeCursor('Bedroom 1', spot, null, 'metric')).toBe(`Bedroom 1, at a height of 1.10 metres. ${WAITING}`);
+	});
+
+	test('says why Enter did nothing, and what to do', () => {
+		expect(describeRefusal('pin', 'Kitchen', air({ inAir: false }))).toBe('No probe pinned: the cursor is on furniture or a wall. Move it with the arrow keys to the air.');
+		expect(describeRefusal('smoke', null, air({ inAir: false }))).toBe('No smoke released: the cursor is not in a room. Move it with the arrow keys to the air.');
+		expect(describeRefusal('pin', 'Kitchen', null)).toBe('No probe pinned: the air here has not been read yet. Try again in a moment.');
 	});
 });
