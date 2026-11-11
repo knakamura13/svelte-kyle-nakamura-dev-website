@@ -48,9 +48,10 @@ jobs:
       matrix:
         # Each browser is split on its own. The Chromium and WebKit airflow specs are the slow ones, so they get more shards.
         include:
-          - { project: chromium, shard: 1, total: 3 }
-          - { project: chromium, shard: 2, total: 3 }
-          - { project: chromium, shard: 3, total: 3 }
+          - { project: chromium, shard: 1, total: 4 }
+          - { project: chromium, shard: 2, total: 4 }
+          - { project: chromium, shard: 3, total: 4 }
+          - { project: chromium, shard: 4, total: 4 }
           - { project: webkit, shard: 1, total: 2 }
           - { project: webkit, shard: 2, total: 2 }
           - { project: firefox, shard: 1, total: 1 }

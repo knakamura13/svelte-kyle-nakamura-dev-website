@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { chromium, devices, expect, test, type CDPSession, type Page } from '@playwright/test';
 import { setupToHash } from '../src/lib/experiments/airflow/link';
 import { blankSetup } from '../src/lib/experiments/airflow/state';
-import { requireWebGL2, unlessStalled } from './webgl';
+import { requireWebGL2 } from './webgl';
 
 // Software WebGL (the headless CI browsers) compiles the world's shaders for many seconds, so a test that waits for the world gets 90 s.
 test.beforeEach(async ({ page }) => {
@@ -392,11 +392,9 @@ for (const phone of PHONES) {
 			// How much smoke is out depends on how fast this machine runs the simulation, so the plume is watched as it grows. The streaks
 			// moving meanwhile are not counted (`airShares` leaves out a pixel that is the air's blue in either picture).
 			let smoke = 0;
-			await unlessStalled(page, () =>
-				expect
-					.poll(async () => (smoke = (await airShares(page, air, await worldShot(page))).smoke), { message: 'the share of the world a burst of smoke clearly covers', timeout: 20_000, intervals: [1000] })
-					.toBeGreaterThan(0.003)
-			);
+			await expect
+				.poll(async () => (smoke = (await airShares(page, air, await worldShot(page))).smoke), { message: 'the share of the world a burst of smoke clearly covers', timeout: 20_000, intervals: [1000] })
+				.toBeGreaterThan(0.003);
 			test.info().annotations.push({ type: 'smoke', description: `${(smoke * 100).toFixed(2)}% of the world's pixels are clearly greyer` });
 		});
 

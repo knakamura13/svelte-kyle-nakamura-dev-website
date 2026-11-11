@@ -45,6 +45,7 @@ export async function unlessStalled(page: Page, check: () => Promise<unknown>, m
 		await check();
 	} catch (error) {
 		const fps = await framesPerSecond(page);
+		test.info().annotations.push({ type: 'frames', description: `The stage drew ${fps.toFixed(1)} frames a second when this check failed.` });
 		if (fps < minFps) test.skip(true, `The stage drew ${fps.toFixed(1)} frames a second with WebGL in software here, under ${minFps}, so the camera's movement cannot be seen in the time the test allows.`);
 		throw error;
 	}
