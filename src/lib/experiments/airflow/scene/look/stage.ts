@@ -125,6 +125,11 @@ interface Slot {
 	/** Whether the opening plays once the world is on show, and the one playing. */
 	playOpening: boolean;
 	opening: CameraOpening | null;
+	/**
+	 * What became of the opening, for the view's `data-opening`: playing, ended (the camera is at the drift's end) or stopped (the visitor
+	 * took the camera). Null where none played. Tests wait on it, since the drift keeps its own clock and not the page's.
+	 */
+	drift: 'playing' | 'ended' | 'stopped' | null;
 	undo: (() => void)[];
 }
 
@@ -247,6 +252,7 @@ export class AirflowStage implements StageHost {
 			warmed: null,
 			playOpening: false,
 			opening: null,
+			drift: null,
 			undo: []
 		};
 		this.slot = slot;
@@ -341,7 +347,10 @@ export class AirflowStage implements StageHost {
 		if (slot.phase === 'live') return;
 		slot.phase = 'live';
 		const opening = slot.playOpening && !slot.world.controls.touched ? slot.world.opening?.(slot.width / Math.max(1, slot.height)) : null;
-		if (opening) slot.opening = new CameraOpening(slot.world.controls, opening);
+		if (opening) {
+			slot.opening = new CameraOpening(slot.world.controls, opening);
+			slot.drift = 'playing';
+		}
 		slot.playOpening = false;
 		performance.mark('airflow:first-frame');
 		const { dataset } = slot.view;
@@ -464,7 +473,12 @@ export class AirflowStage implements StageHost {
 		// The opening moves the camera before the world updates, so the walls are cut for where the camera is this frame. It keeps to the
 		// clock, so it takes as long on a device that draws a few frames a second as on one that draws sixty (a quarter of a second at
 		// most each frame, so a tab that was hidden picks up where it was).
-		if (slot.opening && !slot.opening.update(Math.min(0.25, real))) slot.opening = null;
+		if (slot.opening && !slot.opening.update(Math.min(0.25, real))) {
+			slot.opening = null;
+			slot.drift = 'ended';
+			// The frame that puts the camera at the drift's end is drawn, and its marks written, even if nothing else moves.
+			this.dirty = true;
+		}
 		let moving = slot.world.update(dt) || slot.opening !== null;
 		let quiet = false;
 		if (slot.phase === 'warm-up') {
@@ -494,6 +508,8 @@ export class AirflowStage implements StageHost {
 			zoom: controls.goal.zoom.toFixed(2),
 			focus: `${controls.goal.x.toFixed(2)},${controls.goal.z.toFixed(2)}`
 		};
+		// Written with the camera's marks, so `ended` is never seen beside a camera short of the drift's end.
+		if (slot.drift) marks.opening = slot.drift;
 		for (const [key, value] of Object.entries(marks)) if (dataset[key] !== value) dataset[key] = value;
 	}
 
@@ -528,6 +544,8 @@ export class AirflowStage implements StageHost {
 			if (!slot.opening) return;
 			slot.opening.stop();
 			slot.opening = null;
+			slot.drift = 'stopped';
+			view.dataset.opening = 'stopped';
 		};
 		for (const type of ['pointerdown', 'keydown', 'wheel', 'touchstart'] as const) on(window, type, takeOver, { capture: true, passive: true });
 
