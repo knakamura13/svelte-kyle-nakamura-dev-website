@@ -321,4 +321,39 @@ test.describe('the HUD', () => {
 			expect(await scan()).toEqual([]);
 		});
 	}
+
+	// #97: at a tablet's 768 px the clock's "Running at N× real time" line and the overlay switcher never overlap.
+	test('at 768 px the clock line, when the clock is behind, does not overlap the overlay switcher', async ({ page }) => {
+		await page.setViewportSize({ width: 768, height: 1024 });
+		// No WebGPU, so the CPU worker runs the air and cannot keep up with 20×.
+		await page.addInitScript(() => Object.defineProperty(navigator, 'gpu', { value: undefined, configurable: true }));
+		await openHud(page);
+		if (await page.getByRole('button', { name: 'Resume', exact: true }).isVisible()) await page.keyboard.press('p');
+		await page.getByRole('group', { name: 'Speed' }).getByRole('button', { name: /^20×/ }).click();
+		const behind = page.locator('.clock-behind');
+		await expect(behind).toBeVisible({ timeout: 90_000 });
+		const line = (await behind.boundingBox())!;
+		const overlay = (await page.getByRole('group', { name: 'Overlay' }).boundingBox())!;
+		const overlap = line.x < overlay.x + overlay.width && overlay.x < line.x + line.width && line.y < overlay.y + overlay.height && overlay.y < line.y + line.height;
+		expect(overlap, 'the clock line and the overlay switcher overlap').toBe(false);
+		const time = (await page.locator('.cluster.time').boundingBox())!;
+		const apart = time.x + time.width <= overlay.x || overlay.x + overlay.width <= time.x || time.y + time.height <= overlay.y || overlay.y + overlay.height <= time.y;
+		expect(apart, 'the time cluster and the overlay switcher overlap').toBe(true);
+	});
+
+	// #97: the Smoke legend's ticks read in ppm above the bar and µg/m³ below it, as its unit line says.
+	for (const [width, height] of [
+		[1280, 800],
+		[390, 844]
+	])
+		test(`the Smoke legend's ticks read in ppm above the bar and µg/m³ below it, at ${width} px`, async ({ page }) => {
+			await page.setViewportSize({ width, height });
+			await openHud(page);
+			if (width < 700) await page.getByRole('button', { name: 'View' }).click();
+			await page.getByRole('group', { name: 'Overlay' }).getByRole('button', { name: 'Smoke', exact: true }).click();
+			const legend = page.getByRole('group', { name: 'Legend: Particulates (PM2.5)' });
+			await expect(legend.locator('.legend-unit')).toHaveText('ppm above, µg/m³ below');
+			await expect(legend.locator('.legend-ticks.above li')).toHaveText(['0.001', '0.01', '0.1', '1']);
+			await expect(legend.locator('.legend-ticks:not(.above) li')).toHaveText(['1.2', '12', '120', '1,200']);
+		});
 });

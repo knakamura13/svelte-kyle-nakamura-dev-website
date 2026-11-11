@@ -46,9 +46,15 @@
 	{#if legend}
 		<div class="legend glass" class:floating role="group" aria-label="Legend: {legend.title}">
 			<p class="legend-title"><span>{legend.title}</span><span class="legend-unit">{legend.unit}</span></p>
+			<!-- A tick with a second unit (particulates: ppm above the bar, µg/m³ below it, as the unit line says) has its first label up here. -->
+			{#if legend.ticks.some((tick) => tick.second)}
+				<ol class="legend-ticks above" aria-hidden="true">
+					{#each legend.ticks as tick (tick.at)}<li style:--at={tick.at}>{tick.label.value}</li>{/each}
+				</ol>
+			{/if}
 			<div class="legend-bar" role="img" aria-label={legend.description} style:background={legend.gradient}></div>
 			<ol class="legend-ticks" aria-hidden="true">
-				{#each legend.ticks as tick (tick.at)}<li style:--at={tick.at}>{tick.label.value}</li>{/each}
+				{#each legend.ticks as tick (tick.at)}<li style:--at={tick.at}>{(tick.second ?? tick.label).value}</li>{/each}
 			</ol>
 		</div>
 	{/if}
@@ -224,6 +230,10 @@
 		color: var(--hud-muted);
 		font-size: 10.5px;
 	}
+	.legend-ticks.above {
+		height: 14px;
+		margin: 0 0 4px;
+	}
 	.legend-ticks li {
 		position: absolute;
 		top: 0;
@@ -260,6 +270,30 @@
 			overflow: hidden;
 			clip-path: inset(50%);
 			white-space: nowrap;
+		}
+	}
+
+	/*
+	 * A tablet (700 to 959 px): the time, the overlays and the walls need about 810 px in one row, and 1fr columns of a narrower bar let the time
+	 * cluster run under the overlay switcher, its "Running at N× real time" line with it. Here the overlays take the bottom row, centred, and the
+	 * time and the walls share the row above, so nothing overlaps. From 960 px the one row fits again, as it did before.
+	 */
+	@media (min-width: 700px) and (max-width: 959px) {
+		.bar {
+			grid-template-columns: minmax(0, 1fr) auto;
+			grid-template-areas:
+				'time right'
+				'overlays overlays';
+			row-gap: 10px;
+		}
+		.time {
+			grid-area: time;
+		}
+		.right {
+			grid-area: right;
+		}
+		.overlays {
+			grid-area: overlays;
 		}
 	}
 

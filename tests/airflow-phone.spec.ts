@@ -1,5 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { chromium, devices, expect, test, type CDPSession, type Page } from '@playwright/test';
+import { plans } from '../src/lib/experiments/airflow/homes/plans';
+import type { PlanId } from '../src/lib/experiments/airflow/homes/types';
 import { setupToHash } from '../src/lib/experiments/airflow/link';
 import { SCENARIOS } from '../src/lib/experiments/airflow/scenarios';
 import { blankSetup } from '../src/lib/experiments/airflow/state';
@@ -251,28 +253,34 @@ for (const phone of PHONES) {
 			expect(seen.outside, "panels past the screen's edge").toEqual([]);
 		});
 
-		test('the camera frames the whole home above a sheet at its peek, under the top bar', async ({ page }) => {
-			await page.emulateMedia({ reducedMotion: 'reduce' });
-			// On the default view, which a share link opens on: a visit without one opens on the opening's view of the living room (#82).
-			await openPhone(page, `${PAGE}${setupToHash(blankSetup('two-bedroom'))}`);
-			await toolbar(page).locator('[data-tool="build"]').tap();
-			await expect(hud(page)).toHaveAttribute('data-sheet-size', 'peek');
-			const top = (await page.locator('.hud-top .topbar').boundingBox())!;
-			const catalog = (await page.getByRole('region', { name: 'Build' }).boundingBox())!;
-			const rooms = view(page).locator('.stage-label[data-tone="room"]');
-			await expect(rooms.first()).toBeVisible();
-			const shown = [];
-			for (const room of await rooms.all()) if (await room.isVisible()) shown.push(room);
-			expect(shown, 'every room of the two-bedroom is named in view').toHaveLength(7);
-			for (const room of shown) {
-				const box = (await room.boundingBox())!;
-				const name = await room.textContent();
-				expect(box.y, `${name} is under the top bar`).toBeGreaterThanOrEqual(top.y + top.height);
-				expect(box.y + box.height, `${name} is over the catalog`).toBeLessThanOrEqual(catalog.y);
-				expect(box.x, `${name} is on the screen`).toBeGreaterThanOrEqual(0);
-				expect(box.x + box.width, `${name} is on the screen`).toBeLessThanOrEqual(phone.width);
-			}
-		});
+		// The two-bedroom, and the house, the largest Home (#63): the same framing, with every room of the Home named in view.
+		for (const home of [
+			{ id: 'two-bedroom' as PlanId, rooms: 7 },
+			{ id: 'house' as PlanId, rooms: plans.find((plan) => plan.id === 'house')!.rooms.length }
+		]) {
+			test(`the camera frames the whole ${home.id} above a sheet at its peek, under the top bar`, async ({ page }) => {
+				await page.emulateMedia({ reducedMotion: 'reduce' });
+				// On the default view, which a share link opens on: a visit without one opens on the opening's view of the living room (#82).
+				await openPhone(page, `${PAGE}${setupToHash(blankSetup(home.id))}`);
+				await toolbar(page).locator('[data-tool="build"]').tap();
+				await expect(hud(page)).toHaveAttribute('data-sheet-size', 'peek');
+				const top = (await page.locator('.hud-top .topbar').boundingBox())!;
+				const catalog = (await page.getByRole('region', { name: 'Build' }).boundingBox())!;
+				const rooms = view(page).locator('.stage-label[data-tone="room"]');
+				await expect(rooms.first()).toBeVisible();
+				const shown = [];
+				for (const room of await rooms.all()) if (await room.isVisible()) shown.push(room);
+				expect(shown, `every room of the ${home.id} is named in view`).toHaveLength(home.rooms);
+				for (const room of shown) {
+					const box = (await room.boundingBox())!;
+					const name = await room.textContent();
+					expect(box.y, `${name} is under the top bar`).toBeGreaterThanOrEqual(top.y + top.height);
+					expect(box.y + box.height, `${name} is over the catalog`).toBeLessThanOrEqual(catalog.y);
+					expect(box.x, `${name} is on the screen`).toBeGreaterThanOrEqual(0);
+					expect(box.x + box.width, `${name} is on the screen`).toBeLessThanOrEqual(phone.width);
+				}
+			});
+		}
 
 		test('the first frame’s hint stands over the toolbar with its pointer on Build', async ({ page }) => {
 			await page.emulateMedia({ reducedMotion: 'reduce' });
