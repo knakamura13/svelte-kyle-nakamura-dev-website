@@ -1,7 +1,17 @@
 import { expect, test } from '@playwright/test';
-import { GUST_FACTOR, GUST_INTENSITY, GUST_MEAN_SQUARE, GUST_LATERAL, GUST_LENGTH, GustSeries, gustAt } from '../../src/lib/experiments/airflow/homes/gust';
+import {
+	GUST_DIRECTIONS,
+	GUST_FACTOR,
+	GUST_INTENSITY,
+	GUST_MEAN_SQUARE,
+	GUST_LATERAL,
+	GUST_LENGTH,
+	GustSeries,
+	gustAt,
+	gustDirectionWeights
+} from '../../src/lib/experiments/airflow/homes/gust';
 import { rasterizePlan } from '../../src/lib/experiments/airflow/homes/rasterize';
-import { WIND_AT_EAVES, exteriorState, facadeWindPressure, gustPressures } from '../../src/lib/experiments/airflow/homes/weather';
+import { WIND_AT_EAVES, exteriorState, facadeWindPressure, gustPressures, meanGustPressure, meanGustPressures } from '../../src/lib/experiments/airflow/homes/weather';
 import { SIDE } from '../../src/lib/experiments/airflow/solver/grid';
 import { CpuBackend } from '../../src/lib/experiments/airflow/solver/cpu/backend';
 import { WorkerBackend } from '../../src/lib/experiments/airflow/solver/cpu/proxy';
@@ -104,7 +114,7 @@ test.describe('the gust series', () => {
 });
 
 test.describe('gust pressures', () => {
-	test('are each side’s ½ρU(t)²Cp(θ(t)) less the steady wind’s, which exteriorState already holds, and nothing when steady', () => {
+	test('are each side’s ½ρU(t)²Cp(θ(t)) less its long-run mean, on top of the steady wind’s, which exteriorState already holds, and nothing when steady', () => {
 		const raster = rasterizePlan(PLAN, 0.3, { furniture: false });
 		const gusty = gustySetup(true).conditions;
 		const series = new GustSeries(1);
@@ -113,11 +123,32 @@ test.describe('gust pressures', () => {
 		const steady = exteriorState(raster, gusty, gusty.indoorTemp, AIR);
 		const west = raster.openings.find((o) => o.spec.id === 'west')!;
 		const at = (side: number) => steady.sides[side][3 * west.faces[0].slot];
-		expect(pressures[SIDE.X0] + at(SIDE.X0)).toBeCloseTo(facadeWindPressure(PLAN, 'west', 270 + gust.veer, gust.speed / Math.sqrt(GUST_MEAN_SQUARE), AIR.rho), 4);
-		expect(pressures[SIDE.X1]).toBeCloseTo(facadeWindPressure(PLAN, 'east', 270 + gust.veer, gust.speed / Math.sqrt(GUST_MEAN_SQUARE), AIR.rho) - facadeWindPressure(PLAN, 'east', 270, MEAN, AIR.rho), 5);
+		const departure = (facade: 'west' | 'east') => facadeWindPressure(PLAN, facade, 270 + gust.veer, gust.speed, AIR.rho) - meanGustPressure(PLAN, facade, 270, MEAN, AIR.rho);
+		expect(pressures[SIDE.X0] + at(SIDE.X0)).toBeCloseTo(facadeWindPressure(PLAN, 'west', 270, MEAN, AIR.rho) + departure('west'), 4);
+		expect(pressures[SIDE.X1]).toBeCloseTo(departure('east'), 5);
 		for (const side of [SIDE.Y0, SIDE.Y1, SIDE.Z0, SIDE.Z1]) expect(pressures[side]).toBe(0);
+		// The world works the means out once per setup and passes them in; the result is the same.
+		const means = meanGustPressures(raster, gusty, AIR.rho);
+		expect([...gustPressures(raster, gusty, new GustSeries(1), 7.3, AIR.rho, new Float32Array(6), means)]).toEqual([...pressures]);
 		expect([...gustPressures(raster, gustySetup(false).conditions, series, 7.3, AIR.rho)]).toEqual([0, 0, 0, 0, 0, 0]);
+		// Calm: no gusts and no mean to take away; nothing is divided by the speed.
 		expect([...gustPressures(raster, { ...gusty, windSpeed: 0 }, series, 7.3, AIR.rho)]).toEqual([0, 0, 0, 0, 0, 0]);
+		expect([...meanGustPressures(raster, { ...gusty, windSpeed: 0 }, AIR.rho)]).toEqual([0, 0, 0, 0, 0, 0]);
+	});
+
+	test('their long-run mean is a weighted sum over directions that scales with the speed squared, and the weights sum to the series’ mean square speed', () => {
+		const weights = gustDirectionWeights();
+		expect(weights.length).toBe(GUST_DIRECTIONS);
+		const sum = weights.reduce((a, b) => a + b, 0);
+		// 1 + Iu²(2 + ρu)/3 + Iv²(2 + ρv)/3: the sourced mean square less the interpolation's quarter of a percent (homes/gust.ts).
+		const interpolated = 1 + GUST_INTENSITY ** 2 * ((2 + Math.exp(-1 / 50)) / 3) + (GUST_LATERAL * GUST_INTENSITY) ** 2 * ((2 + Math.exp(-3 / 50)) / 3);
+		expect(sum).toBeCloseTo(interpolated, 5);
+		expect(sum / GUST_MEAN_SQUARE).toBeGreaterThan(0.997);
+		// Even in the direction: a veer one way is as likely as the other.
+		for (let k = 1; k < GUST_DIRECTIONS / 2; k++) expect(weights[GUST_DIRECTIONS - k]).toBeCloseTo(weights[k], 12);
+		const at = (speed: number) => meanGustPressure(PLAN, 'west', 250, speed, AIR.rho);
+		expect(at(2 * MEAN) / at(MEAN)).toBeCloseTo(4, 10);
+		expect(at(0)).toBe(0);
 	});
 });
 
@@ -129,7 +160,7 @@ test.describe('gust pressures', () => {
  * - The air moved in the gusty minute is within 3 % of what quasi-steady theory expects of this minute of this series (the mean of
  *   √(Δp(t)/Δp̄)), which is what the model itself is held to. Against the steady minute it is within 30 %: one minute holds only about
  *   five gust time scales (L/Ū = 5.8 s), so the minute's own mean speed differs from the long-run mean by a standard error of
- *   σu/Ū·√(2T/60) = 0.355·√(11.5/60) = 0.16, and 30 % is about two of those. Over a long run the gusty wind moves about 93 % of the
+ *   σu/Ū·√(2T/60) = 0.355·√(11.5/60) = 0.16, and 30 % is about two of those. Over a long run the gusty wind moves about 92 % of the
  *   steady wind's air (the test below): the flow goes as the square root of a pressure whose mean is the steady wind's, and a square
  *   root's mean is below the square root of the mean.
  */
@@ -164,31 +195,63 @@ for (const [name, make] of [
 	});
 
 /**
- * The gusts' long-run mean pressure. Dividing the dynamic pressure by GUST_MEAN_SQUARE makes its mean the steady wind's to the series'
- * own sampling (measured over 100 h: within 1 %, asserted to 1.5 %). What is left on a single wall is the direction's wobble through
- * the Cp curve: the windward wall's Cp is at its peak square on (0.603), so a wind turned either way pushes less, and the leeward wall's
- * grows more negative off its axis. Over 100 h of the series that is 92.8 % of the steady wind's pressure on the west wall and 108.0 %
- * on the east, which mostly cancel in the difference across the room that drives the cross-flow (97.0 %). The normalisation does not
- * correct the wobble's share; section 2d of the research note says why it is left. Through the square-root law the cross-flow of 100 h
- * is 93.4 % of the steady wind's.
+ * The gusts' long-run mean pressure. Each wall's gust term is ½ρU(t)²Cp(θ(t)) less its own long-run mean, worked out from the series'
+ * statistics (homes/gust.ts `gustDirectionWeights`), so the mean pressure is the steady wind's on every wall at every bearing. Before
+ * (PR #103's /interrogate, finding 3) the dynamic pressure was divided by GUST_MEAN_SQUARE and the direction's wobble through Cp was
+ * left in, which put the difference across the room anywhere from 89.7 % (wind from 180°) to 102.3 % (202.5°) of the steady wind's
+ * and a single wall from 84 % to 113 % (63 % on a wall the wind runs along).
  *
- * Tolerances. For 100 h of the series: the dynamic pressure within 1.5 %, each wall within 10 % (the wobble's 7 to 8 %), the difference
- * across the room within 5 % (the wobble's 3 %). For an hour of the solver: each wall within 15 % of the steady wind's and the
- * difference across within 8 % (the wobble's share plus an hour's sampling: an hour holds about 300 gust time scales, so a mean
- * pressure that varies by about 70 % of itself has a standard error near 0.7/√300 = 4 %, and two of those less the cancelling across
- * the room); and the solver's mean within 1 % of the series' own at the same moments, which is what the backends are tested for.
+ * Tolerances, for 100 h of the series. The mean is now exact, so what is left is sampling: the standard error of each mean, from 100
+ * one-hour batches, is at most 0.0027 of the dynamic pressure q = ½ρŪ² on a wall and 0.42 % of the steady difference across the room,
+ * at every bearing tested. A wall's mean is held within 0.01 q of the steady wind's (in q, not as a share, because a wall the wind runs
+ * along has a steady Cp near zero: 0.07 on the south wall from 247.5°), and the difference across the room within 1.5 %: both about 3.7
+ * standard errors. At 270° the same bounds as shares are 2 % on the west wall (Cp 0.60) and 5 % on the east (Cp −0.23). Measured: every
+ * wall within 0.0014 q and every difference across within 0.2 %.
+ *
+ * The gusts keep their sourced size: the windward wall's pressure spreads by about twice the turbulence intensity times its mean, as the
+ * linear quasi-steady relation gives (p′ = ½ρŪ²Cp·2u′/Ū), measured at 0.365 against Iu = 0.355 and held within 6 %; the square of the
+ * speed and the direction's wobble add the rest. Through the square-root law the cross-flow of 100 h is 91.5 % of the steady wind's
+ * (93.4 % before, when the gusts were scaled down by 1.207), held between 85 and 97 %.
+ *
+ * For an hour of the solver: each wall within 15 % of the steady wind's and the difference across within 8 %. From the same batches an
+ * hour's mean varies by about 4 % of itself on either wall and across the room, so these are about 3.7 and 2 standard deviations. And the
+ * solver's mean within 1 % of the series' own at the same moments, which is what the backends are tested for.
  */
-test('the series’ long-run mean dynamic pressure is the steady wind’s, and so is the pressure difference across the room', () => {
+test('the series’ long-run mean dynamic pressure is the sourced one, and at 270° each wall’s mean pressure and the difference across the room are the steady wind’s', () => {
 	const mean = seriesMeanPressure(100);
+	const at = mean.bearings[0];
 	const flow = quasiSteadyRatio(100 * 3600);
+	const share = (facade: 'west' | 'east') => at.wall[facade].mean / at.wall[facade].steady;
+	const intensity = at.wall.west.spread / (2 * at.wall.west.steady);
 	console.log(
-		`100 h of the series: dynamic pressure ${(mean.dynamic * 100).toFixed(2)} % of the steady wind's (GUST_MEAN_SQUARE ${GUST_MEAN_SQUARE.toFixed(4)}); wall pressure ${(mean.west * 100).toFixed(2)} % on the west wall, ${(mean.east * 100).toFixed(2)} % on the east, ${(mean.across * 100).toFixed(2)} % across the room; quasi-steady cross-flow ${(flow.ratio * 100).toFixed(2)} % of the steady wind's at a mean speed of ${(flow.meanSpeed * 100).toFixed(2)} % of Ū`
+		`100 h of the series: dynamic pressure ${(mean.dynamic * 100).toFixed(2)} % of the sourced (GUST_MEAN_SQUARE ${GUST_MEAN_SQUARE.toFixed(4)}); wall pressure ${(share('west') * 100).toFixed(2)} % on the west wall, ${(share('east') * 100).toFixed(2)} % on the east, ${(at.across * 100).toFixed(2)} % across the room; the west wall's spread over twice its mean ${intensity.toFixed(3)} (Iu ${GUST_INTENSITY.toFixed(3)}); quasi-steady cross-flow ${(flow.ratio * 100).toFixed(2)} % of the steady wind's at a mean speed of ${(flow.meanSpeed * 100).toFixed(2)} % of Ū`
 	);
 	expect(GUST_MEAN_SQUARE).toBeCloseTo(1 + GUST_INTENSITY ** 2 * (1 + GUST_LATERAL ** 2), 12);
 	expect(Math.abs(mean.dynamic - 1)).toBeLessThan(0.015);
-	expect(Math.abs(mean.west - 1)).toBeLessThan(0.1);
-	expect(Math.abs(mean.east - 1)).toBeLessThan(0.1);
-	expect(Math.abs(mean.across - 1)).toBeLessThan(0.05);
+	expect(at.pair).toEqual(['west', 'east']);
+	expect(Math.abs(share('west') - 1)).toBeLessThan(0.02);
+	expect(Math.abs(share('east') - 1)).toBeLessThan(0.05);
+	expect(Math.abs(at.across - 1)).toBeLessThan(0.015);
+	expect(Math.abs(intensity / GUST_INTENSITY - 1)).toBeLessThan(0.06);
+	// The gusts still cost the cross-flow a little over the long run: a square root's mean is below the square root of the mean.
+	expect(flow.ratio).toBeGreaterThan(0.85);
+	expect(flow.ratio).toBeLessThan(0.97);
+});
+
+test('at every bearing, each wall’s long-run mean pressure under the gusts and the difference across the room are the steady wind’s', () => {
+	// Square on to the long (south) facade, three obliques through the diagonal, square on to the short (west) facade, and oblique to it.
+	const bearings = [180, 202.5, 225, 247.5, 270, 300];
+	const { bearings: results } = seriesMeanPressure(100, bearings);
+	const q = 0.5 * AIR.rho * MEAN * MEAN;
+	const failures: string[] = [];
+	for (const r of results) {
+		const walls = Object.entries(r.wall).map(([facade, w]) => `${facade} ${((w.mean - w.steady) / q).toFixed(4)} q off (${((100 * w.mean) / w.steady).toFixed(1)} % of ${(w.steady / q).toFixed(3)} q)`);
+		const line = `from ${r.from}°: across ${r.pair.join('–')} ${(100 * r.across).toFixed(2)} %; ${walls.join(', ')}`;
+		console.log(line);
+		const worst = Math.max(...Object.values(r.wall).map((w) => Math.abs(w.mean - w.steady) / q));
+		if (worst >= 0.01 || Math.abs(r.across - 1) >= 0.015) failures.push(line);
+	}
+	expect(failures, 'bearings with a wall more than 0.01 q from the steady wind’s mean, or the difference across more than 1.5 % from it').toEqual([]);
 });
 
 test('on the CPU, the long-run mean outside pressure on each window is the steady wind’s', async () => {

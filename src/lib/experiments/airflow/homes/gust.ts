@@ -32,10 +32,9 @@ export const GUST_LATERAL_TIME = 1 / 3;
 export const GUST_FACTOR = Math.sqrt(1 + 7 * GUST_INTENSITY);
 
 /**
- * The long-run mean of U(t)² over Ū²: (Ū + u′)² + v′² averages to Ū²(1 + Iu² + Iv²), with Iv = GUST_LATERAL·Iu. The pressure
- * coefficients are mean pressures over the mean wind's dynamic pressure, measured in turbulent wind, so ½ρU(t)²Cp would count the
- * turbulence twice and push about a fifth harder on average than the steady wind. The gusts' dynamic pressure is divided by this,
- * so its long-run mean is the steady wind's (docs/research/airflow/openings-and-wind.md, section 2d).
+ * The long-run mean of U(t)² over Ū² that the sourced intensities give: (Ū + u′)² + v′² averages to Ū²(1 + Iu² + Iv²), with
+ * Iv = GUST_LATERAL·Iu. A target the series is measured against, not an input to it: the pressure takes the gusts' mean out exactly
+ * with `gustDirectionWeights` (docs/research/airflow/openings-and-wind.md, section 2d).
  */
 export const GUST_MEAN_SQUARE = 1 + GUST_INTENSITY ** 2 + (GUST_LATERAL * GUST_INTENSITY) ** 2;
 
@@ -122,4 +121,47 @@ export function gustAt(series: GustSeries, time: number, mean: number): Gust {
 	const along = mean * (1 + GUST_INTENSITY * u);
 	const across = mean * GUST_LATERAL * GUST_INTENSITY * v;
 	return { speed: Math.hypot(along, across), veer: (Math.atan2(across, along) * 180) / Math.PI };
+}
+
+/** How many directions, evenly spaced all the way round, `gustDirectionWeights` weighs. */
+export const GUST_DIRECTIONS = 360;
+
+let weights: Float64Array | null = null;
+
+/**
+ * Weights w_k for the directions k·360/GUST_DIRECTIONS degrees from the mean, such that for any f of the direction
+ * Σ w_k·f(k·360/GUST_DIRECTIONS) is the series' long-run mean of (U(t)/Ū)²·f(veer(t)). With f a wall's Cp(θ̄ + veer) that is the
+ * gusts' long-run mean wall pressure over ½ρŪ², the same for every mean speed, since the series' departures scale with Ū.
+ *
+ * The wind over Ū is w = (1 + Iu·u, Iv·v) along and across the mean direction, with u and v independent normals (two independent
+ * processes, each Gaussian at every τ). In polar form w = r(cos φ, sin φ) the mean is ∫ f(φ)·G(φ) dφ with G(φ) = ∫ r³·p(r, φ) dr, the
+ * density p of w times r² and the r of the polar area: one integral over r per direction, done once. The series is sampled every STEP and
+ * interpolated, which lowers its variance between samples to (1 − s)² + s² + 2s(1 − s)ρ at a share s of the step, with ρ the step's
+ * correlation; over the long run s is spread evenly, so the variance is its mean over s, (2 + ρ)/3. Using the mean variance in place of the
+ * mixture over s is exact for |w|² and leaves a fourth-order term in the spread of that variance, under 10⁻⁵ of the mean pressure.
+ *
+ * Their sum is the mean of (U/Ū)², 1 + Iu²(2 + ρu)/3 + Iv²(2 + ρv)/3, a quarter of a percent under GUST_MEAN_SQUARE.
+ */
+export function gustDirectionWeights(): Float64Array {
+	if (weights) return weights;
+	const a = GUST_INTENSITY * Math.sqrt((2 + Math.exp(-STEP)) / 3);
+	const b = GUST_LATERAL * GUST_INTENSITY * Math.sqrt((2 + Math.exp(-STEP / GUST_LATERAL_TIME)) / 3);
+	// r runs to ten along-wind spreads past the mean wind, where the density is e^-50 of its peak; the integrand is a smooth bump, so
+	// the trapezoid rule on 400 points is exact to far below what matters.
+	const radii = 400;
+	const dr = (1 + 10 * a) / radii;
+	const dphi = (2 * Math.PI) / GUST_DIRECTIONS;
+	const scale = (dr * dphi) / (2 * Math.PI * a * b);
+	const result = new Float64Array(GUST_DIRECTIONS);
+	for (let k = 0; k < GUST_DIRECTIONS; k++) {
+		const c = Math.cos(k * dphi);
+		const s = Math.sin(k * dphi);
+		let sum = 0;
+		for (let j = 1; j <= radii; j++) {
+			const r = j * dr;
+			sum += r ** 3 * Math.exp(-0.5 * (((r * c - 1) / a) ** 2 + ((r * s) / b) ** 2));
+		}
+		result[k] = sum * scale;
+	}
+	return (weights = result);
 }

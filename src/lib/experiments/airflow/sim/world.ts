@@ -2,7 +2,7 @@ import { deviceInputs, type DeviceInputs } from '../devices/solver';
 import type { DeviceModel } from '../devices/types';
 import { rasterizePlan, type Raster } from '../homes/rasterize';
 import { GUST_SEED, GustSeries } from '../homes/gust';
-import { exteriorState, gustPressures } from '../homes/weather';
+import { exteriorState, gustPressures, meanGustPressures } from '../homes/weather';
 import type { PlanId, HomePlan } from '../homes/types';
 import type { BackendUpdate, FlowBackend, FaceUpdate } from '../solver/backend';
 import { AIR, type Emitter, type FluidProperties, type SolverConfig } from '../solver/types';
@@ -74,8 +74,12 @@ export class World {
 	private setup: Setup;
 	private inputs: DeviceInputs | null = null;
 	private emitterCells: number | null = null;
-	/** The gusts' series, the pressures last sent from it, and whether they were a gust's (not all zeros). */
+	/**
+	 * The gusts' series, each side's long-run mean gust pressure for the setup's wind (worked out when the setup is applied, so a step
+	 * costs one gust), the pressures last sent from it, and whether they were a gust's (not all zeros).
+	 */
 	private readonly gusts = new GustSeries(GUST_SEED);
+	private readonly gustMeans = new Float64Array(6);
 	private readonly gust = new Float32Array(6);
 	private gusting = false;
 
@@ -140,6 +144,7 @@ export class World {
 			}
 		const change: BackendUpdate = { faces, exterior, fans: this.inputs.fans, sinks: this.inputs.sinks };
 		this.backend.update(change);
+		if (this.setup.conditions.gusty === true) meanGustPressures(this.raster, this.setup.conditions, this.fluid.rho, this.gustMeans);
 		this.updateGust(time);
 	}
 
@@ -159,7 +164,7 @@ export class World {
 		const gusting = conditions.gusty === true && conditions.windSpeed > 0;
 		if (!gusting && !this.gusting) return;
 		this.gusting = gusting;
-		this.backend.update({ gust: gustPressures(this.raster, conditions, this.gusts, time, this.fluid.rho, this.gust) });
+		this.backend.update({ gust: gustPressures(this.raster, conditions, this.gusts, time, this.fluid.rho, this.gust, this.gustMeans) });
 	}
 
 	/** Pushes oscillating fans' new aim to the solver; call each drawn frame while any fan oscillates. */

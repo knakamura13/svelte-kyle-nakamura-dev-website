@@ -108,7 +108,7 @@ export interface BackendUpdate {
 	exterior?: Exterior;
 	/**
 	 * Six numbers, Pa, in box-side order: added to the outside pressure of every opening on that side, on top of `exterior`'s. A gusty
-	 * wind's departure from its mean (homes/weather.ts `gustPressures`), sent before each step; zeros for a steady wind. It takes
+	 * wind's departure from its long-run mean (homes/weather.ts `gustPressures`), sent before each step; zeros for a steady wind. It takes
 	 * effect from the next step and stays until the next one is sent.
 	 */
 	gust?: Float32Array;

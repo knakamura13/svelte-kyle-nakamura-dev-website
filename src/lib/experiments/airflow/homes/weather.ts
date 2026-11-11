@@ -1,7 +1,7 @@
 import { Grid } from '../solver/grid';
 import type { Exterior, FluidProperties } from '../solver/types';
 import type { Conditions } from '../state';
-import { GUST_MEAN_SQUARE, gustAt, type GustSeries } from './gust';
+import { gustAt, gustDirectionWeights, type GustSeries } from './gust';
 import type { Raster } from './rasterize';
 import type { Facade } from './types';
 
@@ -42,7 +42,7 @@ export function windPressureCoefficient(incidence: number, sideRatio: number) {
 
 /**
  * The wind's pressure on a facade, ½ρU²Cp, Pa, for a wind of `speed` m/s at the eaves blowing from the bearing `from`. The steady wind
- * and the gusts both come through here: a gust's departure is this at the gust's speed and direction (homes/gust.ts) less this at the mean.
+ * and the gusts both come through here: a gust's departure is this at the gust's speed and direction (homes/gust.ts) less its long-run mean (`meanGustPressure`).
  */
 export function facadeWindPressure(plan: { width: number; depth: number }, facade: Facade, from: number, speed: number, rho: number) {
 	const alongNorthSouth = facade === 'north' || facade === 'south';
@@ -57,7 +57,7 @@ export function facadeWindPressure(plan: { width: number; depth: number }, facad
  * hydrostatic term: air at a different temperature from the reference weighs differently, so its pressure changes
  * with height as ρ·g·β·(T_out − T_ref)·y. That term is what drives the stack effect. The reference temperature is
  * the indoor air's starting temperature, so the indoor air has no buoyancy to begin with. The wind here is the mean wind;
- * a gusty wind adds its departure from the mean on each side of the box, each step (`gustPressures`, `BackendUpdate.gust`).
+ * a gusty wind adds its departure from its long-run mean on each side of the box, each step (`gustPressures`, `BackendUpdate.gust`).
  */
 export function exteriorState(raster: Raster, conditions: Conditions, referenceTemperature: number, fluid: FluidProperties): Exterior {
 	const grid = new Grid(raster.spec);
@@ -76,22 +76,55 @@ export function exteriorState(raster: Raster, conditions: Conditions, referenceT
 }
 
 /**
- * A gusty wind's departure from the mean wind's pressure on each side of the box, Pa, six numbers in box-side order (sides without an
- * opening, the floor and the ceiling stay 0): ½ρU(t)²Cp(θ(t)) / GUST_MEAN_SQUARE less ½ρŪ²Cp(θ̄) for the facade on that side, with
- * U(t) and θ(t) the gust at `time` simulated seconds. The division keeps the long-run mean of U(t)² at Ū², so the mean pressure is
- * the steady wind's, as the measured Cp are (homes/gust.ts). All zeros when the wind is steady or calm. The solver adds it to the
- * outside pressure of every opening on the side, so the steady wind and the gusts take one path into the pressure solve.
+ * The gusts' long-run mean pressure on a facade, Pa: the mean of ½ρU(t)²Cp(θ(t)) over the series for a mean wind of `speed` m/s at the
+ * eaves from the bearing `from` (homes/gust.ts `gustDirectionWeights`). It is ½ρŪ² times Cp averaged over the gusts' directions,
+ * weighted by their dynamic pressure, so a change of speed only scales it and a change of direction costs GUST_DIRECTIONS Cp values.
  */
-export function gustPressures(raster: Raster, conditions: Conditions, series: GustSeries, time: number, rho: number, into = new Float32Array(6)) {
+export function meanGustPressure(plan: { width: number; depth: number }, facade: Facade, from: number, speed: number, rho: number) {
+	const weights = gustDirectionWeights();
+	const step = 360 / weights.length;
+	let sum = 0;
+	for (let k = 0; k < weights.length; k++) sum += weights[k] * facadeWindPressure(plan, facade, from + k * step, speed, rho);
+	return sum;
+}
+
+/** `meanGustPressure` for the facade on each side of the box with an opening, six numbers in box-side order (0 elsewhere and in a calm). */
+export function meanGustPressures(raster: Raster, conditions: Conditions, rho: number, into = new Float64Array(6)) {
+	into.fill(0);
+	const mean = conditions.windSpeed * WIND_AT_EAVES;
+	if (!(mean > 0)) return into;
+	for (const opening of raster.openings) {
+		if (opening.side === undefined || opening.facade === undefined) continue;
+		into[opening.side] = meanGustPressure(raster.plan, opening.facade, conditions.windFrom, mean, rho);
+	}
+	return into;
+}
+
+/**
+ * A gusty wind's departure from its long-run mean pressure on each side of the box, Pa, six numbers in box-side order (sides without an
+ * opening, the floor and the ceiling stay 0): ½ρU(t)²Cp(θ(t)) for the facade on that side, with U(t) and θ(t) the gust at `time`
+ * simulated seconds, less its long-run mean (`means`, from `meanGustPressures`). The departure's long-run mean is zero by construction,
+ * so each wall's mean pressure is the steady wind's ½ρŪ²Cp(θ̄) at every bearing, as the measured Cp are, while the pressure follows the
+ * gusts' full speed and direction (docs/research/airflow/openings-and-wind.md, section 2d). All zeros when the wind is steady or calm.
+ * The solver adds it to the outside pressure of every opening on the side, so the steady wind and the gusts take one path into the
+ * pressure solve. A caller that sends it every step passes `means`, worked out once for the setup's wind.
+ */
+export function gustPressures(
+	raster: Raster,
+	conditions: Conditions,
+	series: GustSeries,
+	time: number,
+	rho: number,
+	into = new Float32Array(6),
+	means: ArrayLike<number> = meanGustPressures(raster, conditions, rho)
+) {
 	into.fill(0);
 	const mean = conditions.windSpeed * WIND_AT_EAVES;
 	if (conditions.gusty !== true || !(mean > 0)) return into;
 	const gust = gustAt(series, time, mean);
-	const speed = gust.speed / Math.sqrt(GUST_MEAN_SQUARE);
 	for (const opening of raster.openings) {
 		if (opening.side === undefined || opening.facade === undefined) continue;
-		into[opening.side] =
-			facadeWindPressure(raster.plan, opening.facade, conditions.windFrom + gust.veer, speed, rho) - facadeWindPressure(raster.plan, opening.facade, conditions.windFrom, mean, rho);
+		into[opening.side] = facadeWindPressure(raster.plan, opening.facade, conditions.windFrom + gust.veer, gust.speed, rho) - means[opening.side];
 	}
 	return into;
 }
