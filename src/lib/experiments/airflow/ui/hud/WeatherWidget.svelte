@@ -183,7 +183,7 @@
 		<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 		<div class="weather-sheet glass deep" id="hud-weather-details" role="dialog" tabindex="-1" aria-label="Weather" data-sheet bind:this={sheet} onkeydown={keydown}>
 			<SheetGrip label="the weather" onclose={() => (ui.popover = null)} />
-			<div class="details">{@render details()}</div>
+			<div class="details scroll">{@render details()}</div>
 		</div>
 	{/if}
 {:else}
@@ -464,22 +464,24 @@
 		height: 7px;
 		box-shadow: none;
 	}
+	/* The sheet keeps its grabber, which reaches above it; its details scroll, with room round them for a focus ring. */
 	.weather-sheet {
 		position: fixed;
 		left: calc(10px + env(safe-area-inset-left));
 		right: calc(10px + env(safe-area-inset-right));
 		bottom: calc(86px + env(safe-area-inset-bottom));
+		display: grid;
+		grid-template-rows: minmax(0, 1fr);
 		max-height: 72vh;
-		overflow-y: auto;
-		overscroll-behavior: contain;
-		padding: 24px 14px 16px;
+		padding: 20px 4px 12px;
 		border-radius: 22px;
 		animation: hud-rise 260ms var(--hud-ease);
 	}
 	.weather-sheet .details {
 		gap: 14px;
+		min-height: 0;
 		margin-top: 0;
-		padding: 0 2px;
+		padding: 4px 12px;
 	}
 	.weather-sheet .wind-row {
 		gap: 14px;
