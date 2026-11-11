@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { focusRing, worldShot } from './dock';
+import { requireWebGL2 } from './webgl';
 import { DEVICE_MODELS } from '../src/lib/experiments/airflow/devices/catalog';
 import { plans } from '../src/lib/experiments/airflow/homes/plans';
 
@@ -19,6 +20,12 @@ const twoBedroom = plans.find((plan) => plan.id === 'two-bedroom')!;
 const boxFan = DEVICE_MODELS.find((model) => model.kind === 'box-fan')!;
 
 test.use({ locale: 'en-US' });
+
+// Software WebGL (the headless CI browsers) compiles the world's shaders for many seconds, so a test that waits for the world gets 90 s.
+test.beforeEach(async ({ page }) => {
+	test.setTimeout(90_000);
+	await requireWebGL2(page);
+});
 
 const hud = (page: Page) => page.locator('.hud');
 const live = (page: Page) => page.locator('.hud p[aria-live="polite"]');
@@ -93,6 +100,8 @@ test.describe('the HUD', () => {
 	});
 
 	test('works from the keyboard: tools, the catalog, the dial, the Inspector, the clock, each with a focus ring', async ({ page, browserName }) => {
+		// A long walk of keys, each drawn in software on CI: 69 to 90 s there (run 42997223711), so it gets more than the HUD's 120 s.
+		test.setTimeout(180_000);
 		await openHud(page);
 		const tools = page.getByRole('toolbar', { name: 'Tools' });
 
@@ -227,6 +236,9 @@ test.describe('the HUD', () => {
 	});
 
 	test('the wall modes, the overlays and the graphics quality change the world, and the height probes and smoke use is named for them', async ({ page }) => {
+		// Several pictures of the world, and the medium, low and high tiers asked for by name and so drawn in full where WebGL is drawn in
+		// software: 113 s on CI's Chromium in one run and past 120 s at the high tier in the next (run 42997223711), so it gets 240 s.
+		test.setTimeout(240_000);
 		const errors: string[] = [];
 		page.on('pageerror', (error) => errors.push(`${error.message}\n${error.stack ?? ''}`));
 		await openHud(page);
@@ -238,11 +250,13 @@ test.describe('the HUD', () => {
 		const before = await worldShot(page, stage);
 		await walls.getByRole('button', { name: 'Walls up' }).click();
 		await expect(walls.getByRole('button', { name: 'Walls up' })).toHaveAttribute('aria-pressed', 'true');
-		await expect.poll(async () => changedShare(page, before, await worldShot(page, stage)), { message: 'the walls stand up', timeout: 10_000 }).toBeGreaterThan(0.01);
+		// One picture and its comparison take 6 to 9 s with WebGL in software on CI's 4-core runner (measured 2026-11-11, run 42994808018),
+		// so each wait allows several of them.
+		await expect.poll(async () => changedShare(page, before, await worldShot(page, stage)), { message: 'the walls stand up', timeout: 30_000 }).toBeGreaterThan(0.01);
 		await walls.getByRole('button', { name: 'Walls down' }).click();
 		const down = await worldShot(page, stage);
 		await walls.getByRole('button', { name: 'Cutaway' }).click();
-		await expect.poll(async () => changedShare(page, down, await worldShot(page, stage)), { message: 'cut away again', timeout: 10_000 }).toBeGreaterThan(0.01);
+		await expect.poll(async () => changedShare(page, down, await worldShot(page, stage)), { message: 'cut away again', timeout: 30_000 }).toBeGreaterThan(0.01);
 
 		// An overlay colours the air and shows its legend, in the page's units.
 		const overlay = page.getByRole('group', { name: 'Overlay' });
