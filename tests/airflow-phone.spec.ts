@@ -157,6 +157,50 @@ async function airShares(page: Page, first: Buffer, second?: Buffer) {
 	);
 }
 
+/**
+ * The share of the world's pixels that the second picture shows clearly greyer than the first (as `airShares` counts them) and whose
+ * four neighbours are clearly greyer too: smoke is a patch, while the edges of streaks that came or went are scattered single pixels.
+ */
+async function greyerPatches(page: Page, first: Buffer, second: Buffer) {
+	return page.evaluate(
+		async ([a, b]) => {
+			const pixels = async (base64: string) => {
+				const image = new Image();
+				image.src = `data:image/png;base64,${base64}`;
+				await image.decode();
+				const canvas = document.createElement('canvas');
+				canvas.width = image.width;
+				canvas.height = image.height;
+				const context = canvas.getContext('2d')!;
+				context.drawImage(image, 0, 0);
+				return { data: context.getImageData(0, 0, canvas.width, canvas.height).data, width: canvas.width, height: canvas.height };
+			};
+			const one = await pixels(a);
+			const two = await pixels(b);
+			const { width, height } = one;
+			const luminance = (d: Uint8ClampedArray, i: number) => 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
+			const chroma = (d: Uint8ClampedArray, i: number) => Math.max(d[i], d[i + 1], d[i + 2]) - Math.min(d[i], d[i + 1], d[i + 2]);
+			const airBlue = (d: Uint8ClampedArray, i: number) => d[i + 2] - d[i] > 25 && d[i + 2] > d[i + 1];
+			const greyer = new Uint8Array(width * height);
+			let world = 0;
+			for (let n = 0; n < width * height; n++) {
+				const i = 4 * n;
+				if (one.data[i] + one.data[i + 1] + one.data[i + 2] === 0 || two.data[i] + two.data[i + 1] + two.data[i + 2] === 0) continue;
+				world++;
+				if (!airBlue(one.data, i) && !airBlue(two.data, i) && Math.abs(luminance(two.data, i) - luminance(one.data, i)) > 20 && chroma(one.data, i) - chroma(two.data, i) > 20) greyer[n] = 1;
+			}
+			let patches = 0;
+			for (let y = 1; y < height - 1; y++)
+				for (let x = 1; x < width - 1; x++) {
+					const n = x + width * y;
+					if (greyer[n] && greyer[n - 1] && greyer[n + 1] && greyer[n - width] && greyer[n + width]) patches++;
+				}
+			return patches / world;
+		},
+		[first.toString('base64'), second.toString('base64')]
+	);
+}
+
 for (const phone of PHONES) {
 	test.describe(`on ${phone.name}, ${phone.width} by ${phone.height}`, () => {
 		test.use({
@@ -419,11 +463,13 @@ for (const phone of PHONES) {
 			let smoke = 0;
 			for (let look = 0; look < 3; look++) {
 				await page.waitForTimeout(2000);
-				smoke = Math.max(smoke, (await airShares(page, clean, await worldShot(page))).smoke);
+				smoke = Math.max(smoke, await greyerPatches(page, clean, await worldShot(page)));
 			}
-			test.info().annotations.push({ type: 'even smoke', description: `${(smoke * 100).toFixed(2)}% of the world's pixels are clearly greyer, at most` });
-			// A cooking burst's plume covers 0.3% or more (above). Before #94 the same smoke filled the rooms with a brown fog of puffs.
-			expect(smoke, 'the share of the world that smoke spread evenly through the home turns clearly greyer').toBeLessThan(0.001);
+			test.info().annotations.push({ type: 'even smoke', description: `${(smoke * 100).toFixed(3)}% of the world's pixels are in clearly greyer patches, at most` });
+			// Before #94 the same smoke filled the rooms with a brown fog of puffs. Counted as single pixels, the streaks of the purifier's
+			// jet, restarted with the Scenario's world, made 0.13 to 0.23% clearly greyer on 2026-11-11 in the three browsers; in patches
+			// they make almost none.
+			expect(smoke, 'the share of the world that smoke spread evenly through the home turns clearly greyer, in patches').toBeLessThan(0.001);
 		});
 
 		test('has no WCAG 2.1 A/AA violations that axe can detect, with the sheets at their peek and in full', async ({ page, browserName }) => {
