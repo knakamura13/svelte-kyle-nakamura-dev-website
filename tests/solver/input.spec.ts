@@ -14,7 +14,7 @@ import type { PointerMode } from '../../src/lib/experiments/airflow/state';
 const AIR: HoverReading = { x: 0, y: 1.1, z: 0, u: 0, v: 0, w: 0, speed: 0, averageSpeed: null, temperature: 21, particulates: 0, inAir: true };
 
 /** A host over a 6 × 4 m home whose slice is air everywhere except a piece of furniture at x 4 to 5. */
-function harness(mode: PointerMode = 'look') {
+function harness(mode: PointerMode = 'look', extra: Partial<InputHost> = {}) {
 	const log = { pins: [] as Point3[], unpins: [] as string[], emits: [] as (Point3 | null)[], hovers: [] as (Point3 | null)[], refusals: 0 };
 	let clock = 0;
 	let full = false;
@@ -36,7 +36,8 @@ function harness(mode: PointerMode = 'look') {
 		unpin: (id) => log.unpins.push(id),
 		emit: (point) => log.emits.push(point),
 		now: () => clock,
-		full: () => full
+		full: () => full,
+		...extra
 	};
 	const input = new AirflowInput(host);
 	const ndc = { x: 0, y: 0 };
@@ -378,6 +379,52 @@ test.describe('the keyboard', () => {
 		h.setMode('look');
 		h.input.syncMode();
 		expect(h.log.emits.at(-1)).toBeNull();
+	});
+
+	test('tells a screen reader where each arrow key took the cursor and what it reads, and why Enter did nothing', () => {
+		for (const mode of ['probe', 'emit'] as const) {
+			const moved: [Point3, HoverReading | null][] = [];
+			const refused: [string, Point3, HoverReading | null][] = [];
+			const h = harness(mode, { cursorMoved: (point, reading) => moved.push([point, reading]), refused: (action, point, reading) => refused.push([action, point, reading]) });
+			h.input.key(h.key('ArrowRight'));
+			expect(moved, mode).toHaveLength(1);
+			expect(moved[0][0]).toEqual({ x: 3 + CURSOR_STEP, y: 1.1, z: 2 });
+			expect(moved[0][1]?.inAir).toBe(true);
+			// Keys that do not move it say nothing of where it is: a release, Enter, and Escape.
+			h.input.key(h.key('ArrowRight', {}, 'keyup'));
+			expect(moved).toHaveLength(1);
+			// Onto the furniture at x 4 to 5: Enter there does nothing, and says why, once.
+			for (let n = 0; n < 4; n++) h.input.key(h.key('ArrowRight'));
+			expect(moved.at(-1)?.[1]?.inAir, 'x = 4.25 is furniture').toBe(false);
+			h.input.key(h.key('Enter'));
+			expect(refused).toEqual([[mode === 'probe' ? 'pin' : 'smoke', { x: 4.25, y: 1.1, z: 2 }, expect.objectContaining({ inAir: false })]]);
+			expect(h.log.pins).toEqual([]);
+			expect(h.log.emits).toEqual([]);
+			expect(moved, 'Enter does not say where the cursor is').toHaveLength(5);
+			// Back in the air, Enter acts, and nothing is refused.
+			h.input.key(h.key('ArrowLeft'));
+			h.input.key(h.key('ArrowLeft'));
+			h.input.key(h.key('Enter'));
+			expect(refused).toHaveLength(1);
+			if (mode === 'probe') expect(h.log.pins).toHaveLength(1);
+			else {
+				expect(h.log.emits).toHaveLength(1);
+				// Enter again stops the smoke, which is not a refusal, even with the cursor moved onto furniture meanwhile.
+				h.input.key(h.key('ArrowRight'));
+				h.input.key(h.key('ArrowRight'));
+				h.input.key(h.key('Enter'));
+				expect(h.log.emits.at(-1)).toBeNull();
+				expect(refused).toHaveLength(1);
+			}
+		}
+	});
+
+	test('before the first reading, Enter says it has nothing to go on yet', () => {
+		const refused: [string, HoverReading | null][] = [];
+		const h = harness('probe', { read: () => null, refused: (action, _point, reading) => refused.push([action, reading]) });
+		h.input.key(h.key('Enter'));
+		expect(refused).toEqual([['pin', null]]);
+		expect(h.log.pins).toEqual([]);
 	});
 
 	test('a reset, as when the mode changes, drops the cursor and any smoke', () => {

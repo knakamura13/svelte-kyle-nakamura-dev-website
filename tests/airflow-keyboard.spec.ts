@@ -153,6 +153,8 @@ test('every task from the keyboard alone, with a focus ring at every stop', asyn
 	await page.keyboard.press('Enter');
 	await expect(view(page)).toBeFocused();
 	const path = await findAir(page);
+	// Where the cursor stopped is said once the keys stop: the Room, the height and the air there.
+	await expect(live(page)).toHaveText(/^[A-Z][\w ]+, at a height of .+?\. Air (moving .+|is still), at [\d.]+ (metres per second|miles per hour)\.$/);
 	await page.keyboard.press('Enter');
 	await expect(page.getByRole('list', { name: 'Probes' }).getByRole('listitem')).toHaveCount(1);
 	await expect(live(page)).toHaveText('Probe 1 pinned.');

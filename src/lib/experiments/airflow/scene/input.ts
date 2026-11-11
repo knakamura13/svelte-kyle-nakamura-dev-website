@@ -49,6 +49,13 @@ export interface InputHost {
 	grab?(at: { x: number; y: number }): unknown;
 	/** Follows a held grab: 'start' on the press, 'move' while it is held, 'end' when it lifts or is dropped. */
 	dragGrab?(grab: unknown, at: { x: number; y: number }, phase: 'start' | 'move' | 'end'): void;
+	/**
+	 * For a screen reader, which sees nothing of the cursor: where an arrow key moved the keyboard's cursor and what it reads there, and
+	 * why Enter there did nothing (`refused`: no air under it, or no reading yet). The scene puts both in words (`probeWords.ts`) and
+	 * announces them politely, once the keys stop.
+	 */
+	cursorMoved?(point: Point3, reading: HoverReading | null): void;
+	refused?(action: 'pin' | 'smoke', point: Point3, reading: HoverReading | null): void;
 }
 
 interface Press {
@@ -254,17 +261,22 @@ export class AirflowInput implements SceneInput {
 				if (!down) return true;
 				const step = event.shiftKey ? CURSOR_STEP_FAST : CURSOR_STEP;
 				// North is up the plan, so the up arrow is toward -z.
-				this.moveCursor(event.key === 'ArrowLeft' ? -step : event.key === 'ArrowRight' ? step : 0, event.key === 'ArrowUp' ? -step : event.key === 'ArrowDown' ? step : 0);
+				const point = this.moveCursor(event.key === 'ArrowLeft' ? -step : event.key === 'ArrowRight' ? step : 0, event.key === 'ArrowUp' ? -step : event.key === 'ArrowDown' ? step : 0);
+				this.host.cursorMoved?.(point, this.host.read(point));
 				return true;
 			}
 			case 'Enter':
 			case ' ': {
 				if (!down || event.repeat) return true;
 				const point = this.moveCursor(0, 0);
-				if (mode === 'probe') {
-					if (this.host.read(point)?.inAir) this.host.pin(point);
-				} else if (this.cursorEmitting) this.stopCursorSmoke();
-				else if (this.host.read(point)?.inAir) {
+				if (mode !== 'probe' && this.cursorEmitting) {
+					this.stopCursorSmoke();
+					return true;
+				}
+				const reading = this.host.read(point);
+				if (!reading?.inAir) this.host.refused?.(mode === 'probe' ? 'pin' : 'smoke', point, reading);
+				else if (mode === 'probe') this.host.pin(point);
+				else {
 					this.cursorEmitting = true;
 					this.host.emit(point);
 				}

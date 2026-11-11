@@ -2,7 +2,9 @@ import { PerspectiveCamera, Scene } from 'three';
 import { disposeTree } from '$lib/experiments/engine/kit';
 import type { Label } from '$lib/experiments/engine/labels';
 import type { DeviceModel } from '../devices/types';
+import { roomAt } from '../homes/rooms';
 import type { HomePlan } from '../homes/types';
+import { describeCursor, describeRefusal } from '../probeWords';
 import type { AirflowReadout } from '../readouts';
 import type { Target } from '../state';
 import { chooseBackend } from '../sim/backends';
@@ -250,6 +252,9 @@ export function createAirflowScene(host: WorldHost, params: AirflowSceneParams, 
 			markers.setSmoke(point);
 		},
 		now: () => performance.now(),
+		// The cursor in words, for a screen reader. `announce` waits until the keys stop, so a run of arrow keys is said once, where it ended.
+		cursorMoved: (point, reading) => params.announce(describeCursor(roomAt(house.plan, point.x, point.z)?.name ?? null, point, reading, params.view.units)),
+		refused: (action, point, reading) => params.announce(describeRefusal(action, roomAt(house.plan, point.x, point.z)?.name ?? null, reading)),
 		grab: (at) => editor.grabAt(at, params.selected),
 		dragGrab: (grab, at, phase) => {
 			const held = grab as Grab;
