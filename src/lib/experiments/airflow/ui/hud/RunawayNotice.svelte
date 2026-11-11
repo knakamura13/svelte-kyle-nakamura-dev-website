@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { tick } from 'svelte';
 	import { useAirflow } from '../../experience.svelte';
 	import Icon from './Icon.svelte';
 
@@ -15,13 +14,11 @@
 	const experience = useAirflow();
 	let notice: HTMLElement | undefined = $state();
 
-	async function act(what: 'reset' | 'restart') {
+	function act(what: 'reset' | 'restart') {
 		const focused = notice?.contains(document.activeElement) ?? false;
 		if (what === 'reset') experience.reset();
 		else experience.restart();
-		if (!focused) return;
-		await tick();
-		document.querySelector<HTMLElement>('[data-stage-region] [role="application"]')?.focus();
+		if (focused) document.querySelector<HTMLElement>('[data-stage-region] [role="application"]')?.focus();
 	}
 </script>
 
