@@ -100,6 +100,8 @@ test.describe('the HUD', () => {
 	});
 
 	test('works from the keyboard: tools, the catalog, the dial, the Inspector, the clock, each with a focus ring', async ({ page, browserName }) => {
+		// A long walk of keys, each drawn in software on CI: 69 to 90 s there (run 42997223711), so it gets more than the HUD's 120 s.
+		test.setTimeout(180_000);
 		await openHud(page);
 		const tools = page.getByRole('toolbar', { name: 'Tools' });
 
@@ -234,6 +236,9 @@ test.describe('the HUD', () => {
 	});
 
 	test('the wall modes, the overlays and the graphics quality change the world, and the height probes and smoke use is named for them', async ({ page }) => {
+		// Several pictures of the world, and the medium, low and high tiers asked for by name and so drawn in full where WebGL is drawn in
+		// software: 113 s on CI's Chromium in one run and past 120 s at the high tier in the next (run 42997223711), so it gets 240 s.
+		test.setTimeout(240_000);
 		const errors: string[] = [];
 		page.on('pageerror', (error) => errors.push(`${error.message}\n${error.stack ?? ''}`));
 		await openHud(page);
