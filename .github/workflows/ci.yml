@@ -40,21 +40,27 @@ jobs:
 
   e2e:
     name: end-to-end ${{ matrix.project }} ${{ matrix.shard }} of ${{ matrix.total }}
-    if: false # TEMPORARY (#95): off while the diagnose job runs.
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
       # One shard failing does not cancel the others, so every failure is reported in the same run.
       fail-fast: false
       matrix:
-        # Each browser is split on its own. The Chromium and WebKit airflow specs are the slow ones, so they get more shards.
+        # Each browser is split on its own. The airflow specs are the slow ones (WebGL drawn in software), and they sort early, so
+        # Chromium and WebKit get more shards than their test counts alone would need.
         include:
-          - { project: chromium, shard: 1, total: 4 }
-          - { project: chromium, shard: 2, total: 4 }
-          - { project: chromium, shard: 3, total: 4 }
-          - { project: chromium, shard: 4, total: 4 }
-          - { project: webkit, shard: 1, total: 2 }
-          - { project: webkit, shard: 2, total: 2 }
+          - { project: chromium, shard: 1, total: 8 }
+          - { project: chromium, shard: 2, total: 8 }
+          - { project: chromium, shard: 3, total: 8 }
+          - { project: chromium, shard: 4, total: 8 }
+          - { project: chromium, shard: 5, total: 8 }
+          - { project: chromium, shard: 6, total: 8 }
+          - { project: chromium, shard: 7, total: 8 }
+          - { project: chromium, shard: 8, total: 8 }
+          - { project: webkit, shard: 1, total: 4 }
+          - { project: webkit, shard: 2, total: 4 }
+          - { project: webkit, shard: 3, total: 4 }
+          - { project: webkit, shard: 4, total: 4 }
           - { project: firefox, shard: 1, total: 1 }
     container:
       image: mcr.microsoft.com/playwright:v1.63.0-noble
@@ -74,13 +80,17 @@ jobs:
         run: yarn install --frozen-lockfile
 
       - name: End-to-end tests
+        # One worker: the runner has 4 cores, and one airflow page drawing WebGL in software, with its simulation on a worker, keeps them
+        # busy. Two pages at once drew about 1 frame a second each against 2.7 for one alone, and a trivial page.evaluate took 1.1 to 1.4 s
+        # against 0.12 s (run 42994808018). Memory is not the limit: at most 4.2 of 16 GB was in use.
         # The HTML report is written for the upload below.
         env:
           PLAYWRIGHT_HTML_OPEN: never
-        run: yarn test:e2e --project=${{ matrix.project }} --shard=${{ matrix.shard }}/${{ matrix.total }} --reporter=list,html
+        run: yarn test:e2e --project=${{ matrix.project }} --shard=${{ matrix.shard }}/${{ matrix.total }} --workers=1 --reporter=list,html
 
-      - name: Upload the report on failure
-        if: failure()
+      # Always, so a green run's report still says which tests skipped and why (each skip's reason and measured frame rate).
+      - name: Upload the report
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report-${{ matrix.project }}-${{ matrix.shard }}-of-${{ matrix.total }}
@@ -88,46 +98,3 @@ jobs:
             playwright-report
             test-results
           retention-days: 14
-
-  # TEMPORARY (#95): measures CI's browsers. Not for merging.
-  diagnose:
-    name: diagnose ${{ matrix.project }} workers ${{ matrix.workers }} repeat ${{ matrix.repeat }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { project: chromium, workers: 1, repeat: 1 }
-          - { project: chromium, workers: 2, repeat: 2 }
-          - { project: webkit, workers: 1, repeat: 1 }
-          - { project: webkit, workers: 2, repeat: 2 }
-    container:
-      image: mcr.microsoft.com/playwright:v1.63.0-noble
-    env:
-      HOME: /root
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 20
-          cache: yarn
-      - run: yarn install --frozen-lockfile
-      - name: Machine
-        run: |
-          nproc; free -m; head -20 /proc/cpuinfo | sed -n '/model name/p'; df -h / | tail -1
-      - name: Diagnose
-        env:
-          PLAYWRIGHT_HTML_OPEN: never
-        run: |
-          (while true; do date +%T; free -m | sed -n 2p; head -1 /proc/loadavg; sleep 5; done) > machine.log 2>&1 &
-          yarn test:e2e tests/ci-diagnose.spec.ts --project=${{ matrix.project }} --workers=${{ matrix.workers }} --repeat-each=${{ matrix.repeat }} --retries=0 --reporter=list,html
-      - if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: diagnose-${{ matrix.project }}-w${{ matrix.workers }}
-          path: |
-            playwright-report
-            test-results
-            machine.log
-          retention-days: 7
