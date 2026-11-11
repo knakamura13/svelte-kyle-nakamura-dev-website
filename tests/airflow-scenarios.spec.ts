@@ -4,7 +4,7 @@ import { setupToHash } from '../src/lib/experiments/airflow/link';
 import { SCENARIOS } from '../src/lib/experiments/airflow/scenarios';
 import { OPENING_END, openingFor } from '../src/lib/experiments/airflow/scene/camera/opening';
 import { blankSetup } from '../src/lib/experiments/airflow/state';
-import { PAGE, closePhysics, hud, inspect, notice, openPhysics, openRunning, pickScenario, readAt, readUntil, readings, requireSimRate, view, type Readings } from './airflow-sim';
+import { PAGE, closePhysics, hud, inspect, notice, openPhysics, openRunning, pickScenario, readAt, readUntil, readings, view, type Readings } from './airflow-sim';
 
 /**
  * Each Scenario, loaded from the picker, does what its notice says, read off the page: the Room averages in the Physics panel and the
@@ -109,8 +109,6 @@ test.describe('each Scenario does what its notice says', { tag: '@slow' }, () =>
 
 	test('Cross-ventilation: the wind crosses the home from the living room to the bedrooms, and a closed bedroom door all but stops the flow through that bedroom', async ({ page, browserName }) => {
 		await load(page, 'cross-ventilation');
-		// About 50 simulated seconds and a quarter more, within the test's quarter of an hour (two minutes kept for the page and the door).
-		await requireSimRate(page, 63, 780_000);
 		const open = await readAt(page, 30);
 		console.log(`${browserName}: cross-ventilation at ${open.time} s, air changes an hour: ${show(open, 'changes')}`);
 		// In at the living room, across the hall, out at both bedrooms: each room on the way changes its air at least 20 times an hour
@@ -134,9 +132,6 @@ test.describe('each Scenario does what its notice says', { tag: '@slow' }, () =>
 		const end = openingFor(planById('house')!, 1440 / 900).to;
 		const camera = [end.x, end.z, OPENING_END.heading, OPENING_END.zoom, OPENING_END.tilt].map((n) => n.toFixed(2)).join(',');
 		await load(page, 'stack-effect', `/experiments/airflow?cell=0.3&camera=${camera}${setupToHash(blankSetup('house'))}`);
-		// 60 simulated seconds and a quarter more, within the one wait they run in below (12 minutes). Sizing it to the test's whole budget
-		// let WebKit on CI, at 0.12× real time, pass this check and then reach only 59.2 s in an 8-minute wait (run 43062042229).
-		await requireSimRate(page, 75, 720_000);
 		const { indoorTemp, outdoorTemp, windSpeed } = scenario('stack-effect').setup.conditions;
 		expect(windSpeed).toBe(0);
 
@@ -159,8 +154,6 @@ test.describe('each Scenario does what its notice says', { tag: '@slow' }, () =>
 
 	test('A fan in the window: the air goes from the dining room to the hall and bedroom 1, the closed rooms see little of it, and with the fan off it slows to a drift within a minute', async ({ page, browserName }) => {
 		await load(page, 'window-fan');
-		// About 92 simulated seconds and a quarter more, within the test's quarter of an hour (two minutes kept for the page and the fan).
-		await requireSimRate(page, 115, 780_000);
 		const running = await readAt(page, 30);
 		console.log(`${browserName}: window fan at ${running.time} s, m/s: ${show(running, 'speed')}; °C: ${show(running, 'temperature')}`);
 		const speed = (reading: Readings, room: string) => reading.rooms[room].speed;
@@ -187,14 +180,11 @@ test.describe('each Scenario does what its notice says', { tag: '@slow' }, () =>
 	});
 
 	test('Clearing the smoke: the purifier on High halves the smoke in bedroom 2 about every three and a half minutes', async ({ page, browserName }) => {
-		// The page sends the solver its steps once per drawn frame, so on CI's runners, which draw in software, the air runs at about 0.25×
-		// real time even at 20×. The times below are sized for that, from the simulated seconds this test needs (measured here on the
-		// 0.3 m grid) at 0.25×, with about 40 % more: the CI job for @slow tests allows 45 minutes (ci.yml).
+		// The times below were sized for 0.25× real time, the air's rate on CI's runners at any clock speed before #105, from the simulated
+		// seconds this test needs (measured here on the 0.3 m grid), with about 40 % more: the CI job for @slow tests allows 45 minutes (ci.yml).
 		// Bedroom 2 is under 0.1 ppm at about 65 s (4.3 minutes there) and under 0.065 ppm at about 194 s (129 s later, 8.6 minutes there).
 		test.setTimeout(2_100_000);
 		await load(page, 'clearing-smoke');
-		// 194 simulated seconds and a quarter more, within the two waits below (8 + 13 minutes).
-		await requireSimRate(page, 243, 480_000 + 780_000);
 		// Within 20 % of three and a half minutes: 3.3 to 3.8 here, on the processor and on WebGPU, which differs from run to run.
 		const minutes = await halving(page, 'bedroom-2', browserName, { under: 480_000, halved: 780_000 });
 		expect(minutes).toBeGreaterThan(3.5 * 0.8);
@@ -202,14 +192,11 @@ test.describe('each Scenario does what its notice says', { tag: '@slow' }, () =>
 	});
 
 	test('The smoky day: with every window shut, the purifier on High halves the smoke in the main room about every five minutes', async ({ page, browserName }) => {
-		// The page sends the solver its steps once per drawn frame, so on CI's runners, which draw in software, the air runs at about 0.25×
-		// real time even at 20×. The times below are sized for that, from the simulated seconds this test needs (measured here on the
-		// 0.3 m grid) at 0.25×, with about 40 % more: the CI job for @slow tests allows 45 minutes (ci.yml).
+		// The times below were sized for 0.25× real time, the air's rate on CI's runners at any clock speed before #105, from the simulated
+		// seconds this test needs (measured here on the 0.3 m grid), with about 40 % more: the CI job for @slow tests allows 45 minutes (ci.yml).
 		// The main room is under 0.1 ppm at about 102 s (6.8 minutes there) and under 0.065 ppm at about 295 s (193 s later, 12.9 minutes there).
 		test.setTimeout(2_100_000);
 		await load(page, 'smoky-day');
-		// 295 simulated seconds and a quarter more, within the two waits below (10 + 18 minutes).
-		await requireSimRate(page, 369, 600_000 + 1_080_000);
 		// Within 20 % of five minutes (5.2 on the processor and 5.2 to 5.7 on WebGPU here, from run to run).
 		const minutes = await halving(page, 'main', browserName, { under: 600_000, halved: 1_080_000 });
 		expect(minutes).toBeGreaterThan(5 * 0.8);
