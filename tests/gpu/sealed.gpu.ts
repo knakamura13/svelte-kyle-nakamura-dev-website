@@ -50,5 +50,5 @@ test('windward windows only on the GPU: the west windows carry a small fraction 
 		`windward only on the GPU: west windows ${windwardIn.toFixed(4)} m³/s with the east shut, ${bothIn.toFixed(4)} with the east open too: fraction ${fraction.toFixed(3)} (fastest air ${windward.maxSpeed.toFixed(3)} and ${both.maxSpeed.toFixed(3)} m/s)`
 	);
 	expect(bothIn).toBeGreaterThan(0.1);
-	expect(Math.abs(fraction), 'windward-only flow as a share of the flow with the east open').toBeLessThan(0.2);
+	expect(Math.abs(fraction), 'windward-only flow as a share of the flow with the east open').toBeLessThan(0.01);
 });

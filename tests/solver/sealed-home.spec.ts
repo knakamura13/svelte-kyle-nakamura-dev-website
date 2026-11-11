@@ -116,6 +116,6 @@ test.describe('a sealed home and windward-only windows', () => {
 		);
 		// The both-open case has to carry real flow, or the fraction says nothing.
 		expect(bothIn).toBeGreaterThan(0.1);
-		expect(Math.abs(fraction), 'windward-only flow as a share of the flow with the east open').toBeLessThan(0.2);
+		expect(Math.abs(fraction), 'windward-only flow as a share of the flow with the east open').toBeLessThan(0.01);
 	});
 });
