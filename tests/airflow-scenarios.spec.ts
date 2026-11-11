@@ -93,11 +93,11 @@ const show = (reading: Readings, key: 'speed' | 'temperature' | 'changes' | 'ppm
  * is under 0.1 ppm, where a digit is a hundredth of the level, and ends once it is under 0.065 ppm: each reading is then within half a
  * digit, which moves the answer by 3 % at most. (A stretch of 90 s, a third of a halving in the smoky day, let the rounding move it by 7 %.)
  */
-async function halving(page: Page, room: string, browserName: string) {
+async function halving(page: Page, room: string, browserName: string, waits: { under: number; halved: number }) {
 	// The Scenario's smoke first: for a moment after a new run starts, the rows can still be the last run's air, with none in it.
 	await readUntil(page, (r) => r.rooms[room].ppm >= 0.1, `${room} reads the Scenario's smoke`);
-	const first = await readUntil(page, (r) => r.rooms[room].ppm < 0.1, `${room} falls under 0.1 ppm`);
-	const second = await readUntil(page, (r) => r.rooms[room].ppm < 0.065, `${room} falls under 0.065 ppm`);
+	const first = await readUntil(page, (r) => r.rooms[room].ppm < 0.1, `${room} falls under 0.1 ppm`, waits.under);
+	const second = await readUntil(page, (r) => r.rooms[room].ppm < 0.065, `${room} falls under 0.065 ppm`, waits.halved);
 	const minutes = (Math.LN2 * (second.time - first.time)) / Math.log(first.rooms[room].ppm / second.rooms[room].ppm) / 60;
 	console.log(`${browserName}: ${room} at ${first.rooms[room].ppm} ppm at ${first.time} s and ${second.rooms[room].ppm} ppm at ${second.time} s: halves every ${minutes.toFixed(2)} min`);
 	return minutes;
@@ -180,17 +180,27 @@ test.describe('each Scenario does what its notice says', { tag: '@slow' }, () =>
 	});
 
 	test('Clearing the smoke: the purifier on High halves the smoke in bedroom 2 about every three and a half minutes', async ({ page, browserName }) => {
+		// The page sends the solver its steps once per drawn frame, so on CI's runners, which draw in software, the air runs at about 0.25×
+		// real time even at 20×. The times below are sized for that, from the simulated seconds this test needs (measured here on the
+		// 0.3 m grid) at 0.25×, with about 40 % more: the CI job for @slow tests allows 45 minutes (ci.yml).
+		// Bedroom 2 is under 0.1 ppm at about 65 s (4.3 minutes there) and under 0.065 ppm at about 194 s (129 s later, 8.6 minutes there).
+		test.setTimeout(2_100_000);
 		await load(page, 'clearing-smoke');
 		// Within 20 % of three and a half minutes: 3.3 to 3.8 here, on the processor and on WebGPU, which differs from run to run.
-		const minutes = await halving(page, 'bedroom-2', browserName);
+		const minutes = await halving(page, 'bedroom-2', browserName, { under: 480_000, halved: 780_000 });
 		expect(minutes).toBeGreaterThan(3.5 * 0.8);
 		expect(minutes).toBeLessThan(3.5 * 1.2);
 	});
 
 	test('The smoky day: with every window shut, the purifier on High halves the smoke in the main room about every five minutes', async ({ page, browserName }) => {
+		// The page sends the solver its steps once per drawn frame, so on CI's runners, which draw in software, the air runs at about 0.25×
+		// real time even at 20×. The times below are sized for that, from the simulated seconds this test needs (measured here on the
+		// 0.3 m grid) at 0.25×, with about 40 % more: the CI job for @slow tests allows 45 minutes (ci.yml).
+		// The main room is under 0.1 ppm at about 102 s (6.8 minutes there) and under 0.065 ppm at about 295 s (193 s later, 12.9 minutes there).
+		test.setTimeout(2_100_000);
 		await load(page, 'smoky-day');
 		// Within 20 % of five minutes (5.2 on the processor and 5.2 to 5.7 on WebGPU here, from run to run).
-		const minutes = await halving(page, 'main', browserName);
+		const minutes = await halving(page, 'main', browserName, { under: 600_000, halved: 1_080_000 });
 		expect(minutes).toBeGreaterThan(5 * 0.8);
 		expect(minutes).toBeLessThan(5 * 1.2);
 	});
