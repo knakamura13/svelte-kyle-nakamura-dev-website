@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { chromium, devices, expect, test, type CDPSession, type Page } from '@playwright/test';
 import { setupToHash } from '../src/lib/experiments/airflow/link';
+import { SCENARIOS } from '../src/lib/experiments/airflow/scenarios';
 import { blankSetup } from '../src/lib/experiments/airflow/state';
 
 /**
@@ -389,6 +390,40 @@ for (const phone of PHONES) {
 				.poll(async () => (smoke = (await airShares(page, air, await worldShot(page))).smoke), { message: 'the share of the world a burst of smoke clearly covers', timeout: 20_000, intervals: [1000] })
 				.toBeGreaterThan(0.003);
 			test.info().annotations.push({ type: 'smoke', description: `${(smoke * 100).toFixed(2)}% of the world's pixels are clearly greyer` });
+		});
+
+		test('the low tier draws nothing of smoke spread evenly through the home (#94)', async ({ page }) => {
+			test.setTimeout(150_000);
+			await page.emulateMedia({ reducedMotion: 'reduce' });
+			// The smoky day's home and weather with clean air inside, then the Scenario itself, which fills the home with the same 150 µg/m³
+			// as outside. Both open on the Studio's default view under the same smoky sun.
+			const smokyDay = SCENARIOS.find((s) => s.id === 'smoky-day')!;
+			await openPhone(page, `${PAGE}&quality=low${setupToHash(smokyDay.setup)}`);
+			await expect(view(page)).toHaveAttribute('data-quality', 'low');
+			await page.waitForTimeout(2000);
+			const clean = await worldShot(page);
+			await page.getByRole('button', { name: /^Scenario:/ }).tap();
+			await page.locator('#hud-scenarios').getByRole('button', { name: /^The smoky day/ }).tap();
+			await page.keyboard.press('Escape');
+			await expect(view(page)).toHaveAttribute('data-state', 'live', { timeout: 60_000 });
+			// The Scenario turns the Smoke overlay on; the smoke itself is what is looked at here.
+			await toolbar(page).getByRole('button', { name: 'View' }).tap();
+			await page.getByRole('group', { name: 'Overlay' }).getByRole('button', { name: 'Off', exact: true }).tap();
+			await toolbar(page).getByRole('button', { name: 'View' }).tap();
+			// A Scenario opens paused; the smoke is drawn from the air the running simulation reads.
+			const play = toolbar(page).getByRole('button', { name: 'Play', exact: true });
+			if (await play.isVisible()) await play.tap();
+			await expect(page.locator('.sim-status')).toHaveAttribute('data-status', 'running', { timeout: 60_000 });
+			// The puffs are born where smoke stands out once a volume of the new world arrives, which a loaded machine can take seconds to
+			// read, so the world is looked at three times over six seconds.
+			let smoke = 0;
+			for (let look = 0; look < 3; look++) {
+				await page.waitForTimeout(2000);
+				smoke = Math.max(smoke, (await airShares(page, clean, await worldShot(page))).smoke);
+			}
+			test.info().annotations.push({ type: 'even smoke', description: `${(smoke * 100).toFixed(2)}% of the world's pixels are clearly greyer, at most` });
+			// A cooking burst's plume covers 0.3% or more (above). Before #94 the same smoke filled the rooms with a brown fog of puffs.
+			expect(smoke, 'the share of the world that smoke spread evenly through the home turns clearly greyer').toBeLessThan(0.001);
 		});
 
 		test('has no WCAG 2.1 A/AA violations that axe can detect, with the sheets at their peek and in full', async ({ page, browserName }) => {
