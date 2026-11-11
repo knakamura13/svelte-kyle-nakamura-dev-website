@@ -363,7 +363,7 @@ function randomSetup(next: () => number, wild = false): Setup {
 	});
 	const openings: Record<string, number> = {};
 	for (const id of plan.openings) if (next() < 0.5) openings[id] = value(0, 1, 0);
-	const conditions =
+	const conditions: Setup['conditions'] =
 		next() < 0.2
 			? { ...DEFAULT_CONDITIONS }
 			: {
@@ -373,6 +373,11 @@ function randomSetup(next: () => number, wild = false): Setup {
 					indoorTemp: value(LIMITS.indoorTemp.min, LIMITS.indoorTemp.max, 21),
 					outdoorPm25: value(LIMITS.outdoorPm25.min, LIMITS.outdoorPm25.max, 0)
 				};
+	// Gusty on, off, or (from an untrusted setup) not a boolean at all, which the link reads as off.
+	const gusty = next();
+	if (gusty < 0.3) conditions.gusty = true;
+	else if (gusty < 0.45) conditions.gusty = false;
+	else if (wild && gusty < 0.55) (conditions as unknown as Record<string, unknown>).gusty = 'yes';
 	return { plan: plan.id, furniture: next() < 0.5, devices, openings, conditions };
 }
 
@@ -401,7 +406,7 @@ function maximalSetup(): Setup {
 		furniture: true,
 		devices,
 		openings: Object.fromEntries(plan.openings.map((id, i) => [id, 0.37 + i / 100])),
-		conditions: { windFrom: 359, windSpeed: 14.7, outdoorTemp: -29.5, indoorTemp: 31.5, outdoorPm25: 499 }
+		conditions: { windFrom: 359, windSpeed: 14.7, outdoorTemp: -29.5, indoorTemp: 31.5, outdoorPm25: 499, gusty: true }
 	};
 }
 
@@ -443,6 +448,8 @@ function invalidities(setup: Setup | null, catalog = CATALOG): string[] {
 	}
 	within('windFrom', setup.conditions.windFrom, 0, 359);
 	for (const key of ['windSpeed', 'outdoorTemp', 'indoorTemp', 'outdoorPm25'] as const) within(key, setup.conditions[key], LIMITS[key].min, LIMITS[key].max);
+	// Gusty is true or left out, never false, so a steady setup is the same object it was before gusts existed.
+	if ('gusty' in setup.conditions && setup.conditions.gusty !== true) bad.push(`gusty is ${String(setup.conditions.gusty)}, not true or left out`);
 	// A decoded setup is already as the link keeps it, so it survives another trip unchanged.
 	if (!isDeepStrictEqual(normalizeSetup(setup), setup)) bad.push('normalizeSetup changes it');
 	if (!isDeepStrictEqual(decodeSetup(encodeSetup(setup), catalog), setup)) bad.push('another trip through the link changes it');
@@ -582,6 +589,25 @@ test.describe('link: the shareable setup', () => {
 		});
 	});
 
+	test('a gusty wind is kept in the link as flag bit 1, and a steady one leaves gusty out', () => {
+		const steady = { ...blankSetup('studio'), conditions: { ...DEFAULT_CONDITIONS, windSpeed: 6 } };
+		const gusty = { ...steady, conditions: { ...steady.conditions, gusty: true } };
+		const steadyLink = encodeSetup(steady);
+		const gustyLink = encodeSetup(gusty);
+		expect(gustyLink).not.toBe(steadyLink);
+		expect(decodeSetup(gustyLink, CATALOG)?.conditions).toEqual({ ...DEFAULT_CONDITIONS, windSpeed: 6, gusty: true });
+		expect(decodeSetup(steadyLink, CATALOG)?.conditions).not.toHaveProperty('gusty');
+		// Off is the same link as never having had the switch, and decodes with the key left out.
+		expect(encodeSetup({ ...steady, conditions: { ...steady.conditions, gusty: false } })).toBe(steadyLink);
+		expect(normalizeSetup({ ...steady, conditions: { ...steady.conditions, gusty: false } }).conditions).not.toHaveProperty('gusty');
+		// Written by hand: flags 2 is gusty without furniture, 3 gusty with it.
+		expect(decodeSetup(craft(strings('studio'), 0, 2, 0, 0, 0), CATALOG)).toMatchObject({ furniture: false, conditions: { gusty: true } });
+		expect(decodeSetup(craft(strings('studio'), 0, 3, 0, 0, 0), CATALOG)).toMatchObject({ furniture: true, conditions: { gusty: true } });
+		expectValid(decodeSetup(gustyLink, CATALOG));
+		// Only `true` turns it on: anything else a hand-made setup holds is steady wind.
+		for (const odd of ['yes', 1, null, {}]) expect(encodeSetup({ ...steady, conditions: { ...steady.conditions, gusty: odd as unknown as boolean } })).toBe(steadyLink);
+	});
+
 	test('numbers far outside LIMITS are clamped, and bearings wrapped', () => {
 		const numbers = BIT.x | BIT.z | BIT.yaw | BIT.power | BIT.tilt | BIT.y | BIT.height | BIT.sweep | BIT.period;
 		const fields = (huge: number[]) => [huge, huge, huge, huge, huge, huge, huge, huge, huge];
@@ -668,7 +694,7 @@ test.describe('link: the shareable setup', () => {
 			'trailing byte': craft(strings('studio'), 0, 1, 0, 0, 0, 0),
 			'unknown plan': craft(strings('penthouse'), 0, 1, 0, 0, 0),
 			'plan index outside the strings': craft(strings('studio'), 1, 1, 0, 0, 0),
-			'unknown flag': craft(strings('studio'), 0, 2, 0, 0, 0),
+			'unknown flag': craft(strings('studio'), 0, 4, 0, 0, 0),
 			'unknown condition': craft(strings('studio'), 0, 1, 32, 0, 0, 0),
 			'unknown device bit': craft(strings('studio', fan), 0, 1, 0, 1, 1, 1 << 13, 0),
 			'intake value without intake': craft(strings('studio', fan), 0, 1, 0, 1, 1, BIT.intake, 0),
@@ -877,7 +903,7 @@ test.describe('link: the shareable setup', () => {
 		// A device's id is renumbered d1, d2, ... on decoding, because the id only identifies a device on the page.
 		device: { id: false, model: true, x: true, z: true, y: true, yaw: true, tilt: true, power: true, height: true, oscillation: true, opening: true, intake: true },
 		oscillation: { on: true, sweep: true, period: true },
-		conditions: { windFrom: true, windSpeed: true, outdoorTemp: true, indoorTemp: true, outdoorPm25: true }
+		conditions: { windFrom: true, windSpeed: true, outdoorTemp: true, indoorTemp: true, outdoorPm25: true, gusty: true }
 	} satisfies { setup: Record<keyof Setup, boolean>; device: Record<keyof DeviceState, boolean>; oscillation: Record<keyof DeviceState['oscillation'], boolean>; conditions: Record<keyof Conditions, boolean> };
 
 	test('every field of a Setup is carried: the maximal setup sets them all, and each comes back', () => {

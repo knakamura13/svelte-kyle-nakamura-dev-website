@@ -2,6 +2,8 @@
 	import { onMount } from 'svelte';
 	import { useAirflow } from '../../experience.svelte';
 	import { compassWord, describeBearing } from '../../directionWords';
+	import { GUST_SEED, GustSeries, gustAt } from '../../homes/gust';
+	import { WIND_AT_EAVES } from '../../homes/weather';
 	import { formatPm25, weatherAnnouncement, weatherField, windFromAnnouncement } from '../weather';
 	import { dialRotation, windWords } from './compass';
 	import CompassDial from './CompassDial.svelte';
@@ -29,6 +31,19 @@
 	const air = $derived(airPreset(conditions.outdoorPm25));
 	const gust = $derived(windPreset(conditions.windSpeed));
 	const calm = $derived(!(conditions.windSpeed > 0));
+	const gusty = $derived(conditions.gusty === true);
+	/**
+	 * The wind's speed now, as the chips show it: the mean, or with gusts on the gust at the simulated time the readout last gave, in the
+	 * weather report's terms (the gust at the eaves over the mean there). The series is the one the solver's pressures come from (sim/world.ts),
+	 * a function of the time alone, so the chip and the air agree. With reduced motion asked for, the number holds still at the mean
+	 * and the chip says the wind is gusty instead; the gusts themselves go on.
+	 */
+	const series = new GustSeries(GUST_SEED);
+	const moving = $derived(gusty && !calm && !experience.reducedMotion);
+	const now = $derived(moving ? gustAt(series, experience.readout.physics.time, conditions.windSpeed * WIND_AT_EAVES).speed / WIND_AT_EAVES : conditions.windSpeed);
+	const shown = $derived(weatherField('windSpeed', now, units).display);
+	/** What the chip adds when the number cannot move: the wind is gusty, said in words. */
+	const still = $derived(gusty && !calm && !moving ? ' gusty' : '');
 	/** The phone's pill in words: what its two lines show, for a screen reader. */
 	const said = $derived(
 		`Weather: ${calm ? 'calm' : `wind from the ${compassWord(conditions.windFrom)} at ${speed.spoken}`}; ${outdoor.spoken} outside; outdoor air ${(air?.label ?? formatPm25(conditions.outdoorPm25).spoken).toLowerCase()}.`
@@ -59,6 +74,13 @@
 		const at = WIND_PRESETS.findIndex((preset) => preset.value > conditions.windSpeed + 0.01);
 		const next = WIND_PRESETS[at < 0 ? 0 : at];
 		setWind(next.value, next.label);
+	}
+
+	/** The Gusty switch: says politely what it did, and why nothing moves yet in a calm. */
+	function toggleGusty() {
+		const on = !gusty;
+		experience.setCondition('gusty', on);
+		experience.announce(on ? (calm ? 'Gusty wind on. The wind is calm, so there are no gusts yet.' : 'Gusty wind on. The wind’s speed rises and falls about its mean, and its direction wobbles.') : 'Gusty wind off. The wind blows steady.');
 	}
 
 	function step(key: StepKey, direction: 1 | -1) {
@@ -113,8 +135,8 @@
 			<p class="wind-toward">{wind.toward}</p>
 			{#if ui.phone}
 				<!-- At the sheet's peek the dial and the speed: a tap goes to the next of the wind's speeds, as the desktop's chip does. -->
-				<button type="button" class="speed-chip" aria-label="Wind speed {speed.spoken}{gust ? `, ${gust.label.toLowerCase()}` : ''}. Next speed" onclick={nextWind}
-					>{gust ? `${gust.id === 'calm' ? 'Calm' : gust.label.replace(' breeze', '')} · ` : ''}{speed.display}<Icon name="chevron-right" size={14} /></button
+				<button type="button" class="speed-chip" data-gusty={moving || undefined} aria-label="Wind speed {speed.spoken}{gust ? `, ${gust.label.toLowerCase()}` : ''}{gusty && !calm ? ', gusty' : ''}. Next speed" onclick={nextWind}
+					>{gust ? `${gust.id === 'calm' ? 'Calm' : gust.label.replace(' breeze', '')} · ` : ''}{shown}{still}<Icon name="chevron-right" size={14} /></button
 				>
 			{:else}
 				<p class="hint">Drag the green handle, or focus the dial and use the arrow keys.</p>
@@ -134,6 +156,14 @@
 				>
 			{/each}
 		</div>
+		<!-- A switch, so Space and Enter work and a screen reader says on or off; what it did is announced politely. -->
+		<button type="button" class="gusty" role="switch" aria-checked={gusty} aria-describedby="hud-gusty-note" onclick={toggleGusty}>
+			<span class="track" aria-hidden="true"><span class="thumb"></span></span>
+			<span class="gusty-name">Gusty</span>
+		</button>
+		<p class="gusty-note" id="hud-gusty-note">
+			{gusty ? 'Gusts of up to nearly twice the mean, seconds long, with lulls between, and the direction wobbling.' : 'The wind blows steady at the speed above.'}
+		</p>
 	</div>
 	<div class="block steppers" class:sheet-more={ui.phone}>
 		<p class="eyebrow">Temperature</p>
@@ -169,7 +199,7 @@
 		<span class="pill-lines" aria-hidden="true">
 			<span class="pill-wind">
 				<span class="pill-from">{calm ? 'Calm' : describeBearing(conditions.windFrom).compass}</span>
-				{#if !calm}<span class="pill-speed">{speed.display}</span>{/if}
+				{#if !calm}<span class="pill-speed" data-gusty={moving || undefined}>{shown}{still}</span>{/if}
 			</span>
 			<span class="pill-rest" data-air={air?.id ?? 'custom'}>
 				<span>{outdoor.display}</span>
@@ -199,9 +229,10 @@
 			<button
 				type="button"
 				class="speed-chip"
-				aria-label="Wind speed {speed.spoken}{gust ? `, ${gust.label.toLowerCase()}` : ''}. Next speed"
-				use:tooltip={{ label: gust ? gust.label : 'Wind speed', hint: 'Click for the next wind speed.', side: 'bottom' }}
-				onclick={nextWind}>{speed.display}</button
+				data-gusty={moving || undefined}
+				aria-label="Wind speed {speed.spoken}{gust ? `, ${gust.label.toLowerCase()}` : ''}{gusty && !calm ? ', gusty' : ''}. Next speed"
+				use:tooltip={{ label: gust ? gust.label : 'Wind speed', hint: gusty && !calm ? `Gusty about a mean of ${speed.display}. Click for the next wind speed.` : 'Click for the next wind speed.', side: 'bottom' }}
+				onclick={nextWind}>{shown}{still}</button
 			>
 		</div>
 		<div class="fact temp">
@@ -295,6 +326,71 @@
 	}
 	.speed-chip:hover {
 		background: rgb(95 213 154 / 0.26);
+	}
+	/* A gusting number keeps its width, so the chip does not jitter as it changes. */
+	[data-gusty] {
+		font-variant-numeric: tabular-nums;
+	}
+	/* The Gusty switch: a track and thumb, the whole row a 44 px target. */
+	.gusty {
+		display: inline-flex;
+		align-items: center;
+		gap: 10px;
+		justify-self: start;
+		min-height: 44px;
+		padding: 0 12px 0 6px;
+		border: 0;
+		border-radius: 14px;
+		background: transparent;
+		color: inherit;
+		font: inherit;
+		font-size: 13px;
+		font-weight: 700;
+		cursor: pointer;
+	}
+	.gusty:hover {
+		background: var(--hud-well);
+	}
+	.track {
+		position: relative;
+		width: 38px;
+		height: 22px;
+		border-radius: 11px;
+		background: var(--hud-well);
+		box-shadow: inset 0 0 0 1.5px var(--hud-edge);
+		transition: background 160ms var(--hud-ease);
+	}
+	.thumb {
+		position: absolute;
+		top: 3px;
+		left: 3px;
+		width: 16px;
+		height: 16px;
+		border-radius: 50%;
+		background: var(--hud-muted);
+		transition:
+			transform 160ms var(--hud-ease),
+			background 160ms var(--hud-ease);
+	}
+	.gusty[aria-checked='true'] .track {
+		background: rgb(95 213 154 / 0.35);
+		box-shadow: inset 0 0 0 1.5px var(--hud-accent);
+	}
+	.gusty[aria-checked='true'] .thumb {
+		transform: translateX(16px);
+		background: var(--hud-accent);
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.track,
+		.thumb {
+			transition: none;
+		}
+	}
+	.gusty-note {
+		margin: -6px 0 0;
+		color: var(--hud-dim);
+		font-size: 11px;
+		line-height: 1.45;
 	}
 	/* The chip in the summary is drawn small, under the wind's letters; a finger takes it over 44 px, which reach past it top and bottom. */
 	.summary .speed-chip {

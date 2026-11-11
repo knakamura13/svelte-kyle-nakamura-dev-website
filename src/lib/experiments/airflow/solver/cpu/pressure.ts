@@ -145,9 +145,10 @@ export class PressureSolver {
 	 * coarse operators. `vel` holds the velocity after advection, diffusion and forces, which the projection
 	 * makes divergence-free, except where `air` (per cell, 1/s) says a purifier draws air in (positive) or blows
 	 * it out (negative): there the cell's net outflow becomes minus `air` times its volume. `ease` is the share of the
-	 * way a window fan's face moves from the speed it had toward what its curve asks for, `step / (step + FAN_SPIN_UP)`.
+	 * way a window fan's face moves from the speed it had toward what its curve asks for, `step / (step + FAN_SPIN_UP)`. `gust` adds
+	 * a pressure, Pa, outside every opening on each side of the box (six numbers in box-side order), on top of the exterior's own.
 	 */
-	assemble(dt: number, ease: number, rho: number, cd: number, geometry: Geometry, exterior: Exterior, vel: Velocity, air?: Float32Array) {
+	assemble(dt: number, ease: number, rho: number, cd: number, geometry: Geometry, exterior: Exterior, gust: ArrayLike<number>, vel: Velocity, air?: Float32Array) {
 		const { nx, ny, nz, sx, sxy, h } = this.grid;
 		const fine = this.levels[0];
 		const { au, av, aw, fluid } = geometry;
@@ -192,6 +193,7 @@ export class PressureSolver {
 		const sides = exterior.sides;
 		const openings = (side: SideIndex, open: Float32Array, conductance: Float32Array, faceOf: (a: number, b: number) => number, cellOf: (a: number, b: number) => number, na: number, nb: number) => {
 			const data = sides[side];
+			const outside = gust[side];
 			const q = this.boundaryQ[side];
 			const g = this.boundaryG[side];
 			for (let b = 0; b < nb; b++)
@@ -205,7 +207,7 @@ export class PressureSolver {
 					g[slot] = 0;
 					if (open[face] <= 0 || !fluid[cell]) continue;
 					const base = 3 * slot;
-					let [speed, slope] = PressureSolver.opening(data[base] - p[cell], rho, cd, data[base + 1], data[base + 2]);
+					let [speed, slope] = PressureSolver.opening(data[base] + outside - p[cell], rho, cd, data[base + 1], data[base + 2]);
 					if (data[base + 1] !== 0 && data[base + 2] > 0) {
 						// A window fan's face moves only `ease` of the way from its last speed toward the curve's, as a fan disk's push does.
 						speed = before + ease * (speed - before);
