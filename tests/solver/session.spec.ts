@@ -141,7 +141,7 @@ test.describe('simulation session', () => {
 		// frames a second and polled the worker for as long as it stayed paused (found by #62's keyboard spec, slowed by every round trip).
 		let reads = 0;
 		const slow: BackendFactory = (config, initial) => {
-			const backend = make(config, initial);
+			const backend = new CpuBackend({ ...config, scalarSubsteps: undefined }, initial);
 			const snapshot = backend.snapshot.bind(backend);
 			backend.snapshot = async (request) => {
 				reads++;
