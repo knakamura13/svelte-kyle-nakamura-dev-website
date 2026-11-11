@@ -24,3 +24,20 @@ test('on the GPU, an opening’s pressure follows the gust series, and a gusty m
 	expect(Math.abs(ratio / r.expected.ratio - 1)).toBeLessThan(0.03);
 	expect(Math.abs(ratio - 1)).toBeLessThan(0.3);
 });
+
+/** The long-run mean outside pressure, as tests/solver/gusts.spec.ts checks it on the CPU, with the same bounds and the reasons for them there. */
+test('on the GPU, the long-run mean outside pressure on each window is the steady wind’s', async ({ page }) => {
+	test.setTimeout(600_000);
+	await openHarness(page, 'gusts.ts');
+	const r = await page.evaluate(() => (window as any).gusts.long(3600));
+	const across = (r.west - r.east) / (r.steadyWest - r.steadyEast);
+	console.log(
+		`gpu, an hour: west ${r.west.toFixed(3)} Pa (series ${r.seriesWest.toFixed(3)}, steady ${r.steadyWest.toFixed(3)}, ${((r.west / r.steadyWest) * 100).toFixed(2)} %), east ${r.east.toFixed(3)} Pa (series ${r.seriesEast.toFixed(3)}, steady ${r.steadyEast.toFixed(3)}, ${((r.east / r.steadyEast) * 100).toFixed(2)} %), across ${(across * 100).toFixed(2)} %`
+	);
+	expect(r.kind).toBe('webgpu');
+	expect(Math.abs(r.west / r.steadyWest - 1)).toBeLessThan(0.15);
+	expect(Math.abs(r.east / r.steadyEast - 1)).toBeLessThan(0.15);
+	expect(Math.abs(across - 1)).toBeLessThan(0.08);
+	expect(Math.abs(r.west / r.seriesWest - 1)).toBeLessThan(0.01);
+	expect(Math.abs(r.east / r.seriesEast - 1)).toBeLessThan(0.01);
+});

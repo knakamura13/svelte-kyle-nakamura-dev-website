@@ -31,6 +31,14 @@ export const GUST_LATERAL_TIME = 1 / 3;
  */
 export const GUST_FACTOR = Math.sqrt(1 + 7 * GUST_INTENSITY);
 
+/**
+ * The long-run mean of U(t)² over Ū²: (Ū + u′)² + v′² averages to Ū²(1 + Iu² + Iv²), with Iv = GUST_LATERAL·Iu. The pressure
+ * coefficients are mean pressures over the mean wind's dynamic pressure, measured in turbulent wind, so ½ρU(t)²Cp would count the
+ * turbulence twice and push about a fifth harder on average than the steady wind. The gusts' dynamic pressure is divided by this,
+ * so its long-run mean is the steady wind's (docs/research/airflow/openings-and-wind.md, section 2d).
+ */
+export const GUST_MEAN_SQUARE = 1 + GUST_INTENSITY ** 2 + (GUST_LATERAL * GUST_INTENSITY) ** 2;
+
 /** The seed the page uses, so the same setup always blows the same gusts. */
 export const GUST_SEED = 1;
 

@@ -2,7 +2,7 @@
 import type { BackendFactory } from '$lib/experiments/airflow/sim/world';
 import { GpuBackend } from '$lib/experiments/airflow/solver/gpu/backend';
 import { GpuContext } from '$lib/experiments/airflow/solver/gpu/context';
-import { compare, quasiSteadyRatio, runMinute } from '../../solver/gustyRoom';
+import { compare, quasiSteadyRatio, runLong, runMinute } from '../../solver/gustyRoom';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -15,5 +15,5 @@ async function run() {
 	return { kind: gusty.kind, ...compare(gusty, steady), expected: quasiSteadyRatio() };
 }
 
-(window as any).gusts = { run };
+(window as any).gusts = { run, long: (seconds: number) => runLong(make, seconds) };
 (window as any).harnessReady = true;

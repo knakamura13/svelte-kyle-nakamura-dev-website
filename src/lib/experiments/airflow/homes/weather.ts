@@ -1,7 +1,7 @@
 import { Grid } from '../solver/grid';
 import type { Exterior, FluidProperties } from '../solver/types';
 import type { Conditions } from '../state';
-import { gustAt, type GustSeries } from './gust';
+import { GUST_MEAN_SQUARE, gustAt, type GustSeries } from './gust';
 import type { Raster } from './rasterize';
 import type { Facade } from './types';
 
@@ -77,19 +77,21 @@ export function exteriorState(raster: Raster, conditions: Conditions, referenceT
 
 /**
  * A gusty wind's departure from the mean wind's pressure on each side of the box, Pa, six numbers in box-side order (sides without an
- * opening, the floor and the ceiling stay 0): ½ρU(t)²Cp(θ(t)) less ½ρŪ²Cp(θ̄) for the facade on that side, with U(t) and θ(t) the
- * gust at `time` simulated seconds. All zeros when the wind is steady or calm. The solver adds it to the outside pressure of every
- * opening on the side, so the steady wind and the gusts take one path into the pressure solve.
+ * opening, the floor and the ceiling stay 0): ½ρU(t)²Cp(θ(t)) / GUST_MEAN_SQUARE less ½ρŪ²Cp(θ̄) for the facade on that side, with
+ * U(t) and θ(t) the gust at `time` simulated seconds. The division keeps the long-run mean of U(t)² at Ū², so the mean pressure is
+ * the steady wind's, as the measured Cp are (homes/gust.ts). All zeros when the wind is steady or calm. The solver adds it to the
+ * outside pressure of every opening on the side, so the steady wind and the gusts take one path into the pressure solve.
  */
 export function gustPressures(raster: Raster, conditions: Conditions, series: GustSeries, time: number, rho: number, into = new Float32Array(6)) {
 	into.fill(0);
 	const mean = conditions.windSpeed * WIND_AT_EAVES;
 	if (conditions.gusty !== true || !(mean > 0)) return into;
 	const gust = gustAt(series, time, mean);
+	const speed = gust.speed / Math.sqrt(GUST_MEAN_SQUARE);
 	for (const opening of raster.openings) {
 		if (opening.side === undefined || opening.facade === undefined) continue;
 		into[opening.side] =
-			facadeWindPressure(raster.plan, opening.facade, conditions.windFrom + gust.veer, gust.speed, rho) - facadeWindPressure(raster.plan, opening.facade, conditions.windFrom, mean, rho);
+			facadeWindPressure(raster.plan, opening.facade, conditions.windFrom + gust.veer, speed, rho) - facadeWindPressure(raster.plan, opening.facade, conditions.windFrom, mean, rho);
 	}
 	return into;
 }

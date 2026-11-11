@@ -1,4 +1,4 @@
-import { GUST_SEED, GustSeries, gustAt } from '../../src/lib/experiments/airflow/homes/gust';
+import { GUST_MEAN_SQUARE, GUST_SEED, GustSeries, gustAt } from '../../src/lib/experiments/airflow/homes/gust';
 import { OPENING_LIMITS, type HomePlan } from '../../src/lib/experiments/airflow/homes/types';
 import { WIND_AT_EAVES, facadeWindPressure } from '../../src/lib/experiments/airflow/homes/weather';
 import { World, type BackendFactory } from '../../src/lib/experiments/airflow/sim/world';
@@ -44,7 +44,7 @@ export function gustySetup(gusty: boolean): Setup {
 /** The west window's outside pressure the gust series says, Pa, at `time`: ½ρU(t)²Cp(θ(t)) on the west wall. */
 export function seriesPressure(series: GustSeries, time: number, rho: number) {
 	const gust = gustAt(series, time, MEAN);
-	return facadeWindPressure(PLAN, 'west', 270 + gust.veer, gust.speed, rho);
+	return facadeWindPressure(PLAN, 'west', 270 + gust.veer, gust.speed / Math.sqrt(GUST_MEAN_SQUARE), rho);
 }
 
 export interface Minute {
@@ -152,9 +152,101 @@ export function quasiSteadyRatio(seconds = 60, rho = 1.204) {
 	const steps = Math.round(seconds / STEP);
 	for (let n = 0; n < steps; n++) {
 		const gust = gustAt(series, n * STEP, MEAN);
-		const across = facadeWindPressure(PLAN, 'west', 270 + gust.veer, gust.speed, rho) - facadeWindPressure(PLAN, 'east', 270 + gust.veer, gust.speed, rho);
+		const pressureSpeed = gust.speed / Math.sqrt(GUST_MEAN_SQUARE);
+		const across = facadeWindPressure(PLAN, 'west', 270 + gust.veer, pressureSpeed, rho) - facadeWindPressure(PLAN, 'east', 270 + gust.veer, pressureSpeed, rho);
 		sum += Math.sign(across) * Math.sqrt(Math.abs(across) / mean);
 		speed += gust.speed / MEAN;
 	}
 	return { ratio: sum / steps, meanSpeed: speed / steps };
+}
+
+export interface LongRun {
+	kind: string;
+	/** Mean outside pressure on the west (windward) and east (leeward) windows over the run, Pa, read back from their flow as in `runMinute`. */
+	west: number;
+	east: number;
+	/** The same from the gust series at the same moments, and the steady wind's, Pa. */
+	seriesWest: number;
+	seriesEast: number;
+	steadyWest: number;
+	steadyEast: number;
+}
+
+/**
+ * Runs the gusty room for `seconds` and averages the outside pressure the solver used on each window, read every `every` steps after
+ * the first `settle` seconds. The long-run mean is what the gusts' normalisation (GUST_MEAN_SQUARE) is for: it should be the steady wind's.
+ */
+export async function runLong(make: BackendFactory, seconds: number, every = 10, settle = 10): Promise<LongRun> {
+	const world = await World.create(gustySetup(true), { plans: [PLAN], models: new Map(), make, h: CELL });
+	const { rho, cd } = world.fluid;
+	const { au } = world.raster.geometry;
+	const west = world.raster.openings.find((o) => o.spec.id === 'west')!;
+	const east = world.raster.openings.find((o) => o.spec.id === 'east')!;
+	const series = new GustSeries(GUST_SEED);
+	const run: LongRun = {
+		kind: world.backend.kind,
+		west: 0,
+		east: 0,
+		seriesWest: 0,
+		seriesEast: 0,
+		steadyWest: facadeWindPressure(PLAN, 'west', 270, MEAN, rho),
+		steadyEast: facadeWindPressure(PLAN, 'east', 270, MEAN, rho)
+	};
+	// A window's outside pressure from its faces: `sign` turns u into the speed into the room, and the cell beside a face is `shift` before it.
+	const outside = (faces: { index: number }[], u: Float32Array, p: Float32Array, sign: 1 | -1, shift: 0 | 1) => {
+		let sum = 0;
+		let count = 0;
+		for (const face of faces) {
+			if (au[face.index] <= 0) continue;
+			const into = sign * u[face.index];
+			sum += p[face.index - shift] + Math.sign(into) * 0.5 * rho * (into / cd) ** 2;
+			count++;
+		}
+		return sum / count;
+	};
+	const steps = Math.round(seconds / STEP);
+	let samples = 0;
+	for (let n = 0; n < steps; n++) {
+		const time = n * STEP;
+		world.beforeStep(time);
+		world.backend.step(STEP);
+		if (time < settle || n % every) continue;
+		const { u, p } = await world.backend.readFields();
+		run.west += outside(west.faces, u, p, 1, 0);
+		run.east += outside(east.faces, u, p, -1, 1);
+		const gust = gustAt(series, time, MEAN);
+		const speed = gust.speed / Math.sqrt(GUST_MEAN_SQUARE);
+		run.seriesWest += facadeWindPressure(PLAN, 'west', 270 + gust.veer, speed, rho);
+		run.seriesEast += facadeWindPressure(PLAN, 'east', 270 + gust.veer, speed, rho);
+		samples++;
+	}
+	world.dispose();
+	for (const key of ['west', 'east', 'seriesWest', 'seriesEast'] as const) run[key] /= samples;
+	return run;
+}
+
+/** The series' own long-run mean wall pressure over the steady wind's, on the west and east walls, from `hours` of it sampled every 0.1 s. */
+export function seriesMeanPressure(hours: number, rho = 1.204) {
+	const series = new GustSeries(GUST_SEED);
+	let west = 0;
+	let east = 0;
+	let square = 0;
+	const steps = Math.round((hours * 3600) / STEP);
+	for (let n = 0; n < steps; n++) {
+		const gust = gustAt(series, n * STEP, MEAN);
+		const speed = gust.speed / Math.sqrt(GUST_MEAN_SQUARE);
+		west += facadeWindPressure(PLAN, 'west', 270 + gust.veer, speed, rho);
+		east += facadeWindPressure(PLAN, 'east', 270 + gust.veer, speed, rho);
+		square += (speed / MEAN) ** 2;
+	}
+	const steadyWest = facadeWindPressure(PLAN, 'west', 270, MEAN, rho);
+	const steadyEast = facadeWindPressure(PLAN, 'east', 270, MEAN, rho);
+	return {
+		/** The normalised dynamic pressure's mean over the steady wind's: 1 if GUST_MEAN_SQUARE is right. */
+		dynamic: square / steps,
+		west: west / steps / steadyWest,
+		east: east / steps / steadyEast,
+		/** The mean pressure difference across the room, west less east, over the steady wind's. */
+		across: (west - east) / steps / (steadyWest - steadyEast)
+	};
 }
