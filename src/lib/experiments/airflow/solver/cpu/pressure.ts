@@ -57,7 +57,8 @@ function makeLevel(nx: number, ny: number, nz: number, fx = 1, fy = 1, fz = 1): 
  * difference, with conductance a·h·dt/ρ (a is the face's open fraction). A face on the box that is an exterior
  * opening passes flow by the orifice law (or a window fan's curve), which depends on the room's own pressure; it
  * is linearised about the pressure of the last step, which makes it one more conductance and one more source
- * term in the cell next to it. The resulting system is symmetric and, with any opening in the box, positive
+ * term in the cell next to it. A window fan's face moves only part of the way toward its curve each step
+ * (`FAN_SPIN_UP`). The resulting system is symmetric and, with any opening in the box, positive
  * definite; with none it is singular, and the small shift in the diagonal fixes the constant.
  *
  * The multigrid coarsens by aggregating 2×2×2 cells with piecewise-constant transfer. The coarse operator is the
@@ -143,9 +144,10 @@ export class PressureSolver {
 	 * Builds the system for this step: conductances, diagonal and right-hand side on the fine level, and the
 	 * coarse operators. `vel` holds the velocity after advection, diffusion and forces, which the projection
 	 * makes divergence-free, except where `air` (per cell, 1/s) says a purifier draws air in (positive) or blows
-	 * it out (negative): there the cell's net outflow becomes minus `air` times its volume.
+	 * it out (negative): there the cell's net outflow becomes minus `air` times its volume. `ease` is the share of the
+	 * way a window fan's face moves from the speed it had toward what its curve asks for, `step / (step + FAN_SPIN_UP)`.
 	 */
-	assemble(dt: number, rho: number, cd: number, geometry: Geometry, exterior: Exterior, vel: Velocity, air?: Float32Array) {
+	assemble(dt: number, ease: number, rho: number, cd: number, geometry: Geometry, exterior: Exterior, vel: Velocity, air?: Float32Array) {
 		const { nx, ny, nz, sx, sxy, h } = this.grid;
 		const fine = this.levels[0];
 		const { au, av, aw, fluid } = geometry;
@@ -197,11 +199,18 @@ export class PressureSolver {
 					const slot = a + na * b;
 					const face = faceOf(a, b);
 					const cell = cellOf(a, b);
+					// The speed the face settled on last step: last step's law at the pressure it was solved for, which is still `p`.
+					const before = q[slot] - g[slot] * p[cell];
 					q[slot] = 0;
 					g[slot] = 0;
 					if (open[face] <= 0 || !fluid[cell]) continue;
 					const base = 3 * slot;
-					const [speed, slope] = PressureSolver.opening(data[base] - p[cell], rho, cd, data[base + 1], data[base + 2]);
+					let [speed, slope] = PressureSolver.opening(data[base] - p[cell], rho, cd, data[base + 1], data[base + 2]);
+					if (data[base + 1] !== 0 && data[base + 2] > 0) {
+						// A window fan's face moves only `ease` of the way from its last speed toward the curve's, as a fan disk's push does.
+						speed = before + ease * (speed - before);
+						slope *= ease;
+					}
 					const flowArea = open[face] * area;
 					conductance[face] = flowArea * slope;
 					q[slot] = speed + slope * p[cell];
@@ -399,6 +408,27 @@ export class PressureSolver {
 					const c = i + sx * j + sxy * k;
 					if (dg[c] > 0) p[c] -= mean;
 				}
+	}
+
+	/**
+	 * Takes the speeds on the box's faces from velocities written in (air carried from another world, or set by a test), as the
+	 * speeds the openings settled on last step: a window fan eases on from the speed its face has, whatever the pressure is.
+	 */
+	settleOn(vel: Velocity) {
+		const { nx, ny, nz, sx, sxy } = this.grid;
+		const take = (side: SideIndex, field: Float32Array, sign: number, faceOf: (a: number, b: number) => number, na: number, nb: number) => {
+			for (let b = 0; b < nb; b++)
+				for (let a = 0; a < na; a++) {
+					this.boundaryQ[side][a + na * b] = sign * field[faceOf(a, b)];
+					this.boundaryG[side][a + na * b] = 0;
+				}
+		};
+		take(SIDE.X0, vel.u, 1, (j, kk) => sx * j + sxy * kk, ny, nz);
+		take(SIDE.X1, vel.u, -1, (j, kk) => nx + sx * j + sxy * kk, ny, nz);
+		take(SIDE.Y0, vel.v, 1, (i, kk) => i + sxy * kk, nx, nz);
+		take(SIDE.Y1, vel.v, -1, (i, kk) => i + sx * ny + sxy * kk, nx, nz);
+		take(SIDE.Z0, vel.w, 1, (i, j) => i + sx * j, nx, ny);
+		take(SIDE.Z1, vel.w, -1, (i, j) => i + sx * j + sxy * nz, nx, ny);
 	}
 
 	/**

@@ -1,6 +1,7 @@
 import { Grid } from '../grid';
 import {
 	DEFAULT_PRESSURE,
+	FAN_SPIN_UP,
 	sideConditions,
 	type Diagnostics,
 	type RoomStats,
@@ -254,7 +255,7 @@ export class CpuSolver {
 
 		// 5. Projection, which also makes the air a purifier draws in vanish and the air it blows out appear.
 		// The pressure takes the second half of the step (the first half was applied before advection).
-		this.pressure.assemble(half, fluid.rho, fluid.cd, geometry, this.exterior, this.vel, this.purifiers.length ? this.air : undefined);
+		this.pressure.assemble(half, dt / (dt + FAN_SPIN_UP), fluid.rho, fluid.cd, geometry, this.exterior, this.vel, this.purifiers.length ? this.air : undefined);
 		this.pressure.solve();
 		this.pressure.project(half, fluid.rho, geometry, this.vel);
 

@@ -274,6 +274,13 @@ export const ADVECTION_LIMIT = 0.6;
  * read off that overshoot overshoots the other way, and in a few steps the air is not a number. A fan running steadily pushes exactly
  * as its curve says, so delivered flows are unchanged, and a real fan takes a second or more to spin up. Both backends read this:
  * `cpu/forces.ts` and `gpu/shaders/flow.ts`.
+ *
+ * A window fan eases the same way: each step its face's speed moves this share of the way from the speed it had toward what its
+ * curve asks for at the room's pressure (`cpu/pressure.ts` and `gpu/shaders/pressure.ts`). Set at once, the face went from still air
+ * to the fan's free-delivery speed in one step; the pressure that accelerates the air beside it in that step grows as the step
+ * shrinks, and at the page's 1/60 s it passed the fan's 25 Pa shut-off. A stalled face's law, linearised at the curve's steepest
+ * slope, then held the room beside it near the pressure that stalled it, as if outdoors were at that pressure, and the air ran away
+ * within a few dozen steps on 0.075 to 0.15 m cells (issue 91).
  */
 export const FAN_SPIN_UP = 1;
 

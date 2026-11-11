@@ -130,8 +130,9 @@ test('the cross-ventilation Scenario, as the page runs it: running, paused, resu
 });
 
 /**
- * The fastest air the Scenarios make, on the finest grid: a window fan's jet at its own five times real time and then twenty (not at real time,
- * where an intake window fan runs away: see `runaway.gpu.ts`), and the Airmega Mighty's outlet at 7 m/s at twenty times real time.
+ * The fastest air the Scenarios make, on the finest grid: a window fan's jet at its own five times real time and then twenty (real time,
+ * where an intake window fan ran away until issue 91, is in `window-fan-steps.gpu.ts`), and the Airmega Mighty's outlet at 7 m/s at twenty
+ * times real time.
  */
 for (const scenario of ['window-fan', 'clearing-smoke'])
 	test(`the ${scenario} Scenario on the finest grid at 5x and 20x, paused and resumed`, async () => {
