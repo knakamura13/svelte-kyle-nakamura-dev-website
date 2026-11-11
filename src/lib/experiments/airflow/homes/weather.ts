@@ -84,7 +84,7 @@ export function exteriorState(raster: Raster, conditions: Conditions, referenceT
 export function gustPressures(raster: Raster, conditions: Conditions, series: GustSeries, time: number, rho: number, into = new Float32Array(6)) {
 	into.fill(0);
 	const mean = conditions.windSpeed * WIND_AT_EAVES;
-	if (!conditions.gusty || !(mean > 0)) return into;
+	if (conditions.gusty !== true || !(mean > 0)) return into;
 	const gust = gustAt(series, time, mean);
 	for (const opening of raster.openings) {
 		if (opening.side === undefined || opening.facade === undefined) continue;
