@@ -346,11 +346,31 @@ test.describe('the HUD', () => {
 		await page.getByRole('group', { name: 'Speed' }).getByRole('button', { name: /^20×/ }).click();
 		const behind = page.locator('.clock-behind');
 		await expect(behind).toBeVisible({ timeout: 90_000 });
-		const line = (await behind.boundingBox())!;
-		const overlay = (await page.getByRole('group', { name: 'Overlay' }).boundingBox())!;
+		// The line shows only while the measured rate is under the speed asked for, and a rate near it comes and goes from one reading to
+		// the next (WebKit on CI ran at 16.6× against 20×). So the three boxes are read together, in the page, at a moment the line shows.
+		type Box = { x: number; y: number; width: number; height: number };
+		const seen: { boxes?: { line: Box; overlay: Box; time: Box } | null } = {};
+		await expect
+			.poll(
+				async () => {
+					seen.boxes = await page.evaluate(() => {
+						const box = (selector: string) => {
+							const element = document.querySelector(selector);
+							if (!element || element.getClientRects().length === 0) return null;
+							const { x, y, width, height } = element.getBoundingClientRect();
+							return width > 0 && height > 0 ? { x, y, width, height } : null;
+						};
+						const [line, overlay, time] = [box('.clock-behind'), box('.hud [role="group"][aria-label="Overlay"]'), box('.cluster.time')];
+						return line && overlay && time ? { line, overlay, time } : null;
+					});
+					return seen.boxes != null;
+				},
+				{ message: 'the clock says it is behind', timeout: 90_000, intervals: [100] }
+			)
+			.toBe(true);
+		const { line, overlay, time } = seen.boxes!;
 		const overlap = line.x < overlay.x + overlay.width && overlay.x < line.x + line.width && line.y < overlay.y + overlay.height && overlay.y < line.y + line.height;
 		expect(overlap, 'the clock line and the overlay switcher overlap').toBe(false);
-		const time = (await page.locator('.cluster.time').boundingBox())!;
 		const apart = time.x + time.width <= overlay.x || overlay.x + overlay.width <= time.x || time.y + time.height <= overlay.y || overlay.y + overlay.height <= time.y;
 		expect(apart, 'the time cluster and the overlay switcher overlap').toBe(true);
 	});

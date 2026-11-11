@@ -377,7 +377,7 @@ async function runawayNotice(page: Page, found: Scan[]) {
 }
 
 for (const { width, height } of WIDTHS)
-	test.describe(`at ${width} by ${height}`, () => {
+	test.describe(`at ${width} by ${height}`, { tag: '@slow' }, () => {
 		test.use({ viewport: { width, height }, locale: 'en-US', actionTimeout: STEP_MS });
 
 		test('axe finds no WCAG 2.1 A/AA violation in the states of the Airflow page', async ({
@@ -390,8 +390,9 @@ for (const { width, height } of WIDTHS)
 				'Firefox and WebKit are swept at 1440 px.'
 			);
 			// The sweep takes about 1.5 minutes here. CI runs one worker on software rendering at about 2 fps, which the waits for the stage
-			// and the runaway notice feel most, so the test has 12 minutes. Each step has its own 30 s limit, so a hang fails sooner.
-			test.setTimeout(720_000);
+			// and the runaway notice feel most, so the test has 15 minutes: the 768 px sweep took 11.8 of the 12 it had in Chromium on CI
+			// (run 43026931941). Each step has its own 30 s limit, so a hang fails sooner.
+			test.setTimeout(900_000);
 			// A browser without WebGL 2 (Firefox on CI) has no world to sweep: the stage says it is unsupported.
 			await requireWebGL2(page);
 			await page.emulateMedia({ reducedMotion: 'reduce' });

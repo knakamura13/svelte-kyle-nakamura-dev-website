@@ -46,8 +46,11 @@ jobs:
       # One shard failing does not cancel the others, so every failure is reported in the same run.
       fail-fast: false
       matrix:
-        # Each browser is split on its own. The airflow specs are the slow ones (WebGL drawn in software), and they sort early, so
-        # Chromium and WebKit get more shards than their test counts alone would need.
+        # Every test but the long ones tagged @slow (the e2e-slow job below runs those). Each browser is split on its own, in equal counts
+        # of tests in file order. The airflow specs are the slow ones here too (WebGL drawn in software), and they sort early, so Chromium
+        # and WebKit get more shards than their test counts alone would need. Measured from run 43026931941, with run 43015767486 for the
+        # tests that run did not reach, the busiest shard holds about 12 minutes of tests in Chromium (2 of 8 and 3 of 8) and 10 in WebKit
+        # (1 of 4), and Firefox 4, all of it in a job that spends about a minute and a half setting up.
         include:
           - { project: chromium, shard: 1, total: 8 }
           - { project: chromium, shard: 2, total: 8 }
@@ -83,10 +86,11 @@ jobs:
         # One worker: the runner has 4 cores, and one airflow page drawing WebGL in software, with its simulation on a worker, keeps them
         # busy. Two pages at once drew about 1 frame a second each against 2.7 for one alone, and a trivial page.evaluate took 1.1 to 1.4 s
         # against 0.12 s (run 42994808018). Memory is not the limit: at most 4.2 of 16 GB was in use.
-        # The HTML report is written for the upload below.
+        # The HTML report is written for the upload below. The global timeout stops the run, and writes the report, before the job's
+        # limit would cancel it with none.
         env:
           PLAYWRIGHT_HTML_OPEN: never
-        run: yarn test:e2e --project=${{ matrix.project }} --shard=${{ matrix.shard }}/${{ matrix.total }} --workers=1 --reporter=list,html
+        run: yarn test:e2e --project=${{ matrix.project }} --shard=${{ matrix.shard }}/${{ matrix.total }} --grep-invert @slow --workers=1 --global-timeout=1500000 --reporter=list,html
 
       # Always, so a green run's report still says which tests skipped and why (each skip's reason and measured frame rate).
       - name: Upload the report
@@ -94,6 +98,59 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report-${{ matrix.project }}-${{ matrix.shard }}-of-${{ matrix.total }}
+          path: |
+            playwright-report
+            test-results
+          retention-days: 14
+
+  e2e-slow:
+    # The specs that run the simulation for minutes of simulated time, and the Airflow page's axe sweep, tagged @slow: one test a shard.
+    # Each takes 1 to 12 minutes on a runner drawing in software, and the two purifier Scenarios more (below). Playwright splits a shard
+    # in file order, so together they filled three shards past the 30-minute limit (run 43026931941). `total` is the number of @slow tests in a browser, 18 today (yarn test:e2e
+    # --list --grep @slow --project=chromium), and `shard` counts up to it, so that each shard holds one test: a new @slow test needs a
+    # shard here too. Firefox has no WebGL 2 on the runners and skips every one of them, so it has one shard.
+    # The page sends the solver its steps once per drawn frame, so on these runners, which draw in software, the air runs at about 0.25×
+    # real time even at 20×. The purifier Scenarios need 194 and 295 simulated seconds, about 15 and 22 minutes here, and their tests allow
+    # 35 (tests/airflow-scenarios.spec.ts), so this job has 45 minutes and Playwright 40, which still leaves the report time to upload.
+    name: end-to-end slow ${{ matrix.project }} ${{ matrix.shard }} of ${{ matrix.total }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [chromium, webkit]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]
+        total: [18]
+        include:
+          - { project: firefox, shard: 1, total: 1 }
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
+    env:
+      HOME: /root
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: yarn
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: End-to-end tests
+        # One worker, as above.
+        env:
+          PLAYWRIGHT_HTML_OPEN: never
+        run: yarn test:e2e --project=${{ matrix.project }} --shard=${{ matrix.shard }}/${{ matrix.total }} --grep @slow --workers=1 --global-timeout=2400000 --reporter=list,html
+
+      - name: Upload the report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-slow-${{ matrix.project }}-${{ matrix.shard }}-of-${{ matrix.total }}
           path: |
             playwright-report
             test-results

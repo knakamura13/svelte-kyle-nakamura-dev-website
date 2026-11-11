@@ -3,6 +3,7 @@ import { stubClipboard } from './clipboard';
 import { DEVICE_MODELS } from '../src/lib/experiments/airflow/devices/catalog';
 import { plans } from '../src/lib/experiments/airflow/homes/plans';
 import { decodeSetup, linkCatalog } from '../src/lib/experiments/airflow/link';
+import { requireWebGL2 } from './webgl';
 
 /**
  * Issue 92's Gusty switch in the weather: off at first, reached and turned on from the keyboard and said politely, kept in the Share link
@@ -21,7 +22,9 @@ const live = (page: Page) => page.locator('.hud p[aria-live="polite"]');
 const view = (page: Page) => page.getByRole('application', { name: /^The air in the/ });
 const gusty = (page: Page) => page.getByRole('switch', { name: 'Gusty' });
 
+/** Opens the page on its world, which needs WebGL 2: without it (Firefox on CI) the test skips. */
 async function open(page: Page, path = PAGE) {
+	await requireWebGL2(page);
 	await page.goto(path);
 	await expect(view(page)).toHaveAttribute('data-state', 'live', { timeout: 60_000 });
 	await expect(page.locator('.sim-status')).toHaveAttribute('data-status', /^(running|paused)$/, { timeout: 60_000 });

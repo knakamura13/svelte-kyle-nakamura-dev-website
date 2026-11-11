@@ -135,7 +135,7 @@ async function closeWeather(page: Page) {
 
 const fastest = (reading: Readings) => Math.max(...Object.values(reading.rooms).map((room) => room.speed));
 
-test.describe('the running simulation', () => {
+test.describe('the running simulation', { tag: '@slow' }, () => {
 	// Minutes: Chromium's headless shell steps the air on the processor at about real time here, and a runner drawing in software slower.
 	test.beforeEach(() => test.setTimeout(480_000));
 
@@ -210,6 +210,10 @@ test.describe('the running simulation', () => {
 	});
 
 	test('Smoke released into the moving air shows in the books and the Rooms, then leaves by the open windows', async ({ page, browserName }) => {
+		// Under half the smoke is left at about 130 simulated seconds. CI's runners step the air at about a quarter of real time even at 20×
+		// (0.26× in WebKit in run 43026931941), so that takes some 8 minutes there, and the 8 minutes the other tests get ran out in both
+		// Chromium and WebKit.
+		test.setTimeout(900_000);
 		await openRunning(page);
 		await page.getByRole('group', { name: 'Speed' }).getByRole('button', { name: /^20×/ }).click();
 		await untilSim(page, 3);
@@ -225,7 +229,7 @@ test.describe('the running simulation', () => {
 		expect(released.smoke.inAir).toBeGreaterThan(0.5 * released.smoke.emitted);
 		expect(Math.max(...Object.values(released.rooms).map((room) => room.ppm)), 'a Room holds it').toBeGreaterThan(0);
 		// It decays: the wind takes it out through the windows until under half of it is left in the home.
-		const later = await readUntil(page, (r) => r.smoke.inAir < 0.5 * released.smoke.emitted, 'the smoke leaves');
+		const later = await readUntil(page, (r) => r.smoke.inAir < 0.5 * released.smoke.emitted, 'the smoke leaves', 720_000);
 		console.log(`${browserName}: at ${later.time} s, ${later.smoke.inAir} mg in the air, ${later.smoke.outflow} mg left through openings`);
 		expect(later.smoke.outflow, 'by the openings').toBeGreaterThan(0.3 * released.smoke.emitted);
 	});
@@ -340,7 +344,7 @@ test.describe('the running simulation', () => {
 	});
 });
 
-test.describe('a Share link', () => {
+test.describe('a Share link', { tag: '@slow' }, () => {
 	test.beforeEach(() => test.setTimeout(300_000));
 
 	/** The setup a copied link carries. */

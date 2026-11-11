@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { openAirflow, status } from './dock';
+import { requireWebGL2 } from './webgl';
 
 /**
  * A hidden tab does not run the simulation (#64). The page's frames stop while `document.hidden` is true, and the clock is
@@ -28,6 +29,8 @@ test.use({ locale: 'en-US' });
 
 test('simulated time stands still while the tab is hidden, and goes on once it is shown again', async ({ page }) => {
 	test.setTimeout(120_000);
+	// The clock runs only in a live world, which needs WebGL 2 (Firefox on CI has none).
+	await requireWebGL2(page);
 	await openAirflow(page, PAGE);
 	await expect(status(page)).toHaveAttribute('data-status', 'running', { timeout: 60_000 });
 	// Some simulated time first, so that a clock stuck at 0:00 cannot pass for a paused one.
