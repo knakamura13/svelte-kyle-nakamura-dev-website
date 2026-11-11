@@ -35,6 +35,16 @@ interface StepRecord {
 	dt: number;
 }
 
+/**
+ * One CFL reading as it reached the backend: the speed of the air after `at` steps. A step's scalar substeps carry the air the step
+ * ends with (they run last, on the projected velocity), so the reading at step + 1 is the speed those substeps really had.
+ */
+interface ReadingRecord {
+	world: number;
+	at: number;
+	speed: number;
+}
+
 /** One snapshot as the backend encoded it: how many steps of the log it took, and the fastest air it found, m/s. */
 interface ReadRecord {
 	world: number;
@@ -62,10 +72,19 @@ function animate(frame: (dt: number, t: number) => void, done: (t: number) => bo
 }
 
 /** Records every step and read of a GPU backend, by wrapping the solver's substep rule and the backend's snapshot. Private state is read for the record only. */
-function watch(backend: GpuBackend, world: number, phase: () => string, steps: StepRecord[], reads: ReadRecord[]) {
+function watch(backend: GpuBackend, world: number, phase: () => string, steps: StepRecord[], reads: ReadRecord[], readings: ReadingRecord[]) {
 	const solver = backend.solver as any;
 	const inner = solver.scalarSubsteps.bind(solver);
 	const b = backend as any;
+	// Every reading the backend takes in sets `cflMeasuredAt`, after `cflSpeed`.
+	let measuredAt: number = b.cflMeasuredAt;
+	Object.defineProperty(b, 'cflMeasuredAt', {
+		get: () => measuredAt,
+		set: (at: number) => {
+			measuredAt = at;
+			readings.push({ world, at, speed: b.cflSpeed });
+		}
+	});
 	solver.scalarSubsteps = (dt: number, speed: number, safety?: number) => {
 		const substeps = inner(dt, speed, safety);
 		const measuredAt: number = b.cflMeasuredAt;
@@ -150,6 +169,7 @@ async function run(scenario: string, options: { fixedCell?: number; phases?: Pha
 	const readout = emptyReadout();
 	const steps: StepRecord[] = [];
 	const reads: ReadRecord[] = [];
+	const readings: ReadingRecord[] = [];
 	const worlds: { world: number; kind: string; cells: number; h: number; phase: string }[] = [];
 	let phase = 'warm-up';
 	let made = 0;
@@ -164,7 +184,7 @@ async function run(scenario: string, options: { fixedCell?: number; phases?: Pha
 			const backend: FlowBackend = await choice.make(config, initial);
 			const world = made++;
 			worlds.push({ world, kind: backend.kind, cells: backend.grid.cells, h: config.grid.h, phase });
-			if (backend instanceof GpuBackend) watch(backend, world, () => phase, steps, reads);
+			if (backend instanceof GpuBackend) watch(backend, world, () => phase, steps, reads, readings);
 			return backend;
 		},
 		cellSize: (p) => choice.cellSize(p),
@@ -202,7 +222,7 @@ async function run(scenario: string, options: { fixedCell?: number; phases?: Pha
 			},
 			() => index >= phases.length
 		);
-		return { worlds, steps, reads, errors, inFlightLimit: (session.world?.backend as any)?.maxInFlight ?? null, cap: MAX_SCALAR_SUBSTEPS, logCapacity: LOG_CAPACITY };
+		return { worlds, steps, reads, readings, errors, inFlightLimit: (session.world?.backend as any)?.maxInFlight ?? null, cap: MAX_SCALAR_SUBSTEPS, logCapacity: LOG_CAPACITY };
 	} finally {
 		session.dispose();
 		choice.dispose();

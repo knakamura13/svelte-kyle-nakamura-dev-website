@@ -68,7 +68,9 @@ export class GpuBackend implements FlowBackend {
 	 * The CFL reads' staging buffers: every one made (`dispose` destroys them), and those not on their way back. Each step reads the CFL
 	 * speed into one of its own, so there are about as many as steps in flight. With a single buffer a step could only read when the last
 	 * read was back, and a reading was up to two queues old (16 steps) when it was used: the 1.1-a-step enlargement then reached 3.5 times
-	 * real air of 17 m/s at the finest grid, and the substep cap, under a contended GPU (#104).
+	 * real air of 17 m/s at the finest grid, and the substep cap, under a contended GPU (#104). There are at most twice `limit`: a caller
+	 * that steps without yielding gets none back, and its steps past that read nothing, as they did with one buffer, instead of each
+	 * holding a buffer of its own until `dispose`.
 	 */
 	private readonly cflBuffers: GpuBuffer[] = [];
 	private readonly cflFree: GpuBuffer[] = [];
@@ -158,11 +160,13 @@ export class GpuBackend implements FlowBackend {
 		s.encodeStep(encoder, dt, substeps, slot, s.querySet ? this.steps % PROFILE_STEPS : -1);
 		const measuredAt = this.steps + 1;
 		const writes = this.writes;
-		const staging = this.cflFree.pop() ?? this.cflBuffer();
-		const pass = encoder.beginComputePass({ label: 'cfl' });
-		s.measure(pass);
-		pass.end();
-		encoder.copyBufferToBuffer(s.measureResult, 0, staging, 0, 16);
+		const staging = this.cflFree.pop() ?? (this.cflBuffers.length < 2 * this.limit ? this.cflBuffer() : null);
+		if (staging) {
+			const pass = encoder.beginComputePass({ label: 'cfl' });
+			s.measure(pass);
+			pass.end();
+			encoder.copyBufferToBuffer(s.measureResult, 0, staging, 0, 16);
+		}
 		device.queue.submit([encoder.finish()]);
 		// The queue runs in order, so this resolves once this step, and everything submitted before it, is done. A device that was lost
 		// never finishes the work, and a rejection is how some browsers say so: the session has dropped the world by then, so both count alike.
@@ -172,7 +176,7 @@ export class GpuBackend implements FlowBackend {
 		};
 		device.queue.onSubmittedWorkDone().then(finished, finished);
 		// A buffer whose map failed (a lost device, or one destroyed by `dispose`) is not used again.
-		staging.mapAsync(MapMode.READ).then(
+		staging?.mapAsync(MapMode.READ).then(
 			() => {
 				const speed = new Float32Array(staging.getMappedRange())[0];
 				staging.unmap();

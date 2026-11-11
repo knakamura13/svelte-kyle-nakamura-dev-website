@@ -21,8 +21,9 @@ test.afterAll(async () => {
 	await page.close();
 });
 
-/** The cap, the GPU's queue limit and the log's length, as `solver/gpu/` sets them. */
+/** The cap, the most cells one explicit scalar substep may carry air across (`SCALAR_CFL`, the CPU's rule too), the GPU's queue limit and the log's length, as `solver/gpu/` sets them. */
 const CAP = 64;
+const SCALAR_CFL = 0.45;
 const LIMIT = 8;
 const LOG = 8192;
 
@@ -33,12 +34,16 @@ interface Step {
 	age: number | null;
 	substeps: number;
 	unlogged: number;
+	/** The step, s. */
+	dt: number;
 }
 
 interface Run {
 	worlds: { world: number; kind: string; cells: number; h: number; phase: string }[];
 	steps: Step[];
 	reads: { world: number; phase: string; took: number; maxSpeed: number }[];
+	/** Every CFL reading the backend took in: the speed of the air after `at` steps. */
+	readings: { world: number; at: number; speed: number }[];
 	errors: string[];
 }
 
@@ -93,8 +98,14 @@ function print(scenario: string, r: Run) {
  * What the page must do with the rules: a step goes without a reading, and so takes the cap, only as the first step of a world built from still
  * air (nothing has been read back yet, and its air has no speed to read); a world that carries another's air sizes even its first step from
  * it; every other step's reading is at most one queue old, because every step reads one back (a reading up to two queues old, when a
- * step read only once the last read was back, was enlarged 3.5 times and took the cap on air of 17 m/s at the finest grid, #104); nothing is stepped while the clock is paused; and a read takes the log long
- * before it wraps.
+ * step read only once the last read was back, was enlarged 3.5 times and took the cap on air of 17 m/s at the finest grid, #104); every
+ * step's substeps carry the air it really had at most SCALAR_CFL cells each, the rule the CPU sizes its substeps by; nothing is stepped
+ * while the clock is paused; and a read takes the log long before it wraps.
+ *
+ * A step with a reading may take the cap. The scalar transport is explicit (upwind with a van Leer slope, `cpu/scalars.ts`), so what
+ * matters is that the cap's substeps still cover the step's air: a capped step costs time, not accuracy. Until #104 this said no step
+ * with a reading took the cap. That held alone, but the clearing-smoke Scenario's air is 16 to 17 m/s, and a reading 7 steps old
+ * enlarged by 1.1 a step reaches the cap at 7.5 cm cells. A contended GPU makes readings that old at 5x, where they are 1 old alone.
  */
 function check(r: Run) {
 	expect(r.errors, 'nothing went wrong').toEqual([]);
@@ -108,8 +119,17 @@ function check(r: Run) {
 		const blind = steps.filter((s) => s.age === null);
 		if (carried) expect(blind, `world ${world.world} carried its air on, so every step had a reading`).toEqual([]);
 		else expect(blind.map((s) => s.step), `world ${world.world}: only its first step, from still air, had no reading`).toEqual(blind.length ? [0] : []);
-		const capped = steps.filter((s) => s.substeps >= CAP && s.age !== null);
-		expect(capped, `world ${world.world}: no step with a reading reached the ${CAP}-substep cap`).toEqual([]);
+		// The reading after step n + 1 is of the air step n's substeps carried.
+		const own = new Map(r.readings.filter((x) => x.world === world.world).map((x) => [x.at, x.speed]));
+		const sized = steps.filter((s) => own.has(s.step + 1)).map((s) => ({ ...s, own: own.get(s.step + 1)!, perSubstep: (own.get(s.step + 1)! * s.dt) / world.h / s.substeps }));
+		expect(steps.length - sized.length, `world ${world.world}: nearly every step's own air was read back`).toBeLessThanOrEqual(Math.max(2 * LIMIT, 0.1 * steps.length));
+		const worst = sized.reduce((a, b) => (b.perSubstep > a.perSubstep ? b : a), sized[0]);
+		const capped = sized.filter((s) => s.substeps >= CAP && s.age !== null);
+		console.log(`  world ${world.world}: ${sized.length} of ${steps.length} steps' own air read back; most cells a substep carried it ${worst?.perSubstep.toFixed(3)} (${worst?.own.toFixed(1)} m/s, ${worst?.substeps} substeps, ${worst?.phase}); ${capped.length} steps with a reading at the cap, their air ${capped.map((s) => s.own.toFixed(1)).join(', ') || 'none'} m/s`);
+		expect(
+			sized.filter((s) => s.perSubstep > SCALAR_CFL),
+			`world ${world.world}: every step's substeps carried the air it really had at most ${SCALAR_CFL} cells each`
+		).toEqual([]);
 		const later = steps.filter((s) => s.phase !== 'warm-up');
 		expect(Math.max(0, ...later.map((s) => s.age ?? 0)), `world ${world.world}: a reading is never more than one queue old`).toBeLessThanOrEqual(LIMIT);
 		expect(Math.max(0, ...later.map((s) => s.unlogged)), `world ${world.world}: the log is read every few dozen steps`).toBeLessThanOrEqual(64);
