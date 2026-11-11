@@ -181,6 +181,80 @@ test.describe('simulation session', () => {
 		session.dispose();
 	});
 
+	/** What a visitor can ask to see while paused, and how to tell it was read: a probe pinned, the slice moved, a fan added. */
+	const pausedAsks: { name: string; ask: (params: SessionParams) => void; seen: (session: SimulationSession, readout: ReturnType<typeof emptyReadout>) => boolean }[] = [
+		{
+			name: 'a probe pinned',
+			ask: (params) => (params.probes = [{ id: 'p1', x: 2, y: 1.1, z: 2 }]),
+			seen: (_, readout) => readout.probes.length === 1 && readout.probes[0].id === 'p1'
+		},
+		{
+			name: 'the slice moved',
+			ask: (params) => (params.view.sliceHeight = 2.0),
+			seen: (session) => session.latest.slice !== null && Math.abs(session.latest.slice.y - 2.0) < 0.11
+		},
+		{
+			name: 'a fan added',
+			ask: (params) => (params.setup = { ...params.setup, devices: [fan()] }),
+			seen: (_, readout) => 'f1' in readout.deviceFlow
+		}
+	];
+	for (const { name, ask, seen } of pausedAsks)
+		test(`paused: ${name} while a read the throttle asked for is on its way is still read and drawn, and then the page is quiet again`, async () => {
+			// A pointer move over a paused Stage draws one frame, and that frame's real time (the page was idle) lets the throttle ask for a
+			// read nobody waits for. Before, a click in the next frames was turned away because a read was on its way, the session asked for
+			// no more frames, and the read that came back did not ask for one either, so what was clicked stayed unread until the next input.
+			let inFlight = 0;
+			const slow: BackendFactory = (config, initial) => {
+				const backend = new CpuBackend({ ...config, scalarSubsteps: undefined }, initial);
+				const snapshot = backend.snapshot.bind(backend);
+				backend.snapshot = async (request) => {
+					inFlight++;
+					try {
+						const shot = await snapshot(request);
+						await pause(80);
+						return shot;
+					} finally {
+						inFlight--;
+					}
+				};
+				return backend;
+			};
+			const stage = { dirty: false, more: true };
+			const { session, params, readout } = makeSession((p) => (p.clock.paused = true), slow, () => 0.2, { models: DEVICE_MODELS, invalidate: () => (stage.dirty = true) });
+			let last = performance.now();
+			/** The Stage's loop, passing the real time since the last drawn frame, as airflowScene.ts does. Returns the frames drawn. */
+			const run = async (ms: number) => {
+				let frames = 0;
+				for (const end = Date.now() + ms; Date.now() < end; ) {
+					if (stage.more || stage.dirty) {
+						const now = performance.now();
+						stage.dirty = false;
+						stage.more = session.update((now - last) / 1000);
+						last = now;
+						frames++;
+					}
+					await pause(16);
+				}
+				return frames;
+			};
+			await start(session);
+			await run(1500);
+			expect(session.latest.slice, 'the first picture arrives while paused').not.toBeNull();
+			expect(await run(500), 'caught up, the page is quiet').toBe(0);
+			// The pointer moves over the Stage: one frame, after half a second of nothing.
+			stage.dirty = true;
+			await run(16);
+			expect(inFlight, 'that frame sent the throttle a read').toBe(1);
+			// The click, while that read is on its way.
+			ask(params);
+			stage.dirty = true;
+			await run(1500);
+			expect(seen(session, readout), `${name} has been read`).toBe(true);
+			expect(await run(500), 'and the page is quiet again').toBe(0);
+			session.dispose();
+		});
+
 	test('the slice, the hover reading, a pinned probe and the per-room numbers all arrive from the solver', async () => {
 		const { session, params, readout } = makeSession((p) => (p.probes = [{ id: 'p1', x: 5.1, y: 1.1, z: 2.7 }]));
 		await start(session);
@@ -722,6 +796,47 @@ test.describe('simulation session', () => {
 				params.restarts++;
 				await start(session);
 				expect(made).toHaveLength(2);
+				await draw(session, 2);
+				expect(readout.status).toBe('running');
+			} finally {
+				log.restore();
+				session.dispose();
+			}
+		});
+
+		test('a worker that crashed while a retune was building the next world is not started again either, on that grid or any other', async () => {
+			const { made, factory } = fragileThen('plain');
+			const tuner = scripted();
+			let size = 0.3;
+			let gate: Promise<void> | null = null;
+			let release: () => void = () => {};
+			const cellSize = async () => {
+				if (gate) await gate;
+				return size;
+			};
+			const { session, params, readout } = makeSession(undefined, factory, cellSize, { tuning: tuner.tuning });
+			const log = listen();
+			try {
+				await start(session);
+				await draw(session, 4);
+				// The tuner asks for a coarser grid, and the next world's build waits on the gate while the worker crashes.
+				size = 0.2;
+				gate = new Promise<void>((resolve) => (release = resolve));
+				tuner.ask(retune(0.2));
+				await draw(session, 2);
+				(made[0] as Fragile).fail({ reason: 'crashed', message: 'the solver blew up' });
+				expect(readout.status).toBe('error');
+				release();
+				for (let n = 0; n < 30; n++) {
+					session.update(FRAME);
+					await pause(5);
+				}
+				expect(readout.status, 'the error stays until the visitor restarts').toBe('error');
+				expect(session.world).toBeNull();
+				expect(made, 'not built again').toHaveLength(1);
+
+				params.restarts++;
+				await start(session);
 				await draw(session, 2);
 				expect(readout.status).toBe('running');
 			} finally {

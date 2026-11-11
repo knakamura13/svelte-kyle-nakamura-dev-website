@@ -3,6 +3,7 @@ import { plans } from '../../src/lib/experiments/airflow/homes/plans';
 import { emptyReadout } from '../../src/lib/experiments/airflow/readouts';
 import { RUNAWAY_SPEED, runawayOf } from '../../src/lib/experiments/airflow/sim/runaway';
 import { SimulationSession, type SessionParams } from '../../src/lib/experiments/airflow/sim/session';
+import type { Retune, Tuning } from '../../src/lib/experiments/airflow/sim/tuner';
 import type { BackendFactory } from '../../src/lib/experiments/airflow/sim/world';
 import { CpuBackend } from '../../src/lib/experiments/airflow/solver/cpu/backend';
 import { WorkerBackend } from '../../src/lib/experiments/airflow/solver/cpu/proxy';
@@ -130,3 +131,94 @@ for (const [backendName, make] of Object.entries(backends))
 				session.dispose();
 			}
 		});
+
+test('a runaway while a retune is building the next world stops the run, and it stays stopped until Reset, whatever the tuner asks', async () => {
+	// Before, the stop was recorded against the running world's key, but a retune asked just before had already moved the wanted key
+	// on, so the next frame built the world again: the notice went away and the same setup started over from still air by itself.
+	let ready: Retune | null = null;
+	let observed = 0;
+	const tuning: Tuning = {
+		observe: () => {
+			observed++;
+			const retune = ready;
+			ready = null;
+			return retune;
+		},
+		note: () => ''
+	};
+	let size = 0.3;
+	let gate: Promise<void> | null = null;
+	let release: () => void = () => {};
+	let sized = 0;
+	const params: SessionParams = {
+		setup: blankSetup('studio'),
+		view: { ...DEFAULT_VIEW, units: 'metric' },
+		clock: { ...DEFAULT_CLOCK },
+		probes: [],
+		emission: { strength: 0.5, active: false },
+		restarts: 0,
+		startingSmoke: 0
+	};
+	const readout = emptyReadout();
+	const announced: string[] = [];
+	const make = backends['the CPU in the page'];
+	const cellSize = async () => {
+		sized++;
+		if (gate) await gate;
+		return size;
+	};
+	const session = new SimulationSession({ params, plans, models: [], make, cellSize, readout, invalidate: () => {}, reducedMotion: () => false, announce: (m) => announced.push(m), tuning });
+	/** Draws `frames` frames, letting each one's read finish. Returns whether the last one asked for another. */
+	const draw = async (frames: number) => {
+		let more = true;
+		for (let n = 0; n < frames; n++) {
+			more = session.update(FRAME);
+			for (let k = 0; k < 4; k++) await pause(5);
+		}
+		return more;
+	};
+	try {
+		while (!session.world) await draw(1);
+		await draw(8);
+		const first = session.world!;
+		expect(first.raster.spec.h).toBe(0.3);
+		// The tuner asks for a coarser grid, and the next world's build waits on the gate.
+		size = 0.2;
+		gate = new Promise<void>((resolve) => (release = resolve));
+		ready = { size: 0.2, direction: 'coarser', message: 'Switched to a coarser grid.' };
+		await draw(2);
+		expect(sized, 'the retune is building its world').toBe(2);
+		expect(session.world, 'and the old one runs on meanwhile').toBe(first);
+		// The running world's air runs away while the next one is building.
+		const fields = await first.backend.readFields();
+		for (let n = 0; n < fields.u.length; n++)
+			if (first.raster.geometry.fluid[n] === 1) {
+				fields.u[n] = NaN;
+				break;
+			}
+		first.backend.writeFields(fields);
+		await draw(8);
+		expect(readout.status, 'the runaway is caught').toBe('runaway');
+		expect(session.world).toBeNull();
+		// The retune's build finishes after the stop, and the tuner would ask for yet another size.
+		release();
+		ready = { size: 0.4, direction: 'coarser', message: 'Switched to a coarser grid again.' };
+		const told = observed;
+		const more = await draw(40);
+		expect(readout.status, 'the runaway notice stays until Reset or Restart').toBe('runaway');
+		expect(session.world, 'nothing is built again until the visitor asks').toBeNull();
+		expect(more, 'once the cancelled build has settled, the Stage is not asked for more frames').toBe(false);
+		expect(sized, 'no other world was even sized').toBe(2);
+		expect(observed, 'and a stopped run tells the tuner nothing').toBe(told);
+		expect(announced.filter((m) => m.includes('ran away')), 'said once').toHaveLength(1);
+		expect(announced.some((m) => m.includes('coarser grid')), 'the cancelled retune is never announced').toBe(false);
+		// Reset, as the HUD's button does it: the run's key changes, and the run starts again.
+		ready = null;
+		params.restarts++;
+		while (!session.world) await draw(1);
+		await draw(8);
+		expect(readout.status, 'running again').toBe('running');
+	} finally {
+		session.dispose();
+	}
+});
