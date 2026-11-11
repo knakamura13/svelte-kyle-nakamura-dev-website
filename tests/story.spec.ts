@@ -62,6 +62,8 @@ test.describe('Learning Korean contents', () => {
 		await page.goto('/projects/learning-korean');
 		await page.getByRole('link', { name: 'Back to selected projects' }).click();
 		await expect(page).toHaveURL(/\/#work$/);
+		// The Back link runs a View Transition. A goBack while it still runs is lost (transitions.spec.ts, #44), so wait for it to finish.
+		await expect.poll(() => page.evaluate(() => document.documentElement.dataset.routeTransition ?? null)).toBeNull();
 		await page.goBack();
 		await expect(page).toHaveURL(/\/projects\/learning-korean$/);
 		await expect(page.locator('.case-contents a')).toHaveCount(4);
