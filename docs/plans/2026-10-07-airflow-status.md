@@ -167,16 +167,37 @@ Budgets from the spec: 60 fps at 1440p on a laptop GPU is met on both GPU browse
 
 ## First-load JavaScript
 
-Method: Chromium (`channel: 'chromium'`), a fresh profile, `/experiments/airflow` at 1440×900. Every script response was read as served by `vite preview` (decoded bytes, no transfer compression), and gzipped at level 9 to estimate transfer size. The first-load figure is the scripts requested before the first chunk that holds `WebGLRenderer`, which is the three.js chunk.
+Measured on 2026-11-11 on this Mac (M3 Max, AC power), one browser at a time, with the 1-minute load average between 3.7 and 5.0 for every run. The two methods below both count bytes as the server sends them.
 
-- Before the three.js chunk: 38 files, 837,546 bytes (308,944 gzip).
-- The three.js chunk, `Ct61nPVc.js`: 626,612 bytes (158,454 gzip).
-- All scripts on the page: 39 files, 1,464,158 bytes (467,398 gzip).
-- The largest chunks before three.js: `ChKZnvJL.js`, 287,743 bytes, holds the scene and solver session (it contains WGSL shader code); `h3n8aku-.js`, 237,784 bytes, holds the physics and panel code; `Cqs9dUo6.js`, 124,454 bytes, is the stage; `Dliri9py.js`, 50,622 bytes, is the look assets with the GLTF loader.
+Browser method: Chromium with `channel: 'chromium'`, a fresh profile, 1440×900, the default page. Each script response is read as served (decoded bytes, no transfer compression) and gzipped at level 9 for a transfer estimate. "Before three.js" counts the scripts requested before the first chunk that holds `WebGLRenderer`. On the airflow page that includes the stage and scene chunks the engine imports dynamically at mount.
 
-Lazy loading: the page's HTML has no modulepreload links. It starts the entry with dynamic `import()`, and the airflow engine (`engine.ts`) imports the stage and the scene dynamically when the page mounts. So three.js and the solver session are dynamic imports, but they are fetched on every visit before the first running frame, not on interaction.
+Static method: each route's JavaScript is walked from its node files, which are the root layout, the experiments layout, and the page's leaf and layout nodes from the route map in the built entry. The walk follows only static `import` and `export ... from` statements, not dynamic `import()`. The shell is the root and experiments layouts that every experiment page shares. "Own" is the route's static closure without the shell.
 
-Open: the 81 KB in the earlier note is not reproduced by this method, and that note did not record its own. Kyle needs to decide what "first load" means here: the scripts before the engine mounts (1.46 MB across the page, 837 KB before three.js), or only the static import graph.
+| Route, build | Scripts | Bytes | Gzip | Before three.js (bytes / gzip) |
+| --- | --- | --- | --- | --- |
+| `/experiments`, this branch | 26 | 106,673 | 45,629 | no three.js |
+| `/experiments/relativity`, this branch | 36 | 820,093 | 237,548 | 193,481 / 79,094 |
+| `/experiments/airflow`, this branch | 39 | 1,464,158 | 467,398 | 837,546 / 308,944 |
+| `/experiments/airflow`, main 95b0bef | 39 | 1,441,229 | 459,165 | 814,617 / 300,711 |
+| `/experiments/airflow`, 603d99a | 30 | 852,069 | 246,893 | 301,928 / 110,444 |
+
+The airflow chunk loaded for three.js is `Ct61nPVc.js` (this branch): 626,612 bytes, 158,454 gzip.
+
+| Static closure, build | Files | Bytes | Gzip |
+| --- | --- | --- | --- |
+| Shell (root and experiments layouts) | 16 | 88,164 | 36,928 |
+| `/experiments` | 22 | 96,351 | 41,170 |
+| `/experiments/relativity` | 27 | 142,976 | 59,254 |
+| `/experiments/airflow`, this branch | 26 (own 10) | 336,312 (own 248,148) | 125,119 (own 88,191) |
+| `/experiments/airflow`, main 95b0bef | 26 (own 10) | 321,541 (own 233,635) | 119,704 (own 82,797) |
+| `/experiments/airflow`, 603d99a | 23 (own 7) | 126,060 (own 41,902) | 51,309 (own 15,794) |
+
+Findings:
+- This branch adds 22,929 bytes (8,237 gzip) to the airflow page's load, against main 95b0bef. The own static chunks grow by 14,513 bytes (5,394 gzip).
+- One chunk, `h3n8aku-.js` (237,784 bytes), is most of the airflow route's own static code. It holds physics-panel and smoke text. It contains no three.js and no WGSL. What it is exactly is not identified.
+- three.js and the solver are dynamic imports, but on this branch the engine is requested at mount, so they load on every visit before the first running frame. The engine's loader comment says so ("all at once"). The 603d99a build loaded the engine when the Stage neared the viewport, but its Stage starts on screen, so three.js still loaded on page load there.
+- The "81 KB of JavaScript in the page's first closure" sentence first appears in `603d99a` (2026-10-12). No commit or measurement here gives 81 KB. At `603d99a` the own static chunks are 41,902 bytes (15,794 gzip). The nearest figure is 82,797 gzip for the own static chunks at main 95b0bef, a different tree. Treat 81 KB as unexplained, and use the table above.
+- The first-load figure for this page, from here on, is the browser "before three.js" number: 837,546 bytes, 308,944 gzip, 38 scripts. The static own number, 248,148 bytes (88,191 gzip), is the page's own code without the shared shell and without the engine's dynamic chunks.
 
 ## Hidden tab
 
