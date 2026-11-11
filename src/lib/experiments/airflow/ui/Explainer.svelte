@@ -29,6 +29,14 @@
 				a window open halfway passes the flow of half its fully open area, whatever the grid.
 			</li>
 			<li>
+				<strong>Gusty wind rises and falls about its mean.</strong> With Gusty on in the weather, the wind at the eaves varies as it does near the ground in a
+				suburb: its speed spreads by about a third of the mean either way, and in ten minutes its strongest three seconds are about 1.85 times the mean, a little under
+				the 1.87 that Eurocode&nbsp;1 gives for suburban ground. A gust passes in about 32&nbsp;m of wind, so at a fresh breeze gusts and lulls last several seconds, and in
+				a light wind half a minute. The direction wobbles by about 19° either way. Each opening’s pressure follows the gust every step, so the flow through a
+				window surges and slackens. Over a minute of cross-ventilation the room takes in what the steady wind would have moved at that minute’s mean speed, to within 1&nbsp;%.
+				The gusts are the same on every run, so a shared link shows the same ones.
+			</li>
+			<li>
 				<strong>Smoke is fine particulate matter, PM2.5.</strong> The air carries it and swirls spread it. It settles slowly, sticks to surfaces, leaves
 				through openings, and is removed by purifiers at their rated clean air delivery rate. The Physics panel adds it all up: smoke that was already there, released and let in
 				equals smoke still in the air plus smoke that left, was filtered, or settled. The two sides agree to within 0.1&nbsp;%, and the panel says so if they stop, as rounding alone can after half an hour in a sealed, still home on the coarse grid a phone runs.
@@ -55,13 +63,21 @@
 		</p>
 		<ul class="sources">
 			<li>
-				The weather outside is a pressure, a temperature and an amount of smoke at each opening. Nothing outdoors is simulated, so there are no gusts, no neighbouring
+				The weather outside is a pressure, a temperature and an amount of smoke at each opening. Nothing outdoors is simulated, so there are no gusts but the Gusty switch’s, no neighbouring
 				buildings, and no sun.
 			</li>
 			<li>
 				The wind slider is the speed a weather report gives, measured 10 m up over open ground. The home gets about 55&nbsp;% of it at the eaves, as on a suburban lot.
 				That is the top of the 44 to 55&nbsp;% that published tables give for such a lot, so the wind’s push on the home is on the high side. Open country would be about
 				85&nbsp;% and a city about 30&nbsp;%.
+			</li>
+			<li>
+				The gusts are a model of the wind’s statistics, not of eddies. Their sizes come from Eurocode&nbsp;1’s figures for suburban ground, taken at its lowest height
+				of 5&nbsp;m, which it applies all the way down. Each wall’s pressure follows the gust at once, as if the wind were steady at each moment. That holds for gusts
+				that last seconds; it does not for the small, quick eddies a building makes at its corners, which the model leaves out, along with eddies shorter than about a
+				second. The gust’s speed is squared in its pressure, so a gusty wind pushes about a fifth harder on average than a steady one of the same mean speed, while the
+				wall averages were measured in gusty wind and already include that. A room open on one side only gets no extra exchange from gusts: the wind’s pressure on one
+				wall rises and falls the same at every window there, so it does not pump air in and out as real gusts do.
 			</li>
 			<li>
 				The wind’s effect on each wall uses averages for an isolated low-rise building. They come from a fit made on buildings whose eaves were 0.1 to 0.4 times as high
@@ -210,6 +226,19 @@
 				Orme, Liddament and Wilson, “Numerical Data for Air Infiltration and Natural Ventilation Calculations,” Technical Note 44, Air Infiltration and Ventilation Centre (1998
 				printing): pressure coefficients for exposed, semi-sheltered and sheltered sites, compared with the fit, and three of the four wind-speed tables behind the 44 to 55&nbsp;%. Read by
 				eye on scanned pages.
+			</li>
+			<li>
+				EN 1991-1-4, <i>Eurocode 1: Actions on structures, Part 1-4: Wind actions</i> (2005): the gusts’ turbulence intensity for suburban ground (terrain category III),
+				their peak, and the length of a gust (its Annex B). The standard was not read; its formulas and table were taken from the
+				<a href="https://steelcalculator-dev.pages.dev/reference/european-wind-load/" target="_blank" rel="noopener noreferrer">Steel Calculator reference page</a> and a
+				worked example that print them.
+			</li>
+			<li>
+				Kaimal, Wyngaard, Izumi and Coté, “Spectral characteristics of surface-layer turbulence,” <i>Quarterly Journal of the Royal Meteorological Society</i> 98, 563–589
+				(1972), in the form IEC 61400-1 gives it: the wind across the mean direction varies 0.8 times as much as along it, in gusts a third as long. The original was not
+				read; the ratios were taken from the
+				<a href="https://scientimate.readthedocs.io/en/stable/python_functions/wind/windspectrum.html" target="_blank" rel="noopener noreferrer">SciEnTiMate documentation</a>,
+				and Dlubal’s wind-flow manual gives 0.75.
 			</li>
 			<li>
 				Klote, “<a href="https://nvlpubs.nist.gov/nistpubs/Legacy/IR/nistir4588.pdf" target="_blank" rel="noopener noreferrer">A General Routine for Analysis of Stack Effect</a
