@@ -4,7 +4,7 @@ import { setupToHash } from '../src/lib/experiments/airflow/link';
 import { SCENARIOS } from '../src/lib/experiments/airflow/scenarios';
 import { OPENING_END, openingFor } from '../src/lib/experiments/airflow/scene/camera/opening';
 import { blankSetup } from '../src/lib/experiments/airflow/state';
-import { PAGE, closePhysics, hud, inspect, notice, openPhysics, openRunning, pickScenario, readAt, readUntil, readings, view, type Readings } from './airflow-sim';
+import { PAGE, closePhysics, hud, inspect, notice, openPhysics, openRunning, pickScenario, readAt, readUntil, readings, requireSimRate, view, type Readings } from './airflow-sim';
 
 /**
  * Each Scenario, loaded from the picker, does what its notice says, read off the page: the Room averages in the Physics panel and the
@@ -186,6 +186,8 @@ test.describe('each Scenario does what its notice says', { tag: '@slow' }, () =>
 		// Bedroom 2 is under 0.1 ppm at about 65 s (4.3 minutes there) and under 0.065 ppm at about 194 s (129 s later, 8.6 minutes there).
 		test.setTimeout(2_100_000);
 		await load(page, 'clearing-smoke');
+		// 194 simulated seconds and a quarter more, within the two waits below (8 + 13 minutes).
+		await requireSimRate(page, 243, 480_000 + 780_000);
 		// Within 20 % of three and a half minutes: 3.3 to 3.8 here, on the processor and on WebGPU, which differs from run to run.
 		const minutes = await halving(page, 'bedroom-2', browserName, { under: 480_000, halved: 780_000 });
 		expect(minutes).toBeGreaterThan(3.5 * 0.8);
@@ -199,6 +201,8 @@ test.describe('each Scenario does what its notice says', { tag: '@slow' }, () =>
 		// The main room is under 0.1 ppm at about 102 s (6.8 minutes there) and under 0.065 ppm at about 295 s (193 s later, 12.9 minutes there).
 		test.setTimeout(2_100_000);
 		await load(page, 'smoky-day');
+		// 295 simulated seconds and a quarter more, within the two waits below (10 + 18 minutes).
+		await requireSimRate(page, 369, 600_000 + 1_080_000);
 		// Within 20 % of five minutes (5.2 on the processor and 5.2 to 5.7 on WebGPU here, from run to run).
 		const minutes = await halving(page, 'main', browserName, { under: 600_000, halved: 1_080_000 });
 		expect(minutes).toBeGreaterThan(5 * 0.8);

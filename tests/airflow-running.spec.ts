@@ -16,6 +16,7 @@ import {
 	openPhysics,
 	openRunning,
 	readUntil,
+	requireSimRate,
 	simTime,
 	status,
 	untilSim,
@@ -217,6 +218,8 @@ test.describe('the running simulation', { tag: '@slow' }, () => {
 		await openRunning(page);
 		await page.getByRole('group', { name: 'Speed' }).getByRole('button', { name: /^20×/ }).click();
 		await untilSim(page, 3);
+		// About 130 simulated seconds and a quarter more, within the 12-minute wait for the smoke to leave.
+		await requireSimRate(page, 163, 720_000);
 		// A spot over the air, found with the Probe tool, which then gives its probe back.
 		const at = await pinProbe(page);
 		await page.getByRole('button', { name: 'Remove Probe 1' }).click();
