@@ -109,6 +109,8 @@ test.describe('each Scenario does what its notice says', { tag: '@slow' }, () =>
 
 	test('Cross-ventilation: the wind crosses the home from the living room to the bedrooms, and a closed bedroom door all but stops the flow through that bedroom', async ({ page, browserName }) => {
 		await load(page, 'cross-ventilation');
+		// About 50 simulated seconds and a quarter more, within the test's quarter of an hour (two minutes kept for the page and the door).
+		await requireSimRate(page, 63, 780_000);
 		const open = await readAt(page, 30);
 		console.log(`${browserName}: cross-ventilation at ${open.time} s, air changes an hour: ${show(open, 'changes')}`);
 		// In at the living room, across the hall, out at both bedrooms: each room on the way changes its air at least 20 times an hour
@@ -132,6 +134,8 @@ test.describe('each Scenario does what its notice says', { tag: '@slow' }, () =>
 		const end = openingFor(planById('house')!, 1440 / 900).to;
 		const camera = [end.x, end.z, OPENING_END.heading, OPENING_END.zoom, OPENING_END.tilt].map((n) => n.toFixed(2)).join(',');
 		await load(page, 'stack-effect', `/experiments/airflow?cell=0.3&camera=${camera}${setupToHash(blankSetup('house'))}`);
+		// 60 simulated seconds and a quarter more, within the test's quarter of an hour (two minutes kept for the page and the probes).
+		await requireSimRate(page, 75, 780_000);
 		const { indoorTemp, outdoorTemp, windSpeed } = scenario('stack-effect').setup.conditions;
 		expect(windSpeed).toBe(0);
 
@@ -154,6 +158,8 @@ test.describe('each Scenario does what its notice says', { tag: '@slow' }, () =>
 
 	test('A fan in the window: the air goes from the dining room to the hall and bedroom 1, the closed rooms see little of it, and with the fan off it slows to a drift within a minute', async ({ page, browserName }) => {
 		await load(page, 'window-fan');
+		// About 92 simulated seconds and a quarter more, within the test's quarter of an hour (two minutes kept for the page and the fan).
+		await requireSimRate(page, 115, 780_000);
 		const running = await readAt(page, 30);
 		console.log(`${browserName}: window fan at ${running.time} s, m/s: ${show(running, 'speed')}; °C: ${show(running, 'temperature')}`);
 		const speed = (reading: Readings, room: string) => reading.rooms[room].speed;

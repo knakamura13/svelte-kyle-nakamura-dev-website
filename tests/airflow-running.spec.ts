@@ -145,6 +145,9 @@ test.describe('the running simulation', { tag: '@slow' }, () => {
 		await openRunning(page, `${PAGE}${setupToHash(blankSetup('two-bedroom'))}`);
 		// At 20×: a frame asks for at most a tenth of a second times the clock's speed, and a runner drawing in software makes a few a second.
 		await page.getByRole('group', { name: 'Speed' }).getByRole('button', { name: /^20×/ }).click();
+		// About 85 simulated seconds and a quarter more, within its quarter of an hour (two minutes kept for the page and the catalog).
+		test.setTimeout(900_000);
+		await requireSimRate(page, 106, 780_000);
 		await openPhysics(page);
 		const still = await readUntil(page, (r) => r.time >= 5 && Object.values(r.rooms).every((room) => Number.isFinite(room.speed)), 'the Rooms read');
 		console.log(`${browserName}: still air at ${still.time} s, m/s: ${JSON.stringify(Object.fromEntries(Object.entries(still.rooms).map(([id, r]) => [id, r.speed])))}`);
