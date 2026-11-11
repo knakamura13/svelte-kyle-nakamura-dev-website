@@ -455,3 +455,26 @@ Kyle's call on 2026-11-04, from the smoky-air analysis on #63: draw only the smo
 | ![The sky over the two-bedroom: Smoky before, then clean, Smoky and Wildfire after](airflow-checkins/2026-11-10-smoke/1280-sky.jpg) | ![The Smoke overlay still shows the PM2.5](airflow-checkins/2026-11-10-smoke/1280-smoke-overlay.jpg) |
 
 **Left as it is:** smoke that varies within a Room stands out and is drawn, as it should be: a purifier leaves its Room cleaner near itself, and smoke coming in at an open window is above the Room's average. The smoky studio 30 simulated seconds in has up to 14 µg/m³ over its average (on the CPU, at 30 cm), which the volume's extinction leaves invisible, and neither shows in the stills above. The smoky sky is subtle from the Sims camera, which sees a strip of sky at most; a smoky day shows most in the light, which is flatter and warmer.
+
+### Completion (2026-11-10 to 2026-11-11)
+
+Kyle asked on 2026-11-10 to take #30 to completion. The work ran in agent worktrees merged into `knakamura/issue-30-completion-b4c0c3`, and each issue's closing comment has its numbers. The status doc's "Final state" section is the summary.
+
+**Kyle's calls:**
+- The homes stay airtight (#93). The explainer says so.
+- Checks that need a person or real hardware (VoiceOver and NVDA, real phones and a tablet, real Safari) are recorded as not measured.
+- The smoky sky keeps the sourced haze, which from the default camera reads mostly as flatter, warmer light (#94).
+- The phone puffs keep the desktop smoke's opacity and lighting (#94).
+
+**Calls made during the work, on fidelity:**
+- The window fan eases toward its curve as disk fans do (#91).
+- The runaway notice takes the status line's place, so it is said once (#59).
+- A paused page stops drawing once its picture has caught up (#62's keyboard spec found it drawing about ten frames a second).
+- A room name with no clear side is hidden, not overlapped (#63). None is hidden in the four Homes at 390, 768, 1280 and 1920 px.
+- Gust pressure is scaled by 1 + Iu² + Iv² so its long-run mean equals the steady wind's (#92), and the gust factor follows Eurocode (1.87), not the issue's 1.5.
+- Single-sided pumping by gusts is a documented limit, like the airtight walls.
+- The single-opening shortfall of 5 to 9% is kept as a known limit, inside the formula's own 14.7% scatter.
+
+**Measured:** this Mac's three browsers hold 60 fps at 1440×900, and the air is live in about 2 s. The page's first load is 838 KB of JavaScript (309 KB gzip) before three.js, and this branch adds 8 KB gzip to it. The 81 KB in #64 traces to an unmeasured note from 2026-10-12 (status doc, "First-load JavaScript").
+
+**Stills:** the smoke stills are in `airflow-checkins/2026-11-10-smoke/`. The runaway notice, the room labels, the sheet grabber, the Gusty switch and the landing card were sent to Kyle on 2026-11-10 and 11, and are not committed.

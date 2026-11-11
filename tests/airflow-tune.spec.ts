@@ -6,10 +6,8 @@ import { live, openAirflow, status } from './dock';
 import { requireWebGL2 } from './webgl';
 
 // Software WebGL (the headless CI browsers) compiles the world's shaders for many seconds, so a test that waits for the world gets 90 s.
-test.beforeEach(async ({ page }) => {
-	test.setTimeout(90_000);
-	await requireWebGL2(page);
-});
+// Every test here but the first, which only asks the browser what screen it reports, needs the world, and skips without WebGL 2.
+test.beforeEach(() => test.setTimeout(90_000));
 
 /**
  * The page picks the grid for the device and says so. Where the browser has WebGPU the simulation runs on it, and where it has not
@@ -41,6 +39,7 @@ test.describe('on a phone', () => {
 
 	test('every Home runs the coarsest grid, the status line says so, and a screen reader is told once', async ({ page }) => {
 		test.setTimeout(120_000);
+		await requireWebGL2(page);
 		await openAirflow(page);
 		await started(page, COARSEST);
 		await expect(status(page)).toContainText(NOTE);
@@ -64,6 +63,7 @@ test.describe('on a phone', () => {
 	});
 
 	test('a grid asked for in the address overrules the phone: 20 cm, and no note', async ({ page }) => {
+		await requireWebGL2(page);
 		await openAirflow(page, '/experiments/airflow?cell=0.2');
 		await started(page, /cells, each 0\.20\s*m across/);
 		await expect(status(page)).not.toContainText(NOTE);
@@ -73,6 +73,7 @@ test.describe('on a phone', () => {
 
 test.describe('on a small tablet, 820 wide like the iPads up to the tenth generation', () => {
 	test.use({ viewport: { width: 820, height: 1180 }, hasTouch: true, isMobile: true });
+	test.beforeEach(({ page }) => requireWebGL2(page));
 
 	test('the coarsest grid and the note, as on a phone', async ({ page }) => {
 		await openAirflow(page);
@@ -83,6 +84,7 @@ test.describe('on a small tablet, 820 wide like the iPads up to the tenth genera
 
 test.describe('on a larger tablet, 834 wide like an iPad Pro', () => {
 	test.use({ viewport: { width: 834, height: 1194 }, hasTouch: true, isMobile: true });
+	test.beforeEach(({ page }) => requireWebGL2(page));
 
 	test('the tuner’s grid, and no note', async ({ page }) => {
 		await openAirflow(page);
@@ -93,6 +95,7 @@ test.describe('on a larger tablet, 834 wide like an iPad Pro', () => {
 
 test.describe('on a laptop or a desktop', () => {
 	test.use({ viewport: { width: 1280, height: 800 } });
+	test.beforeEach(({ page }) => requireWebGL2(page));
 
 	test('the page does not say what a phone is told, and shows the grid it has', async ({ page }) => {
 		await openAirflow(page);

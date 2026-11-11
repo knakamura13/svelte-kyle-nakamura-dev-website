@@ -234,7 +234,10 @@ test.describe('route transitions', () => {
 					const transition = native
 						? native(update)
 						: (void update?.(), { ready: Promise.resolve(), updateCallbackDone: Promise.resolve(), finished: Promise.resolve(), skipTransition() {} });
-					if (location.pathname === '/resume' && !Reflect.get(window, '__disarm')) history.back();
+					if (location.pathname === '/resume' && !Reflect.get(window, '__disarm')) {
+						Reflect.set(window, '__backs', Number(Reflect.get(window, '__backs') ?? 0) + 1);
+						history.back();
+					}
 					return transition;
 				}
 			});
@@ -248,6 +251,10 @@ test.describe('route transitions', () => {
 				if (!(link instanceof HTMLAnchorElement)) throw new Error('missing résumé link');
 				link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0, view: window }));
 			});
+			// The router loads the résumé before it changes the URL, so until Back has been pressed the page is still the story, and the checks
+			// below would pass before the navigation began. The next page.goto would then race it: on a slow machine (CI) the link
+			// navigation's pushState and Back land during that goto and abort it (net::ERR_ABORTED).
+			await expect.poll(() => page.evaluate(() => Reflect.get(window, '__backs')), { message: 'Back was pressed during the link navigation' }).toBe(1);
 			await expect(page).toHaveURL(/\/projects\/learning-korean$/);
 			await expect(page).toHaveTitle('Learning Korean — Kyle Nakamura');
 			await expect(page.getByRole('heading', { level: 1 })).toHaveText(/Learning Korean,/);

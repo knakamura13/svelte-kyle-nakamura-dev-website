@@ -84,22 +84,21 @@ export async function framesSince(page: Page, since: number): Promise<{ frames: 
 export const pageNow = (page: Page) => page.evaluate(() => performance.now());
 
 /**
- * Runs a check, and if it fails, skips the test when the page drew fewer than `minFps` frames a second while the check waited, as
- * `countFrames` counts them (it must be installed before the page loads). `because` says why the check cannot hold below that rate,
- * from the page's design. The rate goes in the reason and in an annotation, so a skip on CI says what CI drew. Otherwise the failure
- * stands. A check that passes is never measured or skipped.
+ * Seconds of the page's clock from `since` to `until` (its `performance.now()`, ms), each gap between the frames the page drew
+ * (`countFrames`) counted as at most `cap` seconds: the clock an animation keeps when each frame moves it on by the time since the last
+ * one, but never by more than `cap`. While the page draws at least `1 / cap` frames a second it is the page's own clock, and below that it
+ * runs slower. Null when the count was not installed.
  */
-export async function unlessDrawnUnder(page: Page, minFps: number, because: string, check: () => Promise<unknown>) {
-	const since = await pageNow(page);
-	try {
-		await check();
-	} catch (error) {
-		const drawn = await framesSince(page, since).catch(() => null);
-		if (!drawn) throw error;
-		const rate = `${drawn.frames} frames in ${drawn.seconds.toFixed(1)} s (${drawn.fps.toFixed(1)} a second, the longest gap ${drawn.longest.toFixed(2)} s)`;
-		test.info().annotations.push({ type: 'frames', description: `The page drew ${rate} while a failing check waited.` });
-		test.skip(drawn.fps < minFps, `The page drew ${rate} here, under ${minFps} a second: ${because}`);
-		throw error;
-	}
+export async function cappedClock(page: Page, since: number, until: number, cap: number): Promise<number | null> {
+	return page.evaluate(
+		({ since, until, cap }) => {
+			const drawn = (window as unknown as { __framesDrawn?: number[] }).__framesDrawn;
+			if (!drawn) return null;
+			const points = [since, ...drawn.filter((t) => t > since && t < until), until];
+			let seconds = 0;
+			for (let i = 1; i < points.length; i++) seconds += Math.min(cap, (points[i] - points[i - 1]) / 1000);
+			return seconds;
+		},
+		{ since, until, cap }
+	);
 }
-
