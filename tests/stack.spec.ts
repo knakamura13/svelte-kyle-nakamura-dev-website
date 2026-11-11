@@ -1,5 +1,6 @@
 import { expect, test, type Locator } from '@playwright/test';
 import { stubClipboard } from './clipboard';
+import { focusUntilActive } from './focus';
 
 /** Whether the left edge, middle, and right edge of `target`'s text are painted by `card`, not covered by another card. */
 async function paintsOnTop(card: Locator, target: Locator) {
@@ -38,7 +39,7 @@ test.describe('Project Stack on home', () => {
 	test('keyboard focus brings a card forward like hover', async ({ page }) => {
 		await page.goto('/');
 		const card = page.locator('.stack-foods');
-		await card.focus();
+		await focusUntilActive(card);
 		await expect(card).toHaveAttribute('data-active', 'true');
 		await lifted(card);
 	});
