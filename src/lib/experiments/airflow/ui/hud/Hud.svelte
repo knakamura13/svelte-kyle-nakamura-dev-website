@@ -147,6 +147,8 @@
 
 <svelte:window onkeydown={keydown} />
 
+<!-- `data-sim-time` is the simulated time in seconds, which the clock shows only to the whole second: the end-to-end specs wait on it (#61). -->
+
 <div
 	class="hud"
 	class:phone={ui.phone}
@@ -157,6 +159,7 @@
 	data-carrying={experience.carry ? '' : undefined}
 	data-sheet={ui.phone ? sheet : undefined}
 	data-sheet-size={ui.phone && sheet ? ui.sheetSize : undefined}
+	data-sim-time={experience.readout.physics.time.toFixed(2)}
 >
 	{#if runaway}<RunawayNotice />{/if}
 	<div class="hud-top" bind:this={top}><TopBar /></div>
