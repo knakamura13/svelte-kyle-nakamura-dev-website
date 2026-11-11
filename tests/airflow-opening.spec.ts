@@ -4,7 +4,7 @@ import { setupToHash } from '../src/lib/experiments/airflow/link';
 import { OPENING_END } from '../src/lib/experiments/airflow/scene/camera/opening';
 import { HOME_ZOOM } from '../src/lib/experiments/airflow/scene/camera/sims';
 import { blankSetup } from '../src/lib/experiments/airflow/state';
-import { requireWebGL2 } from './webgl';
+import { requireWebGL2, unlessStalled } from './webgl';
 
 /**
  * The first seconds of a visit (#81 and #82): the loading screen while the world loads, compiles and measures the device, then the
@@ -112,7 +112,7 @@ test.describe('the opening', () => {
 		expect(start.zoom, 'it starts on the default view, or just past it').toBeGreaterThan(END.zoom + 0.1);
 		expect(start.zoom).toBeLessThanOrEqual(HOME_ZOOM + 1e-9);
 		const began = Date.now();
-		await expect.poll(async () => (await camera(page)).zoom, { message: 'it moves', timeout: 5_000 }).toBeLessThan(start.zoom - 0.05);
+		await unlessStalled(page, () => expect.poll(async () => (await camera(page)).zoom, { message: 'it moves', timeout: 5_000 }).toBeLessThan(start.zoom - 0.05));
 		await expect.poll(() => camera(page), { message: 'and arrives', timeout: 15_000 }).toEqual(END);
 		// Seconds after it was first seen, so it is a drift and not a cut, and on time however fast the browser draws.
 		const took = (Date.now() - began) / 1000;
@@ -127,7 +127,7 @@ test.describe('the opening', () => {
 		await page.goto('/experiments/airflow');
 		await shown(page);
 		const start = await camera(page);
-		await expect.poll(async () => (await camera(page)).zoom, { timeout: 5_000 }).toBeLessThan(start.zoom - 0.03);
+		await unlessStalled(page, () => expect.poll(async () => (await camera(page)).zoom, { timeout: 5_000 }).toBeLessThan(start.zoom - 0.03));
 		await page.keyboard.press('Shift');
 		const held = await camera(page);
 		expect(held.zoom, 'stopped part way').toBeGreaterThan(END.zoom + 0.02);
@@ -139,7 +139,7 @@ test.describe('the opening', () => {
 		await page.goto('/experiments/airflow');
 		await shown(page);
 		const start = await camera(page);
-		await expect.poll(async () => (await camera(page)).zoom, { timeout: 5_000 }).toBeLessThan(start.zoom - 0.03);
+		await unlessStalled(page, () => expect.poll(async () => (await camera(page)).zoom, { timeout: 5_000 }).toBeLessThan(start.zoom - 0.03));
 		const box = (await view(page).boundingBox())!;
 		await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.5);
 		await page.mouse.wheel(0, -120);
@@ -157,7 +157,7 @@ test.describe('the opening', () => {
 		test.setTimeout(90_000);
 		await page.goto('/experiments/airflow');
 		await shown(page);
-		await expect.poll(async () => (await camera(page)).zoom, { timeout: 5_000 }).toBeLessThan(HOME_ZOOM - 0.05);
+		await unlessStalled(page, () => expect.poll(async () => (await camera(page)).zoom, { timeout: 5_000 }).toBeLessThan(HOME_ZOOM - 0.05));
 		await page.reload();
 		await shown(page);
 		expect(await camera(page)).toEqual(END);

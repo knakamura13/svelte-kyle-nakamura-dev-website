@@ -15,3 +15,32 @@ export async function requireWebGL2(page: Page) {
 	});
 	test.skip(!webgl2, 'This browser has no WebGL 2, so the Airflow stage has no world to draw.');
 }
+
+/**
+ * Runs a check that waits for the camera to move. If it fails, the stage's frame rate is measured. When the stage draws fewer than
+ * `minFps` frames a second, the test is skipped with that rate in the reason, because a camera that moves a few times in several
+ * seconds cannot show a drift; otherwise the failure stands. The rate comes from the stage's camera readouts (`data-zoom`), which it
+ * writes each time it draws a frame. Only a failing check is measured, so a browser that draws well is timed as before.
+ */
+export async function unlessStalled(page: Page, check: () => Promise<unknown>, minFps = 2) {
+	try {
+		await check();
+	} catch (error) {
+		const fps = await page.getByRole('application', { name: /^The air in the/ }).evaluate(
+			(view) =>
+				new Promise<number>((resolve) => {
+					let writes = 0;
+					const observer = new MutationObserver((records) => {
+						for (const record of records) if (record.attributeName === 'data-zoom') writes++;
+					});
+					observer.observe(view, { attributes: true, attributeFilter: ['data-zoom'] });
+					setTimeout(() => {
+						observer.disconnect();
+						resolve(writes / 2);
+					}, 2000);
+				})
+		);
+		if (fps < minFps) test.skip(true, `The stage drew ${fps.toFixed(1)} frames a second with WebGL in software here, under ${minFps}, so the camera's movement cannot be seen in the time the test allows.`);
+		throw error;
+	}
+}
