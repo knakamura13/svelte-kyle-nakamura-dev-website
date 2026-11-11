@@ -43,11 +43,10 @@ async function findAir(page: Page) {
 	return path;
 }
 
-// fixme until it passes in all three browsers: in Chromium every step passed, under a load average near 90, but the run hit its six-minute limit on the
-// last line, and it has not run in Firefox or WebKit yet (#62).
-test.fixme('every task from the keyboard alone, with a focus ring at every stop', async ({ page, browserName }) => {
-	// Many stops, each a key at a time, in a browser that may draw the world in software: give it time.
-	test.setTimeout(360_000);
+test('every task from the keyboard alone, with a focus ring at every stop', async ({ page, browserName }) => {
+	// About 250 round trips to the page, a key or a look at the focus each. They are quick only while a paused page stays quiet: when it
+	// kept drawing in software, each one waited behind a frame, and the run took six minutes under load (#62).
+	test.setTimeout(180_000);
 	const copied = await stubClipboard(page, 'succeed');
 	await page.goto(PAGE);
 	await expect(view(page)).toHaveAttribute('data-state', 'live', { timeout: 60_000 });
@@ -177,5 +176,5 @@ test.fixme('every task from the keyboard alone, with a focus ring at every stop'
 	await ring('Copy link');
 	await page.keyboard.press('Enter');
 	await expect(live(page)).toHaveText('Link copied.');
-	expect((await copied()).at(-1)).toMatch(/\/experiments\/airflow#1\./);
+	expect((await copied()).at(-1)).toMatch(/\/experiments\/airflow#s=1\./);
 });
