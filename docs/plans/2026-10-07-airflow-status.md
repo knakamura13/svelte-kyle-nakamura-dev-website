@@ -27,7 +27,7 @@ What changed in the last two days, by issue:
 
 Open limits, each stated in the explainer or the research notes:
 - One open window under a temperature difference passes 5 to 9% less air than the single-opening formula. The opening law is applied to the static pressure beside the window, so the approach flow's speeding-up is counted twice (`docs/research/airflow/openings-and-wind.md`, 3d; 3e has the leakage figures).
-- With Gusty on, each wall's mean pressure is 7 to 8% off the steady wind's, because the measured pressure coefficients already average over the direction wobble that the model adds again. The pressure difference across a room, which drives the flow, is within 3% (2d).
+- With Gusty on, each wall keeps the steady wind's long-run mean pressure, because the gust term is zero-mean by construction (2d). The flow still averages about 92% of the steady wind's over long runs, because flow goes as the square root of pressure.
 - A room open on one side gets no pumping from gusts, and the homes do not leak.
 - WebKit reports "Apple GPU" while it renders in software, so a software WebKit picks the medium tier.
 

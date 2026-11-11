@@ -471,7 +471,7 @@ Kyle asked on 2026-11-10 to take #30 to completion. The work ran in agent worktr
 - The runaway notice takes the status line's place, so it is said once (#59).
 - A paused page stops drawing once its picture has caught up (#62's keyboard spec found it drawing about ten frames a second).
 - A room name with no clear side is hidden, not overlapped (#63). None is hidden in the four Homes at 390, 768, 1280 and 1920 px.
-- Gust pressure is scaled by 1 + Iu² + Iv² so its long-run mean equals the steady wind's (#92), and the gust factor follows Eurocode (1.87), not the issue's 1.5.
+- Each wall's gust term is zero-mean by construction (#92): the steady wind's pressure plus the gust's ½ρU²Cp(θ) minus its own long-run expectation, which is computed from the series' statistics. The first version divided by 1 + Iu² + Iv², which matched the mean only near 270°, and /interrogate on PR #103 caught it. The mean now matches within 0.0014 q on every wall at six bearings. The gust factor follows Eurocode (1.87), not the issue's 1.5.
 - Single-sided pumping by gusts is a documented limit, like the airtight walls.
 - The single-opening shortfall of 5 to 9% is kept as a known limit, inside the formula's own 14.7% scatter.
 
