@@ -9,6 +9,7 @@ import { CpuBackend } from '$lib/experiments/airflow/solver/cpu/backend';
 import { GpuBackend } from '$lib/experiments/airflow/solver/gpu/backend';
 import { GpuContext } from '$lib/experiments/airflow/solver/gpu/context';
 import { blankSetup, type Setup } from '$lib/experiments/airflow/state';
+import { runawayOf } from '$lib/experiments/airflow/sim/runaway';
 import { deviceMap, devicesFor, openingsFor, random, setupFor } from '../../solver/randomSetups';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -41,7 +42,7 @@ async function stepAll(world: World, steps: number, watch: boolean, each: (n: nu
 		if (!watch) continue;
 		const { diagnostics: d } = await world.backend.snapshot({});
 		// With `divergence` off only a runaway stops the run, so a passing divergence spike is judged at the end, as on the GPU.
-		if (!(d.maxSpeed < 40) || (divergence && !(d.divergence < 0.05))) return n + 1;
+		if (runawayOf(d) || (divergence && !(d.divergence < 0.05))) return n + 1;
 	}
 	return 0;
 }
@@ -51,7 +52,9 @@ async function verdict(world: World, names: readonly string[]) {
 	const fields = (await world.backend.readFields()) as any;
 	const bad = names.filter((name) => !finite(fields[name]));
 	const g = world.backend.grid;
-	return { maxSpeed: diagnostics.maxSpeed, divergence: diagnostics.divergence, nonFinite: bad, cells: `${g.nx}x${g.ny}x${g.nz}` };
+	/** The runaway check (sim/runaway.ts) on the snapshot read here: null, or what it found. */
+	const runaway = runawayOf(diagnostics);
+	return { maxSpeed: diagnostics.maxSpeed, divergence: diagnostics.divergence, nonFinite: bad, runaway, cells: `${g.nx}x${g.ny}x${g.nz}` };
 }
 
 /** robustness.spec.ts, first test: random openings and weather, openings changed after 40 steps, 60 more. */
@@ -115,12 +118,12 @@ async function longRun(planId: string, h: number, kind: 'wind' | 'cold', backend
 	setup.openings = Object.fromEntries(windows.map((o) => [o.id, 1]));
 	setup.conditions = kind === 'wind' ? { ...setup.conditions, windFrom: 270, windSpeed: 3 } : { ...setup.conditions, windSpeed: 0, outdoorTemp: -5 };
 	const world = await World.create(setup, { plans: [plan], models: new Map(), make: makers[backend], h });
-	const series: { step: number; maxSpeed: number; divergence: number }[] = [];
+	const series: { step: number; maxSpeed: number; divergence: number; runaway: ReturnType<typeof runawayOf> }[] = [];
 	for (let step = 1; step <= 600; step++) {
 		world.backend.step(DT);
 		if (step % 100 === 0) {
 			const { diagnostics } = await world.backend.snapshot({});
-			series.push({ step, maxSpeed: diagnostics.maxSpeed, divergence: diagnostics.divergence });
+			series.push({ step, maxSpeed: diagnostics.maxSpeed, divergence: diagnostics.divergence, runaway: runawayOf(diagnostics) });
 		}
 	}
 	const result = await verdict(world, ['u', 'v', 'w', 'p', 'theta']);

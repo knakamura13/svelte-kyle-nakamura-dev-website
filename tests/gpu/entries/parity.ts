@@ -178,7 +178,7 @@ async function pressureParity(seed: number, nx: number, ny: number, nz: number) 
 	const input = randomVelocity(grid, config, seed);
 	const cpuVel = copy(input);
 	const pressure = new PressureSolver(grid, { ...DEFAULT_PRESSURE });
-	pressure.assemble(half, dt / (dt + FAN_SPIN_UP), config.fluid.rho, config.fluid.cd, config.geometry, emptyExterior(grid), cpuVel);
+	pressure.assemble(half, dt / (dt + FAN_SPIN_UP), config.fluid.rho, config.fluid.cd, config.geometry, emptyExterior(grid), new Float32Array(6), cpuVel);
 	pressure.solve();
 	pressure.project(half, config.fluid.rho, config.geometry, cpuVel);
 	const solver = await GpuSolver.create(await context(), config);

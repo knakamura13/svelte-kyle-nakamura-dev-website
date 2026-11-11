@@ -13,7 +13,8 @@ test.describe('anchor arrival cue', () => {
 		test(`direct load of #${id} accents its thumbnail frame only`, async ({ page }) => {
 			await page.goto(`/#${id}`);
 			await expect(frame(page, id)).toHaveCSS('box-shadow', accentShadow);
-			expect(await marked(page)).toEqual([id]);
+			// The cue's CSS also comes from :target, which works before the page's script runs, so wait for the script's marker too.
+			await expect.poll(() => marked(page)).toEqual([id]);
 			for (const other of ['korean', 'mlrose', 'oc-foods'].filter((o) => o !== id)) await expect(frame(page, other)).toHaveCSS('box-shadow', 'none');
 		});
 	}

@@ -4,6 +4,10 @@ import { planById } from '../src/lib/experiments/airflow/homes/plans';
 import { setupToHash } from '../src/lib/experiments/airflow/link';
 import { blankSetup } from '../src/lib/experiments/airflow/state';
 
+// Software WebGL (the headless CI browsers) takes tens of seconds to show a cold world, so each test here gets 90 s, and the wait for
+// the world to be shown gets 60 s.
+test.beforeEach(() => test.setTimeout(90_000));
+
 /** How much of a picture its most common colour takes up: close to 1 for a Stage with nothing in it. */
 async function dominantShare(page: Page, png: Buffer) {
 	return page.evaluate(async (base64) => {
@@ -91,7 +95,7 @@ test.describe('the airflow page', () => {
 		await page.goto('/experiments/airflow');
 		await expect(page.getByRole('heading', { level: 1 })).toContainText('Airflow');
 		const view = page.getByRole('application', { name: /^The air in the/ });
-		await expect(view).toHaveAttribute('data-state', /^(live|unsupported)$/, { timeout: 15_000 });
+		await expect(view).toHaveAttribute('data-state', /^(live|unsupported)$/, { timeout: 60_000 });
 		test.skip((await view.getAttribute('data-state')) === 'unsupported', 'This browser has no WebGL.');
 
 		await expect(view.locator('canvas')).toHaveCount(1);
@@ -111,7 +115,7 @@ test.describe('the airflow page', () => {
 		await page.setViewportSize({ width: 1280, height: 900 });
 		await page.goto('/experiments/airflow');
 		const view = page.getByRole('application', { name: /^The air in the/ });
-		await expect(view).toHaveAttribute('data-state', /^(live|unsupported)$/, { timeout: 15_000 });
+		await expect(view).toHaveAttribute('data-state', /^(live|unsupported)$/, { timeout: 60_000 });
 		test.skip((await view.getAttribute('data-state')) === 'unsupported', 'This browser has no WebGL.');
 		await expect(page.locator('.sim-status')).toHaveAttribute('data-status', /^(paused|running|unsupported)$/, { timeout: 30_000 });
 		// The world is lawn, sky, wood, plaster and fabric in warm and green tones: nothing in it is magenta, which is what the speckle was.
@@ -174,7 +178,7 @@ test.describe('the airflow page', () => {
 			// worker and changes the count of them below, and says so in the status line, between the cell size and the rate.
 			await page.goto('/experiments/airflow?cell=0.2');
 			const view = page.getByRole('application', { name: /^The air in the/ });
-			await expect(view).toHaveAttribute('data-state', /^(live|unsupported)$/, { timeout: 15_000 });
+			await expect(view).toHaveAttribute('data-state', /^(live|unsupported)$/, { timeout: 60_000 });
 			test.skip((await view.getAttribute('data-state')) === 'unsupported', 'This browser has no WebGL.');
 
 			const status = page.locator('.sim-status');
@@ -233,7 +237,7 @@ test.describe('the airflow page', () => {
 			});
 			await page.goto('/experiments/airflow');
 			const view = page.getByRole('application', { name: /^The air in the/ });
-			await expect(view).toHaveAttribute('data-state', /^(live|unsupported)$/, { timeout: 15_000 });
+			await expect(view).toHaveAttribute('data-state', /^(live|unsupported)$/, { timeout: 60_000 });
 			test.skip((await view.getAttribute('data-state')) === 'unsupported', 'This browser has no WebGL.');
 			const status = page.locator('.sim-status');
 			await expect(status).toHaveAttribute('data-status', 'unsupported', { timeout: 30_000 });

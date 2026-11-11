@@ -80,6 +80,8 @@ export class CpuSolver {
 	c: Float32Array;
 	readonly pressure: PressureSolver;
 	exterior: Exterior;
+	/** Pressure added outside every opening on each side of the box, Pa, in box-side order: a gusty wind's departure from its mean (`BackendUpdate.gust`). */
+	readonly gust = new Float32Array(6);
 	fans: FanDisk[] = [];
 	/** Flow through each fan's disk as of the last step, m³/s. */
 	fanFlow = new Float64Array(0);
@@ -255,7 +257,7 @@ export class CpuSolver {
 
 		// 5. Projection, which also makes the air a purifier draws in vanish and the air it blows out appear.
 		// The pressure takes the second half of the step (the first half was applied before advection).
-		this.pressure.assemble(half, dt / (dt + FAN_SPIN_UP), fluid.rho, fluid.cd, geometry, this.exterior, this.vel, this.purifiers.length ? this.air : undefined);
+		this.pressure.assemble(half, dt / (dt + FAN_SPIN_UP), fluid.rho, fluid.cd, geometry, this.exterior, this.gust, this.vel, this.purifiers.length ? this.air : undefined);
 		this.pressure.solve();
 		this.pressure.project(half, fluid.rho, geometry, this.vel);
 

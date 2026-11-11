@@ -1,6 +1,7 @@
 import { Grid } from '../solver/grid';
 import type { Exterior, FluidProperties } from '../solver/types';
 import type { Conditions } from '../state';
+import { GUST_MEAN_SQUARE, gustAt, type GustSeries } from './gust';
 import type { Raster } from './rasterize';
 import type { Facade } from './types';
 
@@ -40,30 +41,57 @@ export function windPressureCoefficient(incidence: number, sideRatio: number) {
 }
 
 /**
+ * The wind's pressure on a facade, ½ρU²Cp, Pa, for a wind of `speed` m/s at the eaves blowing from the bearing `from`. The steady wind
+ * and the gusts both come through here: a gust's departure is this at the gust's speed and direction (homes/gust.ts) less this at the mean.
+ */
+export function facadeWindPressure(plan: { width: number; depth: number }, facade: Facade, from: number, speed: number, rho: number) {
+	const alongNorthSouth = facade === 'north' || facade === 'south';
+	const sideRatio = alongNorthSouth ? plan.width / plan.depth : plan.depth / plan.width;
+	return 0.5 * rho * speed * speed * windPressureCoefficient(from - FACADE_BEARING[facade], sideRatio);
+}
+
+/**
  * Pressures outside every exterior opening, and the outdoor air's temperature and particulates.
  *
  * Outside pressure at a face is the wind's (½ρU² times the facade's coefficient for this wind direction) plus a
  * hydrostatic term: air at a different temperature from the reference weighs differently, so its pressure changes
  * with height as ρ·g·β·(T_out − T_ref)·y. That term is what drives the stack effect. The reference temperature is
- * the indoor air's starting temperature, so the indoor air has no buoyancy to begin with.
+ * the indoor air's starting temperature, so the indoor air has no buoyancy to begin with. The wind here is the mean wind;
+ * a gusty wind adds its departure from the mean on each side of the box, each step (`gustPressures`, `BackendUpdate.gust`).
  */
 export function exteriorState(raster: Raster, conditions: Conditions, referenceTemperature: number, fluid: FluidProperties): Exterior {
 	const grid = new Grid(raster.spec);
 	const sides = [0, 1, 2, 3, 4, 5].map((s) => new Float32Array(3 * grid.sideSize(s as 0))) as Exterior['sides'];
 	const difference = conditions.outdoorTemp - referenceTemperature;
 	const eaves = conditions.windSpeed * WIND_AT_EAVES;
-	const dynamic = 0.5 * fluid.rho * eaves * eaves;
-	const { plan } = raster;
 	for (const opening of raster.openings) {
 		if (opening.side === undefined || opening.facade === undefined) continue;
-		const alongNorthSouth = opening.facade === 'north' || opening.facade === 'south';
-		const sideRatio = alongNorthSouth ? plan.width / plan.depth : plan.depth / plan.width;
-		const incidence = conditions.windFrom - FACADE_BEARING[opening.facade];
-		const wind = dynamic * windPressureCoefficient(incidence, sideRatio);
+		const wind = facadeWindPressure(raster.plan, opening.facade, conditions.windFrom, eaves, fluid.rho);
 		for (const face of opening.faces) {
 			const height = (face.y0 + face.y1) / 2;
 			sides[opening.side][3 * face.slot] = wind + fluid.rho * fluid.g * fluid.beta * difference * height;
 		}
 	}
 	return { sides, theta: difference, particulates: conditions.outdoorPm25 / (fluid.rho * 1000) };
+}
+
+/**
+ * A gusty wind's departure from the mean wind's pressure on each side of the box, Pa, six numbers in box-side order (sides without an
+ * opening, the floor and the ceiling stay 0): ½ρU(t)²Cp(θ(t)) / GUST_MEAN_SQUARE less ½ρŪ²Cp(θ̄) for the facade on that side, with
+ * U(t) and θ(t) the gust at `time` simulated seconds. The division keeps the long-run mean of U(t)² at Ū², so the mean pressure is
+ * the steady wind's, as the measured Cp are (homes/gust.ts). All zeros when the wind is steady or calm. The solver adds it to the
+ * outside pressure of every opening on the side, so the steady wind and the gusts take one path into the pressure solve.
+ */
+export function gustPressures(raster: Raster, conditions: Conditions, series: GustSeries, time: number, rho: number, into = new Float32Array(6)) {
+	into.fill(0);
+	const mean = conditions.windSpeed * WIND_AT_EAVES;
+	if (conditions.gusty !== true || !(mean > 0)) return into;
+	const gust = gustAt(series, time, mean);
+	const speed = gust.speed / Math.sqrt(GUST_MEAN_SQUARE);
+	for (const opening of raster.openings) {
+		if (opening.side === undefined || opening.facade === undefined) continue;
+		into[opening.side] =
+			facadeWindPressure(raster.plan, opening.facade, conditions.windFrom + gust.veer, speed, rho) - facadeWindPressure(raster.plan, opening.facade, conditions.windFrom, mean, rho);
+	}
+	return into;
 }

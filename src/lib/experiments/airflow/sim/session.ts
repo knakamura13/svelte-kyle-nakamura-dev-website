@@ -328,7 +328,7 @@ export class SimulationSession {
 			measured = await measureSteps(trial.backend, {
 				dt: WARMUP_STEP,
 				before: () => {
-					trial.updateOscillation(time);
+					trial.beforeStep(time);
 					time += WARMUP_STEP;
 				},
 				progress: (share) => (this.measuring = share),
@@ -617,7 +617,7 @@ export class SimulationSession {
 		const dt = steps > 0 ? Math.min(stable, this.owed / steps) : 0;
 		const started = performance.now();
 		for (let n = 0; n < steps; n++) {
-			world.updateOscillation(this.simTime);
+			world.beforeStep(this.simTime);
 			backend.step(dt);
 			this.simTime += dt;
 		}

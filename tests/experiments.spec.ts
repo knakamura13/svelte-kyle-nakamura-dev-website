@@ -6,7 +6,7 @@ import { experiments } from '../src/lib/experiments/catalog';
 const routes = fileURLToPath(new URL('../src/routes/experiments/', import.meta.url));
 
 /** Pages that exist but are not listed yet because they are not finished: reachable by address only. Add each to the catalog, and take it off this list, when it is. */
-const UNLISTED = ['airflow'];
+const UNLISTED: string[] = [];
 
 test.describe('the experiments landing page', () => {
 	test('lists an experiment for every page under /experiments, and a page for every experiment', () => {
@@ -16,6 +16,13 @@ test.describe('the experiments landing page', () => {
 			.filter((name) => !UNLISTED.includes(name));
 		expect(experiments.map((experiment) => experiment.slug).sort()).toEqual(pages.sort());
 		for (const slug of UNLISTED) expect(experiments.map((experiment) => experiment.slug), `${slug} is listed, so it is no longer unlisted`).not.toContain(slug);
+	});
+
+	test('lists Airflow, room by room first, and links to its page', async ({ page }) => {
+		expect(experiments[0].slug).toBe('airflow');
+		await page.goto('/experiments');
+		await expect(page.getByRole('heading', { level: 3 }).first()).toHaveText('Airflow, room by room');
+		await expect(page.getByRole('link', { name: 'Open Airflow, room by room' })).toHaveAttribute('href', '/experiments/airflow');
 	});
 
 	test('shows each experiment and links to it', async ({ page }) => {

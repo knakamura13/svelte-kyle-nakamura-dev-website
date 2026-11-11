@@ -193,6 +193,7 @@ export class GpuBackend implements FlowBackend {
 		if (change.faces?.length) s.updateFaces(change.faces);
 		// After the faces, so whether the box has an outlet is worked out on the new openings.
 		if (change.exterior) s.setExterior(change.exterior);
+		if (change.gust) s.setGust(change.gust);
 		if (change.fans) s.setFans(change.fans);
 		if (change.emitters) s.setEmitters(change.emitters);
 		if (change.sinks) s.setSinks(change.sinks);

@@ -5,6 +5,13 @@ import type { PlanId } from '../src/lib/experiments/airflow/homes/types';
 import { setupToHash } from '../src/lib/experiments/airflow/link';
 import { SCENARIOS } from '../src/lib/experiments/airflow/scenarios';
 import { blankSetup } from '../src/lib/experiments/airflow/state';
+import { requireWebGL2 } from './webgl';
+
+// Software WebGL (the headless CI browsers) compiles the world's shaders for many seconds, so a test that waits for the world gets 90 s.
+test.beforeEach(async ({ page }) => {
+	test.setTimeout(90_000);
+	await requireWebGL2(page);
+});
 
 /**
  * The airflow page on a phone (#83): the world keeps most of the screen with a sheet at its peek and no panel covers another, every
@@ -473,10 +480,12 @@ for (const phone of PHONES) {
 			await page.keyboard.press('Enter');
 			await expect(page.locator('.hud [role="status"][data-releasing]')).toBeVisible();
 			// How much smoke is out depends on how fast this machine runs the simulation, so the plume is watched as it grows. The streaks
-			// moving meanwhile are not counted (`airShares` leaves out a pixel that is the air's blue in either picture).
+			// moving meanwhile are not counted (`airShares` leaves out a pixel that is the air's blue in either picture). With WebGL in software
+			// on CI's 4-core runner a picture and its count take several seconds (6 to 9 s for the desktop's, measured 2026-11-11), so the wait
+			// allows several of them.
 			let smoke = 0;
 			await expect
-				.poll(async () => (smoke = (await airShares(page, air, await worldShot(page))).smoke), { message: 'the share of the world a burst of smoke clearly covers', timeout: 20_000, intervals: [1000] })
+				.poll(async () => (smoke = (await airShares(page, air, await worldShot(page))).smoke), { message: 'the share of the world a burst of smoke clearly covers', timeout: 45_000, intervals: [1000] })
 				.toBeGreaterThan(0.003);
 			test.info().annotations.push({ type: 'smoke', description: `${(smoke * 100).toFixed(2)}% of the world's pixels are clearly greyer` });
 		});
