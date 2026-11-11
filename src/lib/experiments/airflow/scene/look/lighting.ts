@@ -1,11 +1,13 @@
 import { Color, DirectionalLight, Euler, Fog, HemisphereLight, MathUtils, Vector3, type Scene, type Texture } from 'three';
 import type { Quality } from './quality';
+import { SkyHaze, hazeAt, smokyDay, throughLayer } from './smokyDay';
 
 /**
  * The light of the world: late afternoon. A low, warm sun from the west-south-west (the side the default wind comes from, so it
  * shines in at the living room windows), with soft shadows fitted to the Home; the CC0 sky (Kloppenheim 06, a low sun in a clear,
  * hazy sky) as the background and, through PMREM, as the ambient light and the reflections; and a warm haze that takes the lawn into
- * the sky at the horizon. Everything here is in the solver's axes (metres; x east, y up, z south).
+ * the sky at the horizon. With smoke outdoors (`setSmoke`, `smokyDay.ts`) the sky and the far lawn haze over by the visibility it
+ * gives, and the sun dims and warms. Everything here is in the solver's axes (metres; x east, y up, z south).
  */
 
 /** Where the sun is: the compass bearing it shines from, degrees, its height above the horizon, its colour and its strength. */
@@ -20,6 +22,18 @@ const SKY = { background: 0.62, environment: 0.42 } as const;
 /** The haze at the horizon, linear: the sky's own colour a few degrees up, so the lawn fades into it. */
 const HAZE = new Color(0.93, 0.83, 0.72);
 
+/** Where the haze begins and where it hides everything, m. */
+const FOG = { near: 34, far: 150 } as const;
+
+/** The warm bounce from the floors and the lawn, and the soft sky over it. */
+const FILL = { sky: 0xffe8cc, ground: 0xd0a070, intensity: 0.75 } as const;
+
+/** How far the lawn reaches from the Home, m (`outside.ts`): the smoke's haze is matched to the clean fog's there. */
+const LAWN_EDGE = 90;
+
+/** The elevation the haze at the horizon is taken at, degrees: where the lawn meets the sky. */
+const HORIZON = 2;
+
 /** The direction toward the sun, a unit vector. */
 export function sunDirection(bearing: number = SUN.bearing, elevation: number = SUN.elevation): Vector3 {
 	const b = MathUtils.degToRad(bearing);
@@ -32,6 +46,10 @@ export class Lighting {
 	readonly sun: DirectionalLight;
 	private readonly fill: HemisphereLight;
 	private readonly centre = new Vector3();
+	private readonly fog: Fog;
+	private readonly skyHaze = new SkyHaze();
+	/** The outdoor PM2.5 the light is set for, µg/m³. */
+	private pm25 = 0;
 
 	constructor(private readonly scene: Scene) {
 		this.sun = new DirectionalLight(SUN.color, SUN.intensity);
@@ -41,10 +59,45 @@ export class Lighting {
 		this.sun.shadow.normalBias = 0.025;
 		scene.add(this.sun, this.sun.target);
 		// Warm bounce from the floors and the lawn and a soft sky, under the sky's own light, so the rooms read warm and no shadow goes dead.
-		this.fill = new HemisphereLight(0xffe8cc, 0xd0a070, 0.75);
+		this.fill = new HemisphereLight(FILL.sky, FILL.ground, FILL.intensity);
 		scene.add(this.fill);
-		scene.fog = new Fog(HAZE.clone().multiplyScalar(SKY.background), 34, 150);
+		this.fog = new Fog(HAZE.clone().multiplyScalar(SKY.background), FOG.near, FOG.far);
+		scene.fog = this.fog;
 		scene.background = new Color(0xcfd9df);
+		scene.add(this.skyHaze.mesh);
+	}
+
+	/**
+	 * The outdoor PM2.5, µg/m³: the sky and the far lawn haze over by the visibility it gives, the sun dims and warms, and the sky's
+	 * light grows with what the smoke scatters down (`smokyDay.ts`). At 0 everything is as it is on a clean day.
+	 */
+	setSmoke(pm25: number) {
+		const pm = Math.max(0, pm25);
+		if (pm === this.pm25) return;
+		this.pm25 = pm;
+		this.applySmoke();
+	}
+
+	private applySmoke() {
+		const { scene, fog } = this;
+		const day = smokyDay(this.pm25, SUN.elevation);
+		const clean = day.pm25 === 0;
+		this.sun.color.setHex(SUN.color);
+		fog.color.copy(HAZE).multiplyScalar(SKY.background);
+		fog.near = FOG.near;
+		fog.far = FOG.far;
+		this.fill.intensity = FILL.intensity;
+		if (scene.environment) scene.environmentIntensity = SKY.environment;
+		this.skyHaze.set(day);
+		if (clean) return;
+		this.sun.color.multiply(new Color(...day.sun));
+		this.fill.intensity = FILL.intensity * day.sky;
+		if (scene.environment) scene.environmentIntensity = SKY.environment * day.sky;
+		// The lawn fades into the smoky horizon: the fog takes the haze's colour as the sky there does, and at the lawn's edge hides what
+		// the clean fog and the smoke over the rest of it hide together.
+		fog.color.lerp(day.haze, 1 - throughLayer(day.depth[1], HORIZON));
+		const hidden = hazeAt(LAWN_EDGE, FOG.near, FOG.far, day.extinction);
+		fog.far = FOG.near + (LAWN_EDGE - FOG.near) / Math.max(hidden, 1e-3);
 	}
 
 	/**
@@ -57,6 +110,7 @@ export class Lighting {
 		scene.environment = environment;
 		scene.backgroundIntensity = SKY.background;
 		scene.environmentIntensity = SKY.environment;
+		this.applySmoke();
 		scene.backgroundBlurriness = 0;
 		// The renderer looks an equirectangular sky up with the world direction turned by minus this rotation; the sun in the image is at
 		// SKY_SUN_BEARING, so turning by the difference puts it at the sun's bearing (a bearing is clockwise seen from above, a positive
@@ -72,6 +126,7 @@ export class Lighting {
 	 */
 	fit(bounds: { width: number; depth: number; ceiling: number }, margin = 8) {
 		this.centre.set(bounds.width / 2, 0, bounds.depth / 2);
+		this.skyHaze.place(this.centre);
 		const radius = Math.hypot(bounds.width / 2 + margin, bounds.depth / 2 + margin);
 		const direction = sunDirection();
 		this.sun.position.copy(this.centre).addScaledVector(direction, radius + 20);
@@ -102,6 +157,7 @@ export class Lighting {
 
 	dispose() {
 		this.sun.shadow.map?.dispose();
-		this.scene.remove(this.sun, this.sun.target, this.fill);
+		this.scene.remove(this.sun, this.sun.target, this.fill, this.skyHaze.mesh);
+		this.skyHaze.dispose();
 	}
 }

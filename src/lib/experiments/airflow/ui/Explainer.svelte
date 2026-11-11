@@ -34,6 +34,12 @@
 				equals smoke still in the air plus smoke that left, was filtered, or settled. The two sides agree to within 0.1&nbsp;%, and the panel says so if they stop, as rounding alone can after half an hour in a sealed, still home on the coarse grid a phone runs.
 			</li>
 			<li>
+				<strong>The smoke you see is the smoke that stands out.</strong> Indoors, only the smoke above its room’s average is drawn, as a dark grey that dims what is
+				behind it. Smoke spread evenly through a room is not drawn, because real smoke at these levels looks clear: 150&nbsp;µg/m³ dims a 4&nbsp;m room by about
+				0.3&nbsp;%. A fresh release shows and fades as it mixes, and the Smoke overlay shows the PM2.5 that stays. Outdoors, smoke hazes the sky and the distance by the
+				visibility it gives, about 6&nbsp;km at 150&nbsp;µg/m³, and the sun dims and turns orange.
+			</li>
+			<li>
 				<strong>The solver is checked against published results.</strong> Each of these runs in the test suite: air in a lid-driven cavity at Reynolds number
 				1000 (Ghia and colleagues), natural convection in a heated cavity (de Vahl Davis), flow through two openings, the stack effect, the decay of smoke in
 				a well-mixed room, and the slowing of a fan’s jet.
@@ -69,6 +75,11 @@
 				home’s surroundings change the pressures a lot.
 			</li>
 			<li>There are no heat sources, no sunlight through windows, no heat through walls, and no humidity. Warm and cold air come only from the temperatures you set.</li>
+			<li>
+				A released plume is drawn far denser than real smoke, so that it still reads once the cubes have averaged it. The smoky sky takes the smoke as mixed evenly
+				through the lowest kilometre of air with the extinction of aged wildfire smoke, 4.5&nbsp;m² for each gram, which is good to about a third. Real wildfire smoke often
+				also rides higher, which makes the sky darker than the PM2.5 at the ground says.
+			</li>
 			<li>The four homes are single-story and rectangular, with fixed furniture. Doors and windows stay where they are drawn.</li>
 			<li>
 				The homes are airtight: with every window and door shut, no air comes in or goes out. Real homes leak through cracks, about 0.4 air changes an hour in a typical
@@ -409,6 +420,28 @@
 			Each mark is one candle, one stick of incense or one cooking event. The candle and the incense come from the studies of them, frying from the middle of four
 			cooking studies, and the cooking burst from the 95th percentile of the apartments’ events and the hottest cooking tests.
 		</p>
+
+		<h3>Smoke you can see</h3>
+		<ul class="sources">
+			<li>
+				Reid and colleagues, “<a href="https://doi.org/10.5194/acp-5-827-2005" target="_blank" rel="noopener noreferrer"
+					>A review of biomass burning emissions part III: intensive optical properties of biomass burning particles</a
+				>,” <i>Atmospheric Chemistry and Physics</i> 5, 827–849 (2005): how much light a gram of smoke scatters (4.0 to 4.3&nbsp;m² for aged smoke) and absorbs
+				(about 0.5&nbsp;m²), and how much more it takes out of blue light than red. The extinction used here, 4.5&nbsp;m² a gram, is the low end of the two together.
+			</li>
+			<li>
+				Lee and Shang, “<a href="https://doi.org/10.1175/JAS-D-16-0102.1" target="_blank" rel="noopener noreferrer"
+					>Visibility: how applicable is the century-old Koschmieder model?</a
+				>,” <i>Journal of the Atmospheric Sciences</i> 73, 4573–4581 (2016): visibility is 3.912 divided by the extinction, for an eye that sees a contrast of 2&nbsp;%. Only a
+				summary of the paper was read.
+			</li>
+			<li>
+				Seidel and colleagues, “<a href="https://doi.org/10.1029/2012JD018143" target="_blank" rel="noopener noreferrer"
+					>Climatology of the planetary boundary layer over the continental United States and Europe</a
+				>,” <i>Journal of Geophysical Research</i> 117, D17106 (2012): the air near the ground mixes to typically under 1&nbsp;km by day, the depth the smoky sky takes the
+				smoke to fill. Its abstract was read.
+			</li>
+		</ul>
 
 		<h3>Fan and purifier ratings</h3>
 		<ul class="sources">
