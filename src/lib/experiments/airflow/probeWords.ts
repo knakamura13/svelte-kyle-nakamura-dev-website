@@ -92,3 +92,25 @@ export function describeSpot(name: string, point: Point, reading: AirReading | n
 	const sentence = [head, moving, mean, `Temperature ${temperature.spoken}.`, `PM2.5 ${particulates.spoken}.`].join(' ');
 	return { name, place, rows, message: '', sentence };
 }
+
+/**
+ * What the keyboard's cursor (the arrow keys in the 3D view, with the Probe or Smoke tool) has under it, said to a screen reader once
+ * the keys stop: the Room and the height, then whether there is air to read there and what it does. Short, as it is said after every
+ * run of keys; the Probe panel has the whole reading. `room` is the Room's name, or null between the Rooms (a wall) or outside them.
+ */
+export function describeCursor(room: string | null, point: Point, reading: AirReading | null | undefined, units: UnitSystem): string {
+	const where = `${room ?? 'Not in a room'}, at a height of ${formatLength(point.y, units).spoken}.`;
+	if (!reading) return `${where} ${WAITING}`;
+	if (!reading.inAir) return `${where} ${room ? 'Furniture or a wall here, so there is no air to read.' : 'There is no air to read here.'}`;
+	const direction = describeDirection(reading.u, reading.v, reading.w);
+	const speed = formatSpeed(reading.speed, units);
+	return `${where} ${direction.text === 'still' ? `Air is still, at ${speed.spoken}.` : `Air moving ${direction.spoken}, at ${speed.spoken}.`}`;
+}
+
+/** Why Enter at the keyboard's cursor did nothing: no air under it, or no reading of it yet. `action` is what Enter would have done. */
+export function describeRefusal(action: 'pin' | 'smoke', room: string | null, reading: AirReading | null | undefined): string {
+	const nothing = action === 'pin' ? 'No probe pinned' : 'No smoke released';
+	if (!reading) return `${nothing}: the air here has not been read yet. Try again in a moment.`;
+	const why = room ? 'the cursor is on furniture or a wall' : 'the cursor is not in a room';
+	return `${nothing}: ${why}. Move it with the arrow keys to the air.`;
+}

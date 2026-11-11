@@ -36,6 +36,7 @@ export class CpuBackend implements FlowBackend {
 		const arrays = [geometry.au, geometry.av, geometry.aw];
 		for (const faces of change.faces ?? []) for (let n = 0; n < faces.indices.length; n++) arrays[faces.axis][faces.indices[n]] = faces.values[n];
 		if (change.exterior) this.solver.exterior = change.exterior;
+		if (change.gust) this.solver.gust.set(change.gust);
 		if (change.fans) this.solver.setFans(change.fans);
 		if (change.emitters) this.solver.setEmitters(change.emitters);
 		if (change.sinks) this.solver.setSinks(change.sinks);
@@ -82,6 +83,7 @@ export class CpuBackend implements FlowBackend {
 		this.solver.vel.v.set(fields.v);
 		this.solver.vel.w.set(fields.w);
 		this.solver.pressure.pressure.set(fields.p);
+		this.solver.pressure.settleOn(this.solver.vel);
 		this.solver.theta.set(fields.theta);
 		this.solver.c.set(fields.particulates);
 		// The diagnostics describe the air there is now, as the GPU's (measured at each snapshot) do: a snapshot before the next step reads this air.

@@ -4,7 +4,7 @@
 - Scope: single-story home, outdoors not simulated. Wind reaches open windows and doors through wall pressure coefficients (Cp) by facade and wind angle; flow through each opening follows the orifice equation.
 - Verification method: pages fetched with WebFetch; scanned PDFs (FSEC-CR-163-86, AIVC TN 44, NISTIR 6585) read from the saved PDF through the OCR text layer (PyMuPDF) or tesseract, then checked by eye against rendered page images. Every table value labelled "computed" and every code block below was executed with node 20.19.0 (TypeScript transpiled with esbuild); the check script is not stored in the repo.
 - ASHRAE Handbook text was not read (paywalled; ASHRAE terms bar entering its content into AI tools). Every "ASHRAE" value below comes from a document that cites it.
-- Labels. CONFIRMED: two or more independent sources agree, or a primary source was read directly and cross-checked numerically. SINGLE-SOURCE: one source read directly. UNCONFIRMED: not verified; reason given. Tags [S1] to [S28] resolve in section 6 ([S10] is unused).
+- Labels. CONFIRMED: two or more independent sources agree, or a primary source was read directly and cross-checked numerically. SINGLE-SOURCE: one source read directly. UNCONFIRMED: not verified; reason given. Tags [S1] to [S41] resolve in section 6 ([S10] is unused).
 
 ## 1. Wall pressure coefficients (Cp) for a low-rise rectangular building
 
@@ -225,6 +225,72 @@ export function speedLbl(uMet10: number, z: number, aSite: number, bSite: number
 }
 ```
 
+### 2d. Gusts at the eaves (added 2026-11-11, issue 92)
+
+The model's wind is otherwise steady. With the Gusty switch on, the eaves wind varies about its mean speed U_eave (section 2c) and its direction wobbles, as wind near the ground in a suburb does. Terrain is EN 1991-1-4 category III, "area with regular cover of vegetation or buildings ... (suburbs, villages, permanent forest)": z0 = 0.3 m, zmin = 5 m [S37]. The eaves (3 m) sit below zmin, and the Eurocode holds every profile quantity at its zmin value below zmin, so every figure below is taken at 5 m.
+
+| Quantity | Value used | Working | Sources | Status |
+|---|---|---|---|---|
+| Turbulence intensity sigma_u / U | 0.355 | EN 1991-1-4 eq. 4.7, Iv = kI / (c0 ln(z/z0)) with kI = 1 and c0 = 1 (flat ground): 1 / ln(5/0.3) = 1 / 2.813 = 0.355 | [S37] (formula, kI, c0, category III row); [S38] gives the same form with A_u = 1.0 | CONFIRMED (formula); the standard itself was not read |
+| Gust factor, peak 3 s gust over the 10 min mean | 1.87 | EN 1991-1-4 eq. 4.8, qp = (1 + 7 Iv) * 0.5 rho vm^2. The gust speed whose dynamic pressure is qp is vm * sqrt(1 + 7 Iv) = sqrt(3.488) = 1.868 vm | [S37] | SINGLE-SOURCE (secondary page citing the clause) |
+| Integral length scale of the along-wind gusts, L | 31.6 m | EN 1991-1-4 Annex B, L(z) = Lt (z/zt)^alpha with Lt = 300 m, zt = 200 m, alpha = 0.67 + 0.05 ln z0 = 0.610: 300 * (5/200)^0.610 = 31.6 m | Steel Buildings in Europe worked example (search excerpt: the same formula and constants give 75.9 m at 21 m for z0 = 0.3 m, which the formula reproduces); [S39] notes the 2024 draft may change zt | SINGLE-SOURCE; the page itself could not be fetched (HTTP 404) |
+| Gust time scale | T_u = L / U_eave | Taylor's frozen turbulence: a gust of length L passes in L/U. At U_eave = 2.75 m/s (5 m/s at the weather station) T_u = 11.5 s; at 5.5 m/s, 5.8 s | definition | judgement |
+| Across-wind spread sigma_v / sigma_u | 0.8 | IEC 61400-1's Kaimal model | [S40]; [S38] gives 0.75 (A_v = 0.75 against A_u = 1.0) | CONFIRMED within 7 % |
+| Across-wind time scale over along-wind | 1/3 | IEC 61400-1's Kaimal model: L_v = 2.7 Lambda, L_u = 8.1 Lambda | [S40] | SINGLE-SOURCE |
+| Direction wobble, standard deviation | about 16 degrees | sigma_v / U = 0.8 * 0.355 = 0.284 rad = 16.3 degrees (small-angle) | from the two rows above | computed |
+
+The Eurocode figures are the design values for a mean wind of at least design strength; at the model's light winds the real intensity near the ground is if anything higher, and the gusts and lulls longer. They were chosen because they are the only full set (intensity, length scale, peak factor) for one stated terrain.
+
+**The issue's figure.** Issue 92 asked for gusts "about half again above the mean" (a gust factor of 1.5). The sourced figure for suburban ground at the eaves is 1.87. The Wieringa-Beljaars form cited in WMO material, G = 1 + 2.12 / ln(z/z0) for 10 min data, gives 1.75 at 5 m (seen only in a search excerpt of a KNMI poster; the poster's text could not be extracted). A factor of 1.5 belongs to open country (z0 about 0.03 m). The model follows the sourced 1.87 (decided by the coordinator on 2026-11-11).
+
+**The process (judgement).** u' and v', the along-wind and across-wind departures, are two independent Ornstein-Uhlenbeck processes: Gaussian, with an exponential autocorrelation whose area is the integral time scale. It is the simplest process with the three sourced statistics (an intensity, a time scale, and through them the peak). Its spectrum, S(n) = 4 sigma^2 T / (1 + (2 pi n T)^2), has the right variance and the right integral time scale, so the slow gusts that carry most of the variance are right. Above its peak it falls as n^-2 against the real n^-5/3 (the inertial subrange), so eddies of under a second are under-represented; a window's flow barely follows them. The speed is the length of the vector (U + u', v'), the direction turns by atan2(v', U + u'). The series is sampled every 1/50 of T_u in the dimensionless time tau = t * U_eave / L from a seeded generator (mulberry32 and Box-Muller), and interpolated between samples, so it is the same function of time on every run with the same seed.
+
+**Pressure (revised again 2026-11-11, after PR #103's review).** Each wall's outside pressure is
+
+p_s(t) = 0.5 rho U^2 Cp_s(theta) + [0.5 rho U(t)^2 Cp_s(theta(t)) - E(0.5 rho U(t)^2 Cp_s(theta(t)))]
+
+with U and theta the mean wind's speed and bearing and E the long-run mean over the gust series. The first term is the steady wind's, which the solver already holds. The bracket is the gust term the solver is sent each step (`BackendUpdate.gust`, the same on the CPU, the worker and the GPU): the quasi-steady pressure (the pressure on a wall follows the wind with no lag) less its own long-run mean, so its mean is zero by construction.
+
+Why the mean has to come out. A mean pressure coefficient is the mean pressure over the mean wind's dynamic pressure. Wu and Kopp [S41] write the quasi-steady pressure as the instantaneous dynamic pressure times an instantaneous coefficient (their eq. 2) and the measured mean coefficient as the mean of that over the measured speeds and directions (eq. 6). The Swami and Chandra Cp were fitted to mean pressures measured in turbulent boundary-layer wind, so they already contain both the gusts' extra dynamic pressure (the mean of U(t)^2 is 1 + 0.355^2 (1 + 0.8^2) = 1.207 times U^2; Iw is left out, as the model has no vertical gust) and the direction's wobble through the Cp curve. Evaluating 0.5 rho U(t)^2 Cp(theta(t)) with the measured Cp counts both a second time. The decision for issue 92 (2026-11-11): the gusts keep the steady wind's long-run mean pressure on every wall, and the pressure follows the gusts' fluctuations.
+
+The first version divided the dynamic pressure by 1.207 (`GUST_MEAN_SQUARE`), which removes the speed's share but not the direction's. Its error depended on the bearing. Over 100 h of the series in the 6 x 3 m test room: from 270 degrees (square on to the short west wall) 92.8 % of the steady wind's mean pressure on the windward wall, 108.0 % on the leeward and 97.0 % across the room; from 180 degrees (square on to the long south wall) 93.6 % on the windward wall, 84.6 % on the leeward and 89.7 % across; from 247.5 degrees 111.3 % on the leeward wall (PR #103's /interrogate, finding 3). The table below has every bearing tested.
+
+**How the mean is worked out (computed).** The series' wind over U is w = (1 + Iu u, Iv v) along and across the mean direction, where u and v are independent standard normals at every moment: the two Ornstein-Uhlenbeck processes are driven by separate draws, so their values are independent by construction, not by assumption. Speed and direction are both functions of w, so the expectation is a two-dimensional integral over w with no assumption about how speed and direction relate (they are correlated: a lull turns the wind further). In polar form, w = r (cos phi, sin phi), it is
+
+E(0.5 rho U(t)^2 Cp_s(theta(t))) = 0.5 rho U^2 * integral over phi of Cp_s(theta + phi) G(phi), with G(phi) = integral over r of r^3 p(r, phi),
+
+p the normal density of w (r^2 from the dynamic pressure, r from the polar area). G depends only on the sourced intensities, so it is computed once (360 directions, a 400-point trapezoid in r, about 4 ms) as weights (`gustDirectionWeights` in `homes/gust.ts`). A change of wind direction costs 360 Cp values per wall (about 0.1 ms for four walls); a change of speed only scales the mean by U^2; a calm has a mean of 0 and nothing is divided by the speed. One correction makes it exact for the generated series rather than for the ideal process: the series is sampled every 1/50 of its time scale and interpolated, which lowers its variance between samples to (1 - s)^2 + s^2 + 2s(1 - s) rho at a share s of the step (rho the one-step correlation), and over a long run s is spread evenly, so the variance used is the mean over s, (2 + rho)/3: 0.9934 along the wind and 0.9806 across. Its effect on a wall's mean is about 0.001 q (q = 0.5 rho U^2). Using that mean variance instead of the mixture over s changes a wall's mean by under 3e-6 q, and four times finer grids in phi and r by under 7e-5 q (measured).
+
+Measured over 100 h of the series (seed 1, every 0.1 s, `tests/solver/gusts.spec.ts`), wall means against the steady wind's. "Across" is the windward wall less the leeward wall of the pair whose steady difference is largest. The standard error from 100 one-hour batches is at most 0.0027 q on a wall and 0.42 % across:
+
+| Wind from | Across (pair) before | Across after | Worst wall before | Worst wall after |
+|---|---|---|---|---|
+| 180 | 89.7 % (south-north) | 100.18 % | north 84.6 % | 0.0014 q (east) |
+| 202.5 | 102.3 % (south-north) | 100.15 % | north 112.8 % | 0.0012 q (east) |
+| 225 | 96.6 % (south-north) | 100.16 % | west 88.5 % | 0.0010 q (north) |
+| 247.5 | 99.7 % (west-east) | 100.18 % | north 84.8 %, east 111.3 % (south 63.2 % at Cp 0.07) | 0.0011 q (north, west) |
+| 270 | 97.0 % (west-east) | 100.18 % | east 108.0 % | 0.0011 q (south, west) |
+| 300 | 98.4 % (north-south) | 100.23 % | north 84.4 % | 0.0011 q (south) |
+
+The test holds every wall within 0.01 q and every difference across within 1.5 %, about 3.7 standard errors. Every bearing's "after" is about 0.17 % high together: that is seed 1's own mean square speed, 0.15 % above its expectation.
+
+**The fluctuations.** The gust term is not scaled, so it has the size quasi-steady theory gives. Linearised, it is p' = 0.5 rho U^2 Cp * 2u'/U, a spread of 2 Iu times the mean (the form of [S41]'s eq. 2 to first order). Measured on the windward wall from 270 degrees, the pressure's spread over twice its mean is 0.365 against Iu = 0.355; the square of the speed and the wobble add the rest. The first version's division shrank that to 0.30. Through the square-root law of an opening, the long-run cross-flow with gusts is 91.5 % of the steady wind's (93.4 % in the first version: larger swings cost a little more, as the mean of a square root is below the square root of the mean), while a single minute moves within a few percent of what quasi-steady theory gives for that minute, and the flow surges and slackens with the gusts (`tests/solver/gusts.spec.ts`).
+
+Status: the form (zero-mean departure about the measured mean) is the decision recorded above; the quasi-steady pressure is SINGLE-SOURCE ([S41] read through WebFetch's summary, which lost the equation bodies); the expectation is computed. An alternative, replacing Cp(theta) by the deconvolved coefficient Wu and Kopp fit as a Fourier series, would make the instantaneous coefficient itself right and the mean follow, but the Swami and Chandra fit does not provide one, and deconvolving it here would add a fit with no source to check it against. The zero-mean form is exact for the mean and needs nothing beyond the series' own statistics.
+
+Quasi-steady theory is known to hold for the low-frequency gusts that dominate the flow and to fail near corners and in separated flow, where the building makes its own turbulence [S41]; the model has neither. A room open on one side gets no exchange from gusts: the gust pressure is the same over a whole wall and the solver's air is incompressible, so it cannot pump. That is a documented limit (decided 2026-11-11, as the sealed homes of section 3e were).
+
+**Measured statistics of the series** (seed 1, 200 windows of 10 min each, sampled at 0.05 s; `tests/solver/gusts.spec.ts` repeats these at 2.75 and 5.5 m/s):
+
+| U_eave (m/s) | mean speed | sigma / U (target 0.355) | integral time (target L/U) | direction sigma (target 16.3 deg) | gust factor, mean of 200 (target 1.87); 10 to 90 % |
+|---|---|---|---|---|---|
+| 1.1 | 1.048 U | 0.340 | 26.5 s (28.8) | 18.8 deg | 1.76; 1.56 to 1.99 |
+| 2.75 | 1.047 U | 0.340 | 11.1 s (11.5) | 19.1 deg | 1.83; 1.65 to 2.01 |
+| 5.5 | 1.045 U | 0.341 | 5.5 s (5.8) | 19.2 deg | 1.85; 1.69 to 2.01 |
+| 8.25 | 1.043 U | 0.342 | 3.7 s (3.8) | 19.3 deg | 1.84; 1.69 to 1.99 |
+
+The speed's spread is 4 % under sigma_u because the across-wind part adds to the speed's mean more than to its spread; the direction's is 18 % over sigma_v / U because a lull turns the wind further for the same v'. The gust factor is within 2 % of the target above 2 m/s and 6 % under it at 1.1 m/s, where 10 minutes holds only about 20 integral times.
+
 ## 3. Discharge coefficients and effective open areas
 
 ### 3a. Flow equations (CONFIRMED)
@@ -279,6 +345,40 @@ Method of [S26] (Breezway Technical Bulletin, 9 August 2012, Australian aluminiu
 Used in the model (2026-10-14, issue 47): 0.8 for a casement (`OPENING_LIMITS` in `src/lib/experiments/airflow/homes/types.ts`), the top of the measured 0.78 to 0.80, with the single-source status above; 0.5 for a double-hung window and a sliding door; 1 for a swinging door.
 
 Angle dependence for a side-hung casement (geometry, derived, not sourced and not executed): with sash width W and height H opened to angle theta, the gap between the free edge and the opposite jamb is H * 2 * W * sin(theta/2); it equals the frame width at theta = 60 degrees. The sash obstructs the stream, so Cd must fall with angle ([S12], [S11]).
+
+### 3d. One open window and a temperature difference, no wind (added 2026-11-10, issue 93)
+
+```
+Q = (Cd / 3) * A * sqrt(g * H * dT / Tm)          flow each way: in through the lower half, out through the upper half
+```
+
+A is the whole opening's area, H its height, dT the inside-minus-outside temperature difference and Tm the mean of the two absolute temperatures. It comes from integrating the orifice equation of section 3a over a pressure difference that grows linearly with height from a neutral plane at mid-height: each half carries the flow one way, and the 1/3 is that integral. Q is the flow in one direction (in equals out), not the sum of both.
+
+| Point | Finding | Sources | Status |
+|---|---|---|---|
+| Form and the 1/3 factor | Q = (1/3) Cd A sqrt(g H dT / Tm), attributed to Warren and Parkins (1985) | [S29] eq. (1), PDF p. 3, which defines Tm as "Average temperature [K]" and A as the total area of the opening; [S30] eq. (13) derives it from the orifice law and eq. (15) states it, saying that with the neutral plane at mid-height it and Warren's model "are exactly the same" | CONFIRMED |
+| One direction, not the total | The neutral plane comes from Q_in = Q_out and the integral runs over one half | [S30] eq. (9) and (13); [S31] p. 3, eq. (7), V = W H v_max / 3 over 0 to the neutral height | CONFIRMED |
+| Cd for this case | about 0.6 (the sharp-orifice value) | [S30] p. 5 (0.6, citing Swami and Chandra 1987); [S31] p. 3 (0.61 widely used; Kiel and Wilson's water-model data agree with 0.6) | CONFIRMED |
+| Kiel and Wilson full-scale doorway Cd | 0.40 + 0.0045 dT (dT in K) | [S31] p. 3 | SINGLE-SOURCE. Section 3b gives 0.4 + 0.0075 dT from [S11] Table 1; the two disagree and neither original was read |
+| Measured agreement | Warren's model averaged 14.7 % error over 50 measured buoyancy-driven cases in an apartment; it slightly overestimates at low dT and low wind against EN 16798-7 | [S30] p. 13; [S32] pp. 16 to 17 | SINGLE-SOURCE each |
+| ASHRAE Fundamentals form | Q = Cd A sqrt(2 g dH_npl (Ti - To) / Ti) | only a garbled Wikipedia page | UNCONFIRMED; not relied on |
+
+Not read (paywalled): CIBSE AM10 (2005), BS 5925:1991, Allard (1998), Warren and Parkins (1985) itself, and the journal version of Larsen and Heiselberg (2008).
+
+How the model meets it. The solver is Boussinesq: the pressure outside an opening is the hydrostatic rho g beta dT y of `homes/weather.ts` with beta = 1/T_room, so the model's own form has T_room where the formula has Tm, 0.9 % less flow at 20 and 10 °C. Worked example (computed): Cd 0.62, a window 0.9 m wide and 1.2 m tall, 20 °C inside and 10 °C outside: Q = 0.62/3 x 1.08 x sqrt(9.80665 x 1.2 x 10 / 288.15) = 0.1426 m^3/s each way. `tests/solver/single-opening.spec.ts` and `tests/gpu/single-opening.gpu.ts` hold the model to it, from 10 % below to 2 % above. Measured on a 4 x 2.7 x 4 m room with that window, its sill 0.9 m up (2026-11-10): 94.6 %, 92.5 % and 91.3 % of the formula on 0.15, 0.1 and 0.075 m cells with the room kept at one temperature, 93.1 %, 92.3 % and 91.9 % with the cold air coming in cold, CPU and GPU agreeing to four digits at 0.1 m. The opening's law is not the cause: applied to the pressure in the cells beside the window it gives the solver's flow to 0.2 %. Air leaving through the upper half speeds up toward the window inside the room, so the pressure beside the window is lower than the still room's by about rho u^2 / 2 (0.03 to 0.05 Pa against differences of up to 0.24 Pa), while the formula's Cd already counts that speeding up from rest. The two-opening benchmark is 1 to 4 % low for the same reason. Removing the double count would mean applying the orifice law to the stagnation pressure of the cell beside each opening, which would change every opening; it was not done.
+
+### 3e. Air leakage with every opening shut (added 2026-11-10, issue 93)
+
+The model's homes have no leaks. Kyle decided on 2026-11-10 to keep them sealed and to say so in the explainer. For that sentence:
+
+| Population | Air changes per hour, windows shut unless stated | Source | Status |
+|---|---|---|---|
+| US homes, measured (tracer gas, 2,971 measurements, occupied, some with windows open) | median 0.45; 10th percentile 0.18; mean 0.63; 90th percentile 1.26; regional medians 0.35 (Midwest) to 0.49 (Northeast, South) | [S33] section 19.2 and Table 19-24, p. 19-45 (Koontz and Rector 1995; Murray and Burmaster 1995 reanalysed 2,844 of them) | CONFIRMED with [S34] |
+| US homes, modelled infiltration alone (209 homes standing for 80 % of the stock, no window opening) | regional medians 0.40 to 0.42; homes built after 1970 tighter; the newest under 0.25 about half the year, pre-1970 homes about a tenth of it | [S34] pp. 15, 21. The authors note measured values elsewhere run about twice as high, partly from open windows | CONFIRMED with [S33] |
+| Natural rate from a blower-door test | rate at 50 Pa divided by about 10 to 30, 12 as a national best fit; the UK uses 20 | [S35] eq. (11) to (12), pp. 38 to 39; [S36] p. 10 (divisors from 10 to 58) | CONFIRMED as a range |
+| UK houses, measured | 0.41, or 0.28 in a terrace; below 0.2 to 1 with the wind | [S36] pp. 13 to 14 | SINGLE-SOURCE |
+
+Summary used in the explainer: about 0.4 per hour in a typical US home with the windows shut, under 0.2 in a new, tight one, about 1 in an old, leaky one. For scale (computed): one 0.9 x 1.2 m window at a 10 K difference moves 0.14 m^3/s, which is 2 air changes an hour in a 250 m^3 home and 13 in a 40 m^3 bedroom; a purifier's 0.1 m^3/s is 9 an hour in that bedroom.
 
 ## 4. Typical dimensions
 
@@ -375,7 +475,20 @@ Leads seen only in search-result summaries (pages not opened; do not use as data
 - [S26] Breezway Technical Bulletin, "Comparative Ventilation Openings Of Various Window Types", 9 August 2012 (vendor bulletin, 5 pages, Australian aluminium windows; read from the saved PDF text layer). https://www.breezway.com.au/downloads/hawaii/TB_Ventilation_Openings.pdf
 - [S27] The Foothill Catalog Foundation fact sheets hosted by LA County Planning (read from the saved PDF text layers): Garfield IV https://planning.lacounty.gov/wp-content/uploads/2026/07/2026-06-11_Garfield-Factsheet-4.pdf ; Daisy https://planning.lacounty.gov/wp-content/uploads/2025/11/2025-11-14-Daisy-Fact-Sheet.pdf ; Billy https://planning.lacounty.gov/wp-content/uploads/2025/12/BILLY-FACT-SHEET.pdf ; Lewis https://planning.lacounty.gov/wp-content/uploads/2025/06/2025-04-25-2501-The-Lewis-Fact-Sheet.pdf ; Palm https://planning.lacounty.gov/wp-content/uploads/2025/06/2025-04-25-2501-The-Palm-Fact-Sheet.pdf
 - [S28] The Plan Collection, plan 109-1098 (read through WebFetch). https://www.theplancollection.com/house-plans/plan-1500-square-feet-3-bedroom-2-bathroom-ranch-style-14403
-- Unfetched leads: Home Depot interior door guide https://www.homedepot.com/c/ab/interior-door-buying-guide/9ba683603be9fa5395fab90ba405845 ; Lowe's interior door guide https://www.lowes.com/n/buying-guide/interior-doors-buying-guide ; Milgard sliding doors https://www.milgard.com/patio-doors/sliding-glass-doors (HTTP 403 on fetch) ; NatHERS technical note https://www.homeenergyrating.gov.au/sites/default/files/2024-07/NatHERS%20Tech%20Note%2020220901.pdf (fetch timed out)
+- [S29] Larsen, T.S. and Heiselberg, P., "Single-sided Natural Ventilation Driven by a Combination of Wind Pressure and Temperature Difference", Proceedings of IAQVEC 2007, Sendai, p. 145 (Aalborg University repository copy; eq. (1) on PDF p. 3, nomenclature on PDF p. 9). https://vbn.aau.dk/ws/files/13402435/Single-sided_Natural_Ventilation_Driven_by_a_Combination_of_Wind_Pressure_and_Temperature_ (the path ends so, with no extension)
+- [S30] Pan, W., Liu, S., Li, S., Cheng, X., Zhang, H., Long, Z., Zhang, T. and Chen, Q., "A model for calculating single-sided natural ventilation rate in an urban residential apartment", Building and Environment 147 (2019), pp. 372 to 381. https://engineering.purdue.edu/~yanchen/paper/2019-1.pdf
+- [S31] van der Maas, J., Roulet, C.-A. and Hertig, J.-A., "Some Aspects of Gravity Driven Air Flow through Large Apertures in Buildings", ASHRAE Transactions 95(2), 1989, preprint VA-89-6-1. https://aivc.org/sites/default/files/airbase_3521.pdf
+- [S32] Larsen, T.S. and others, "Calculation methods for single-sided natural ventilation - now and ahead", Energy and Buildings 177 (2018), pp. 279 to 289 (same group as [S29], so not independent of it). https://vbn.aau.dk/ws/files/284948171/Calculation_methods_for_single_sided_natural_ventilation_now_and_ahead.pdf
+- [S33] U.S. Environmental Protection Agency, Exposure Factors Handbook, 2011 edition, Chapter 19, Building Characteristics. https://www.epa.gov/sites/default/files/2015-09/documents/efh-chapter19.pdf
+- [S34] Persily, A., Musser, A. and Emmerich, S.J., "Modeled Infiltration Rate Distributions for U.S. Housing", Indoor Air 20 (2010), pp. 473 to 485 (NIST preprint). https://tsapps.nist.gov/publication/get_pdf.cfm?pub_id=904946
+- [S35] Chan, W.R., Price, P.N., Sohn, M.D. and Gadgil, A.J., "Analysis of U.S. Residential Air Leakage Database", LBNL-53367 (2003), the report behind Chan et al., Atmospheric Environment 39 (2005). https://www.osti.gov/servlets/purl/816784
+- [S36] Roberts, Mourkos and Lomas, airtightness in the UK housing stock, methodology and evidence, Department for Energy Security and Net Zero research paper 2025/002 (2025). https://assets.publishing.service.gov.uk/media/68db99fbc487360cc70c9ef3/airtightness-in-uk-housing-stock-methodology-evidence.pdf
+- [S37] Steel Calculator reference, "European Wind Load: EN 1991-1-4 Wind Actions" (secondary; cites EN 1991-1-4 cl. 4.4 eq. 4.7 and cl. 4.5 eq. 4.8 and gives Table 4.1's rows; read through WebFetch on 2026-11-11). https://steelcalculator-dev.pages.dev/reference/european-wind-load/
+- [S38] Dlubal, RWIND/CFD analysis manual, section B1.2 "Wind Flow Over Homogeneous Terrain" (I = A / ln((z - d0)/z0) with A_u 1.0, A_v 0.75, A_w 0.5; read through WebFetch on 2026-11-11). https://www.dlubal.com/en/downloads-and-information/documents/online-manuals/cfd-analysis-application/005801
+- [S39] Ricciardelli, F., "EN 1991-1-4 Wind actions", JRC 2nd generation Eurocodes workshop, 2025 (search excerpt only). https://eurocodes.jrc.ec.europa.eu/sites/default/files/2025-08/2025_2G-Eurocodes-Workshop_EN%201991_FRicciardelli_website.pdf
+- [S40] SciEnTiMate documentation, `windspectrum` (IEC 61400-1 settings for the Kaimal model: sigma_v = 0.8 sigma, L_u = 8.1 Lambda, L_v = 2.7 Lambda; cites Kaimal et al. 1972, QJRMS 98, 563 to 589; read through WebFetch on 2026-11-11). https://scientimate.readthedocs.io/en/stable/python_functions/wind/windspectrum.html
+- [S41] Wu, C.-H. and Kopp, G.A., "Estimation of Wind-Induced Pressures on a Low-Rise Building Using Quasi-Steady Theory", Frontiers in Built Environment 2:5 (2016), doi:10.3389/fbuil.2016.00005 (read through WebFetch's summary on 2026-11-11; the equation bodies were not in the scraped text, so the forms above are from its prose). https://www.frontiersin.org/articles/10.3389/fbuil.2016.00005
+- Unfetched leads: Letchford, Iverson and McDonald, "The application of the Quasi-steady Theory to full scale measurements on the Texas Tech building", JWEIA 48 (1993) 111 to 132 (paywalled); Home Depot interior door guide https://www.homedepot.com/c/ab/interior-door-buying-guide/9ba683603be9fa5395fab90ba405845 ; Lowe's interior door guide https://www.lowes.com/n/buying-guide/interior-doors-buying-guide ; Milgard sliding doors https://www.milgard.com/patio-doors/sliding-glass-doors (HTTP 403 on fetch) ; NatHERS technical note https://www.homeenergyrating.gov.au/sites/default/files/2024-07/NatHERS%20Tech%20Note%2020220901.pdf (fetch timed out)
 
 ## Gaps and uncertainty
 

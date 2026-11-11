@@ -14,11 +14,16 @@ import { deviceMap, devicesFor, openingsFor, random, setupFor } from './randomSe
  * Environment: `ROBUST_TRIALS` seeds per plan (default 5), `ROBUST_H` cell size in metres (default 0.2: the page's CPU
  * fallback uses about 0.2 and the GPU path 0.05 to 0.1), `ROBUST_VERBOSE=1` to print each seed's fastest air.
  * Every failing seed is reported, not only the first.
+ *
+ * The random setups run at two steps: 1/20 s, the step of the page's faster clock speeds, and 1/60 s, a frame at 1×, which is
+ * where an intake window fan used to run away while it passed at 1/20 s (issue 91).
  */
 
 const make: BackendFactory = (config, initial) => new CpuBackend({ ...config, scalarSubsteps: undefined }, initial);
 const TRIALS = Number(process.env.ROBUST_TRIALS ?? 5);
 const DT = 1 / 20;
+/** Each plan with each step the random setups run at, s, and how a test's title names the step. */
+const RANDOM = [1 / 20, 1 / 60].flatMap((dt) => plans.map((plan) => ({ plan, dt, step: `1/${Math.round(1 / dt)} s` })));
 const H = Number(process.env.ROBUST_H ?? 0.2);
 /** Specific seeds to run instead of the first `ROBUST_TRIALS`, for reproducing a failure: `ROBUST_SEEDS=1004,52004`. */
 const ONLY = process.env.ROBUST_SEEDS?.split(',').map(Number);
@@ -43,10 +48,10 @@ const finite = (array: Float32Array) => {
  * case then ends at once, where the solver's own substep count could spend minutes on each further step. Returns where it
  * stopped, or null when it ran through.
  */
-async function advance(world: World, count: number, first = 0, tick?: (step: number) => void) {
+async function advance(world: World, count: number, first = 0, tick?: (step: number) => void, dt = DT) {
 	for (let n = 0; n < count; n++) {
 		tick?.(first + n);
-		world.backend.step(DT);
+		world.backend.step(dt);
 		const { diagnostics } = await world.backend.snapshot({});
 		if (!Number.isFinite(diagnostics.maxSpeed) || diagnostics.maxSpeed > RUNAWAY) return { step: first + n + 1, fastest: diagnostics.maxSpeed };
 	}
@@ -62,19 +67,19 @@ async function check(world: World, where: string, names: readonly ('u' | 'v' | '
 	expect.soft(diagnostics.divergence, `${where}: divergence`).toBeLessThan(0.05);
 }
 
-for (const plan of plans) {
-	test(`${plan.name}: random openings and weather, changed mid-run, keep the solver finite and divergence-free`, async () => {
+for (const { plan, dt, step } of RANDOM) {
+	test(`${plan.name}: random openings and weather, changed mid-run, keep the solver finite and divergence-free at a step of ${step}`, async () => {
 		test.setTimeout(allowed(60000 + TRIALS * 20000));
 		for (const seed of seeds(0, plans.indexOf(plan), 1)) {
 			const rand = random(seed);
 			const setup = setupFor(plan, rand);
-			const where = `${plan.id}, seed ${seed}, h ${H}, wind ${setup.conditions.windSpeed} m/s from ${setup.conditions.windFrom}°, ${setup.conditions.outdoorTemp} °C outside`;
+			const where = `${plan.id}, seed ${seed}, h ${H}, step ${step}, wind ${setup.conditions.windSpeed} m/s from ${setup.conditions.windFrom}°, ${setup.conditions.outdoorTemp} °C outside`;
 			const world = await World.create(setup, { plans: [plan], models: new Map(), make, h: H });
-			let ran = await advance(world, 40);
+			let ran = await advance(world, 40, 0, undefined, dt);
 			if (!ran) {
 				// Now the visitor opens and closes things while the air is moving.
-				world.apply({ ...setup, openings: openingsFor(plan, rand) }, 40 * DT);
-				ran = await advance(world, 60, 40);
+				world.apply({ ...setup, openings: openingsFor(plan, rand) }, 40 * dt);
+				ran = await advance(world, 60, 40, undefined, dt);
 			}
 			expect.soft(ran, `${where}: the air ran away at step ${ran?.step} (${ran?.fastest} m/s)`).toBeNull();
 			if (!ran) await check(world, where, ['u', 'v', 'w', 'p', 'theta']);
@@ -83,17 +88,17 @@ for (const plan of plans) {
 	});
 }
 
-for (const plan of plans) {
-	test(`${plan.name}: random fans and purifiers, turned and re-aimed mid-run, keep the solver finite and divergence-free`, async () => {
+for (const { plan, dt, step } of RANDOM) {
+	test(`${plan.name}: random fans and purifiers, turned and re-aimed mid-run, keep the solver finite and divergence-free at a step of ${step}`, async () => {
 		test.setTimeout(allowed(60000 + TRIALS * 20000));
 		for (const seed of seeds(50000, plans.indexOf(plan), 0)) {
 			const rand = random(seed);
 			const setup: Setup = { ...setupFor(plan, rand), devices: devicesFor(plan, rand) };
 			const list = setup.devices.map((d) => `${d.model}${d.opening ? ` in ${d.opening}` : ` at ${d.x.toFixed(1)},${d.z.toFixed(1)}`}`).join('; ');
-			const where = `${plan.id}, seed ${seed}, h ${H}, wind ${setup.conditions.windSpeed} m/s, devices: ${list}`;
+			const where = `${plan.id}, seed ${seed}, h ${H}, step ${step}, wind ${setup.conditions.windSpeed} m/s, devices: ${list}`;
 			const world = await World.create(setup, { plans: [plan], models: deviceMap, make, h: H });
-			const oscillate = (step: number) => world.updateOscillation(step * DT);
-			let ran = await advance(world, 40, 0, oscillate);
+			const oscillate = (n: number) => world.updateOscillation(n * dt);
+			let ran = await advance(world, 40, 0, oscillate, dt);
 			if (!ran) {
 				// The visitor turns the dials: a new power for every device, a new aim for the freestanding ones, another mix of openings.
 				const changed: Setup = {
@@ -101,8 +106,8 @@ for (const plan of plans) {
 					openings: openingsFor(plan, rand),
 					devices: setup.devices.map((d) => ({ ...d, power: rand(), yaw: d.opening || rand() < 0.5 ? d.yaw : Math.floor(rand() * 360) }))
 				};
-				world.apply(changed, 40 * DT);
-				ran = await advance(world, 60, 40, oscillate);
+				world.apply(changed, 40 * dt);
+				ran = await advance(world, 60, 40, oscillate, dt);
 			}
 			expect.soft(ran, `${where}: the air ran away at step ${ran?.step} (${ran?.fastest} m/s)`).toBeNull();
 			if (!ran) await check(world, where, ['u', 'v', 'w', 'p', 'theta', 'particulates']);
@@ -115,21 +120,21 @@ for (const plan of plans) {
  * The catalog's own purifiers, not the stand-in: the Airmega Mighty's outlet jet is about twice as fast as the stand-in's, and the
  * Levoit's is a ring. Every size, at any power, among fans, in any weather, changed mid-run, must stay finite too.
  */
-for (const plan of plans) {
-	test(`${plan.name}: random fans and the catalog's purifiers, at any power, keep the solver finite and divergence-free`, async () => {
+for (const { plan, dt, step } of RANDOM) {
+	test(`${plan.name}: random fans and the catalog's purifiers, at any power, keep the solver finite and divergence-free at a step of ${step}`, async () => {
 		test.setTimeout(allowed(60000 + 3 * 20000));
 		const catalog = new Map(DEVICE_MODELS.map((m) => [m.id, m]));
 		for (const seed of seeds(60000, plans.indexOf(plan), 0).slice(0, 3)) {
 			const rand = random(seed);
 			const setup: Setup = { ...setupFor(plan, rand), devices: devicesFor(plan, rand, DEVICE_MODELS) };
 			const list = setup.devices.map((d) => `${d.model} at ${d.power.toFixed(2)}${d.opening ? ` in ${d.opening}` : ` at ${d.x.toFixed(1)},${d.z.toFixed(1)}`}`).join('; ');
-			const where = `${plan.id}, seed ${seed}, h ${H}, wind ${setup.conditions.windSpeed} m/s, devices: ${list}`;
+			const where = `${plan.id}, seed ${seed}, h ${H}, step ${step}, wind ${setup.conditions.windSpeed} m/s, devices: ${list}`;
 			const world = await World.create(setup, { plans: [plan], models: catalog, make, h: H });
-			const oscillate = (step: number) => world.updateOscillation(step * DT);
-			let ran = await advance(world, 40, 0, oscillate);
+			const oscillate = (n: number) => world.updateOscillation(n * dt);
+			let ran = await advance(world, 40, 0, oscillate, dt);
 			if (!ran) {
-				world.apply({ ...setup, openings: openingsFor(plan, rand), devices: setup.devices.map((d) => ({ ...d, power: rand() })) }, 40 * DT);
-				ran = await advance(world, 60, 40, oscillate);
+				world.apply({ ...setup, openings: openingsFor(plan, rand), devices: setup.devices.map((d) => ({ ...d, power: rand() })) }, 40 * dt);
+				ran = await advance(world, 60, 40, oscillate, dt);
 			}
 			expect.soft(ran, `${where}: the air ran away at step ${ran?.step} (${ran?.fastest} m/s)`).toBeNull();
 			if (!ran) await check(world, where, ['u', 'v', 'w', 'p', 'theta', 'particulates']);

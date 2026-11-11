@@ -29,9 +29,25 @@
 				a window open halfway passes the flow of half its fully open area, whatever the grid.
 			</li>
 			<li>
+				<strong>Gusty wind rises and falls about its mean.</strong> With Gusty on in the weather, the wind at the eaves varies as it does near the ground in a
+				suburb: its speed spreads by about a third of the mean either way, and in ten minutes its strongest three seconds are about 1.85 times the mean, a little under
+				the 1.87 that Eurocode&nbsp;1 gives for suburban ground. A gust passes in about 32&nbsp;m of wind, so at a fresh breeze gusts and lulls last several seconds, and in
+				a light wind half a minute. The direction wobbles by about 19° either way. Each opening’s pressure follows the gust every step, so the flow through a
+				window surges and slackens. The wall averages the model uses were measured in gusty wind, so they already hold the gusts’ average push. The model takes the gusts’
+				own long-run average out of each gust’s push, so on every wall and from every direction the average is the steady wind’s, and only the rise and fall are added. Flow goes
+				as the square root of pressure, so over an hour a gusty wind moves about 92&nbsp;% of the steady wind’s air through a room open on two
+				sides, while any one minute moves more or less as that minute’s gusts run strong or weak. The gusts are the same on every run, so a shared link shows the same ones.
+			</li>
+			<li>
 				<strong>Smoke is fine particulate matter, PM2.5.</strong> The air carries it and swirls spread it. It settles slowly, sticks to surfaces, leaves
 				through openings, and is removed by purifiers at their rated clean air delivery rate. The Physics panel adds it all up: smoke that was already there, released and let in
 				equals smoke still in the air plus smoke that left, was filtered, or settled. The two sides agree to within 0.1&nbsp;%, and the panel says so if they stop, as rounding alone can after half an hour in a sealed, still home on the coarse grid a phone runs.
+			</li>
+			<li>
+				<strong>The smoke you see is the smoke that stands out.</strong> Indoors, only the smoke above its room’s average is drawn, as a dark grey that dims what is
+				behind it. Smoke spread evenly through a room is not drawn, because real smoke at these levels looks clear: 150&nbsp;µg/m³ dims a 4&nbsp;m room by about
+				0.3&nbsp;%. A fresh release shows and fades as it mixes, and the Smoke overlay shows the PM2.5 that stays. Outdoors, smoke hazes the sky and the distance by the
+				visibility it gives, about 6&nbsp;km at 150&nbsp;µg/m³, and the sun dims and turns orange.
 			</li>
 			<li>
 				<strong>The solver is checked against published results.</strong> Each of these runs in the test suite: air in a lid-driven cavity at Reynolds number
@@ -55,7 +71,7 @@
 		</p>
 		<ul class="sources">
 			<li>
-				The weather outside is a pressure, a temperature and an amount of smoke at each opening. Nothing outdoors is simulated, so there are no gusts, no neighbouring
+				The weather outside is a pressure, a temperature and an amount of smoke at each opening. Nothing outdoors is simulated, so there are no gusts but the Gusty switch’s, no neighbouring
 				buildings, and no sun.
 			</li>
 			<li>
@@ -64,12 +80,30 @@
 				85&nbsp;% and a city about 30&nbsp;%.
 			</li>
 			<li>
+				The gusts are a model of the wind’s statistics, not of eddies. Their sizes come from Eurocode&nbsp;1’s figures for suburban ground, taken at its lowest height
+				of 5&nbsp;m, which it applies all the way down. Each wall’s pressure follows the gust at once, as if the wind were steady at each moment. That holds for gusts
+				that last seconds; it does not for the small, quick eddies a building makes at its corners, which the model leaves out, along with eddies shorter than about a
+				second. Each gust’s pressure uses the wall averages as if they held at that moment’s speed and direction, which is the usual quasi-steady guess; only its
+				long-run average is pinned to the measurements. A room open on one side only gets no exchange at all from gusts. Real gusts pump air in and out of such a room, but here the wind’s pressure rises and
+				falls the same over a whole wall and the air cannot be squeezed, so nothing is pumped. That is a limit of the model, like its airtight walls.
+			</li>
+			<li>
 				The wind’s effect on each wall uses averages for an isolated low-rise building. They come from a fit made on buildings whose eaves were 0.1 to 0.4 times as high
 				as their short wall is wide. The studio’s eaves are about half as high as its short wall is wide, so for the studio the fit is used outside its range. A real
 				home’s surroundings change the pressures a lot.
 			</li>
 			<li>There are no heat sources, no sunlight through windows, no heat through walls, and no humidity. Warm and cold air come only from the temperatures you set.</li>
+			<li>
+				A released plume is drawn far denser than real smoke, so that it still reads once the cubes have averaged it. The smoky sky takes the smoke as mixed evenly
+				through the lowest kilometre of air with the extinction of aged wildfire smoke, 4.5&nbsp;m² for each gram, which is good to about a third. Real wildfire smoke often
+				also rides higher, which makes the sky darker than the PM2.5 at the ground says.
+			</li>
 			<li>The four homes are single-story and rectangular, with fixed furniture. Doors and windows stay where they are drawn.</li>
+			<li>
+				The homes are airtight: with every window and door shut, no air comes in or goes out. Real homes leak through cracks, about 0.4 air changes an hour in a typical
+				US home with the windows shut, from under 0.2 in a new, tight one to about 1 in an old, leaky one. An open window or a running purifier moves several to many times
+				that, so the leaks matter little while one is open or on. They matter most in a home shut against smoke outside, which in a real home slowly comes back in.
+			</li>
 			<li>
 				A window’s free area is less than its frame. Published figures put a double-hung or sliding window at about 40 to 50&nbsp;% of its frame and a single casement sash
 				at about 80&nbsp;%. The model uses half of the frame for a double-hung window and a sliding door, about 80&nbsp;% for a casement, and all of it for a door. The
@@ -207,9 +241,38 @@
 				eye on scanned pages.
 			</li>
 			<li>
+				EN 1991-1-4, <i>Eurocode 1: Actions on structures, Part 1-4: Wind actions</i> (2005): the gusts’ turbulence intensity for suburban ground (terrain category III),
+				their peak, and the length of a gust (its Annex B). The standard was not read; its formulas and table were taken from the
+				<a href="https://steelcalculator-dev.pages.dev/reference/european-wind-load/" target="_blank" rel="noopener noreferrer">Steel Calculator reference page</a> and a
+				worked example that print them.
+			</li>
+			<li>
+				Kaimal, Wyngaard, Izumi and Coté, “Spectral characteristics of surface-layer turbulence,” <i>Quarterly Journal of the Royal Meteorological Society</i> 98, 563–589
+				(1972), in the form IEC 61400-1 gives it: the wind across the mean direction varies 0.8 times as much as along it, in gusts a third as long. The original was not
+				read; the ratios were taken from the
+				<a href="https://scientimate.readthedocs.io/en/stable/python_functions/wind/windspectrum.html" target="_blank" rel="noopener noreferrer">SciEnTiMate documentation</a>,
+				and Dlubal’s wind-flow manual gives 0.75.
+			</li>
+			<li>
+				Wu and Kopp, “<a href="https://www.frontiersin.org/articles/10.3389/fbuil.2016.00005" target="_blank" rel="noopener noreferrer"
+					>Estimation of Wind-Induced Pressures on a Low-Rise Building Using Quasi-Steady Theory</a
+				>,” <i>Frontiers in Built Environment</i> 2:5 (2016): a wall’s pressure as the gust’s dynamic pressure times a coefficient, and the measured average as average
+				pressure over average dynamic pressure, which is why the gusts’ own average is taken out of their pressure. Read as a web page, whose equations did not come through.
+			</li>
+			<li>
 				Klote, “<a href="https://nvlpubs.nist.gov/nistpubs/Legacy/IR/nistir4588.pdf" target="_blank" rel="noopener noreferrer">A General Routine for Analysis of Stack Effect</a
 				>,” NISTIR 4588, National Institute of Standards and Technology (1991): the flow through two openings at different heights, and where the neutral level sits. The equations
 				were re-derived as a check.
+			</li>
+			<li>
+				U.S. Environmental Protection Agency, “<a href="https://www.epa.gov/sites/default/files/2015-09/documents/efh-chapter19.pdf" target="_blank" rel="noopener noreferrer"
+					>Exposure Factors Handbook, Chapter 19: Building Characteristics</a
+				>” (2011): air change rates measured in about 3,000 US homes, a median of 0.45 per hour and a tenth of homes under 0.18. Some homes had windows open.
+			</li>
+			<li>
+				Persily, Musser and Emmerich, “<a href="https://tsapps.nist.gov/publication/get_pdf.cfm?pub_id=904946" target="_blank" rel="noopener noreferrer"
+					>Modeled Infiltration Rate Distributions for U.S. Housing</a
+				>,” <i>Indoor Air</i> 20, 473–485 (2010): leakage alone, windows shut, about 0.4 per hour in the median US home, and under 0.25 for much of the year in the newest.
 			</li>
 			<li>
 				Dols and Polidoro,
@@ -394,6 +457,28 @@
 			Each mark is one candle, one stick of incense or one cooking event. The candle and the incense come from the studies of them, frying from the middle of four
 			cooking studies, and the cooking burst from the 95th percentile of the apartments’ events and the hottest cooking tests.
 		</p>
+
+		<h3>Smoke you can see</h3>
+		<ul class="sources">
+			<li>
+				Reid and colleagues, “<a href="https://doi.org/10.5194/acp-5-827-2005" target="_blank" rel="noopener noreferrer"
+					>A review of biomass burning emissions part III: intensive optical properties of biomass burning particles</a
+				>,” <i>Atmospheric Chemistry and Physics</i> 5, 827–849 (2005): how much light a gram of smoke scatters (4.0 to 4.3&nbsp;m² for aged smoke) and absorbs
+				(about 0.5&nbsp;m²), and how much more it takes out of blue light than red. The extinction used here, 4.5&nbsp;m² a gram, is the low end of the two together.
+			</li>
+			<li>
+				Lee and Shang, “<a href="https://doi.org/10.1175/JAS-D-16-0102.1" target="_blank" rel="noopener noreferrer"
+					>Visibility: how applicable is the century-old Koschmieder model?</a
+				>,” <i>Journal of the Atmospheric Sciences</i> 73, 4573–4581 (2016): visibility is 3.912 divided by the extinction, for an eye that sees a contrast of 2&nbsp;%. Only a
+				summary of the paper was read.
+			</li>
+			<li>
+				Seidel and colleagues, “<a href="https://doi.org/10.1029/2012JD018143" target="_blank" rel="noopener noreferrer"
+					>Climatology of the planetary boundary layer over the continental United States and Europe</a
+				>,” <i>Journal of Geophysical Research</i> 117, D17106 (2012): the air near the ground mixes to typically under 1&nbsp;km by day, the depth the smoky sky takes the
+				smoke to fill. Its abstract was read.
+			</li>
+		</ul>
 
 		<h3>Fan and purifier ratings</h3>
 		<ul class="sources">

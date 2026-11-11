@@ -13,6 +13,7 @@
 	import OpeningHint from './OpeningHint.svelte';
 	import ProbeCards from './ProbeCards.svelte';
 	import ProbePanel from './ProbePanel.svelte';
+	import RunawayNotice from './RunawayNotice.svelte';
 	import SmokePanel from './SmokePanel.svelte';
 	import ToolRail from './ToolRail.svelte';
 	import Tooltip from './Tooltip.svelte';
@@ -29,6 +30,8 @@
 	const experience = useAirflow();
 	const ui = provideHudUi();
 	const tool = $derived(experience.tool);
+	/** The run ran away and waits for a reset: the notice says why, in the status line's place, and its buttons are the HUD's first stops. */
+	const runaway = $derived(experience.readout.status === 'runaway');
 	/** On a phone one sheet shows over the toolbar at a time: Advanced, a small menu, the context menu, the Inspector, then the tool's panel. */
 	const sheet = $derived(ui.panel === 'advanced' ? 'advanced' : ui.popover ? 'popover' : experience.menu && experience.selection ? 'menu' : ui.inspector ? 'inspector' : tool !== 'select' ? 'tool' : undefined);
 	const key = (target: { kind: string; id: string } | null) => (target ? `${target.kind}:${target.id}` : '');
@@ -144,6 +147,8 @@
 
 <svelte:window onkeydown={keydown} />
 
+<!-- `data-sim-time` is the simulated time in seconds, which the clock shows only to the whole second: the end-to-end specs wait on it (#61). -->
+
 <div
 	class="hud"
 	class:phone={ui.phone}
@@ -154,7 +159,9 @@
 	data-carrying={experience.carry ? '' : undefined}
 	data-sheet={ui.phone ? sheet : undefined}
 	data-sheet-size={ui.phone && sheet ? ui.sheetSize : undefined}
+	data-sim-time={experience.readout.physics.time.toFixed(2)}
 >
+	{#if runaway}<RunawayNotice />{/if}
 	<div class="hud-top" bind:this={top}><TopBar /></div>
 	<div class="hud-weather" bind:this={weather}><WeatherWidget /></div>
 
@@ -180,7 +187,7 @@
 	{#if ui.panel === 'about'}<AboutPanel />{/if}
 	{#if ui.panel === 'advanced'}<AdvancedPanel />{/if}
 
-	<p class="hud-status sim-status" role="status" data-status={experience.readout.status}>
+	<p class="hud-status sim-status" role="status" data-status={experience.readout.status} hidden={runaway}>
 		{status}{#if tuning}<span aria-hidden="true" data-tuning>{' '}{tuning}</span>{/if}{#if behind}<span aria-hidden="true" data-behind>{' '}{behind}</span>{/if}
 	</p>
 	<p class="sr-only" aria-live="polite">{experience.announcement}</p>

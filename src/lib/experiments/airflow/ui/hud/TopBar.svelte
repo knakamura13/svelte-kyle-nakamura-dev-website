@@ -109,48 +109,53 @@
 	{#if open === 'home'}
 		<div id="hud-homes" class="panel glass deep" role="group" aria-label="Choose a home" data-sheet bind:this={panel}>
 			{#if ui.phone}<SheetGrip label="the homes" peek={false} onclose={() => close(true)} />{/if}
-			<p class="eyebrow">Choose a home</p>
-			<div class="homes">
-				{#each homes as { plan, card, thumb } (plan.id)}
-					{@const current = plan.id === experience.setup.plan}
-					<button type="button" class="home" aria-pressed={current} aria-describedby="hud-home-{plan.id}" onclick={() => chooseHome(plan.id)}>
-						<span class="plan-frame" aria-hidden="true">
-							<svg class="plan" viewBox={thumb.viewBox} preserveAspectRatio="xMidYMid meet">
-								{#each thumb.rooms as room (room.id)}<path class="room" d={room.d} fill={room.tint} />{/each}
-								{#each thumb.walls as wall, i (i)}<line class="wall" x1={wall.x1} y1={wall.y1} x2={wall.x2} y2={wall.y2} />{/each}
-								<path class="outline" d={thumb.outline} />
-								{#each thumb.openings as gap, i (i)}<line class="gap" class:window={gap.window} x1={gap.x1} y1={gap.y1} x2={gap.x2} y2={gap.y2} />{/each}
-							</svg>
-						</span>
-						<span class="home-head">
-							<span class="home-name">{card.name}</span>
-							<span class="home-area">{card.area}</span>
-						</span>
-						<span class="home-facts">{card.facts}</span>
-						<span class="sr-only" id="hud-home-{plan.id}">{card.blurb}</span>
-						{#if current}<span class="home-check" aria-hidden="true"><Icon name="check" size={14} /></span>{/if}
-					</button>
-				{/each}
+			<!-- What scrolls in a phone's sheet, so the sheet itself does not clip its grabber. Under the bar it is no box at all. -->
+			<div class="contents" class:scroll={ui.phone}>
+				<p class="eyebrow">Choose a home</p>
+				<div class="homes">
+					{#each homes as { plan, card, thumb } (plan.id)}
+						{@const current = plan.id === experience.setup.plan}
+						<button type="button" class="home" aria-pressed={current} aria-describedby="hud-home-{plan.id}" onclick={() => chooseHome(plan.id)}>
+							<span class="plan-frame" aria-hidden="true">
+								<svg class="plan" viewBox={thumb.viewBox} preserveAspectRatio="xMidYMid meet">
+									{#each thumb.rooms as room (room.id)}<path class="room" d={room.d} fill={room.tint} />{/each}
+									{#each thumb.walls as wall, i (i)}<line class="wall" x1={wall.x1} y1={wall.y1} x2={wall.x2} y2={wall.y2} />{/each}
+									<path class="outline" d={thumb.outline} />
+									{#each thumb.openings as gap, i (i)}<line class="gap" class:window={gap.window} x1={gap.x1} y1={gap.y1} x2={gap.x2} y2={gap.y2} />{/each}
+								</svg>
+							</span>
+							<span class="home-head">
+								<span class="home-name">{card.name}</span>
+								<span class="home-area">{card.area}</span>
+							</span>
+							<span class="home-facts">{card.facts}</span>
+							<span class="sr-only" id="hud-home-{plan.id}">{card.blurb}</span>
+							{#if current}<span class="home-check" aria-hidden="true"><Icon name="check" size={14} /></span>{/if}
+						</button>
+					{/each}
+				</div>
+				<p class="panel-note">A new home starts closed up and empty, in the weather you have now.</p>
 			</div>
-			<p class="panel-note">A new home starts closed up and empty, in the weather you have now.</p>
 		</div>
 	{:else if open === 'scenario'}
 		<div id="hud-scenarios" class="panel glass deep scenarios" role="group" aria-label="Scenarios" data-sheet bind:this={panel}>
 			{#if ui.phone}<SheetGrip label="the scenarios" peek={false} onclose={() => close(true)} />{/if}
-			<p class="eyebrow">Scenarios</p>
-			<div class="scenario-list">
-				{#each experience.scenarios as scenario, i (scenario.id)}
-					<button type="button" class="scenario" aria-pressed={experience.scenario === scenario.id} onclick={() => chooseScenario(scenario.id)}>
-						<span class="scenario-number" aria-hidden="true">{i + 1}</span>
-						<span class="scenario-text">
-							<span class="scenario-name">{scenario.name}</span>
-							<span class="scenario-blurb">{scenario.blurb}</span>
-						</span>
-						{#if experience.scenario === scenario.id}<span class="scenario-check" aria-hidden="true"><Icon name="check" size={16} /></span>{/if}
-					</button>
-				{/each}
+			<div class="contents" class:scroll={ui.phone}>
+				<p class="eyebrow">Scenarios</p>
+				<div class="scenario-list">
+					{#each experience.scenarios as scenario, i (scenario.id)}
+						<button type="button" class="scenario" aria-pressed={experience.scenario === scenario.id} onclick={() => chooseScenario(scenario.id)}>
+							<span class="scenario-number" aria-hidden="true">{i + 1}</span>
+							<span class="scenario-text">
+								<span class="scenario-name">{scenario.name}</span>
+								<span class="scenario-blurb">{scenario.blurb}</span>
+							</span>
+							{#if experience.scenario === scenario.id}<span class="scenario-check" aria-hidden="true"><Icon name="check" size={16} /></span>{/if}
+						</button>
+					{/each}
+				</div>
+				<p class="panel-note">{active ? active.notice : 'This is your own setup. Pick a scenario to start from a prepared one.'}</p>
 			</div>
-			<p class="panel-note">{active ? active.notice : 'This is your own setup. Pick a scenario to start from a prepared one.'}</p>
 		</div>
 	{/if}
 </div>
@@ -239,6 +244,9 @@
 	.panel.scenarios {
 		left: 150px;
 		width: 380px;
+	}
+	.contents {
+		display: contents;
 	}
 	.homes {
 		display: grid;
@@ -443,12 +451,18 @@
 		left: calc(10px + env(safe-area-inset-left));
 		right: calc(10px + env(safe-area-inset-right));
 		bottom: calc(86px + env(safe-area-inset-bottom));
+		grid-template-rows: minmax(0, 1fr);
 		width: auto;
 		max-height: 70vh;
-		padding-top: 24px;
-		overflow-y: auto;
-		overscroll-behavior: contain;
+		padding: 20px 4px 12px;
 		animation-name: hud-rise;
+	}
+	/* The sheet keeps its grabber, which reaches above it; its contents scroll, with room round them for a focus ring. */
+	:global(.hud.phone) .contents {
+		display: grid;
+		gap: 12px;
+		min-height: 0;
+		padding: 4px 12px;
 	}
 	:global(.hud.phone) .plan-frame {
 		height: 84px;

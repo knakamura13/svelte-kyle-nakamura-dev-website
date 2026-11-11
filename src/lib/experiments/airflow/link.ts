@@ -17,7 +17,7 @@ import { LIMITS, MAX_DEVICES, type Conditions, type DeviceState, type Setup } fr
  *               bytes, the new UTF-8 bytes. Every id below is an index into this list, so an id used twice is
  *               stored once and ids with a common start share it.
  *   plan        string index
- *   flags       bit 0: furniture built in
+ *   flags       bit 0: furniture built in; bit 1: the wind gusts (added 2026-11-11, so a link without it means steady wind, as before)
  *   conditions  mask of the fields that differ from V1_CONDITIONS (below), then those fields in order
  *   devices     count, then each: model (string index), mask, the masked numbers in DEVICE_FIELDS order, and the
  *               opening (string index) when its bit is set
@@ -65,9 +65,12 @@ const bounded = ({ min, max }: { min: number; max: number }, scale: number, fall
  * page can change its own defaults later without changing the meaning of a link already shared. Changing any value here,
  * a `scale`, a `fallback` or a `signed` below, or the order of the fields, needs a new version tag.
  */
-const V1_CONDITIONS: Readonly<Conditions> = { windFrom: 270, windSpeed: 0, outdoorTemp: 10, indoorTemp: 21, outdoorPm25: 0 };
+const V1_CONDITIONS: Readonly<Record<ConditionNumber, number>> = { windFrom: 270, windSpeed: 0, outdoorTemp: 10, indoorTemp: 21, outdoorPm25: 0 };
 
-const CONDITION_FIELDS: readonly (readonly [keyof Conditions, Field])[] = [
+/** The conditions that are numbers. Whether the wind gusts is a flag (`GUSTY`). */
+type ConditionNumber = Exclude<keyof Conditions, 'gusty'>;
+
+const CONDITION_FIELDS: readonly (readonly [ConditionNumber, Field])[] = [
 	['windFrom', bearing(V1_CONDITIONS.windFrom)],
 	['windSpeed', bounded(LIMITS.windSpeed, 10, V1_CONDITIONS.windSpeed)],
 	['outdoorTemp', bounded(LIMITS.outdoorTemp, 2, V1_CONDITIONS.outdoorTemp, true)],
@@ -95,6 +98,10 @@ const HAS_OPENING = 1 << 10;
 const HAS_INTAKE = 1 << 11;
 const INTAKE = 1 << 12;
 const DEVICE_BITS = 13;
+
+/** The bits of `flags`. */
+const FURNITURE = 1;
+const GUSTY = 2;
 
 const AMOUNT = bounded({ min: 0, max: 1 }, 100, 0);
 
@@ -127,6 +134,7 @@ interface PackedDevice {
 interface Packed {
 	plan: string;
 	furniture: boolean;
+	gusty: boolean;
 	conditions: number[];
 	devices: PackedDevice[];
 	openings: [string, number][];
@@ -160,6 +168,7 @@ function pack(setup: Setup): Packed {
 	return {
 		plan: String(setup.plan),
 		furniture: typeof setup.furniture === 'boolean' ? setup.furniture : true,
+		gusty: setup.conditions?.gusty === true,
 		conditions: CONDITION_FIELDS.map(([key, field]) => toSteps(field, setup.conditions?.[key])),
 		devices,
 		openings: Object.keys(record)
@@ -171,6 +180,8 @@ function pack(setup: Setup): Packed {
 function unpack(packed: Packed): Setup {
 	const conditions = {} as Conditions;
 	CONDITION_FIELDS.forEach(([key, field], i) => (conditions[key] = packed.conditions[i] / field.scale));
+	// Left out when off, so a setup from before gusts existed comes back from the link unchanged.
+	if (packed.gusty) conditions.gusty = true;
 	const openings: Record<string, number> = {};
 	// defineProperty, so an id such as "__proto__" is an ordinary key rather than a prototype.
 	for (const [id, steps] of packed.openings) Object.defineProperty(openings, id, { value: steps / AMOUNT.scale, enumerable: true, writable: true, configurable: true });
@@ -335,7 +346,7 @@ function write(packed: Packed): number[] {
 		previous = bytes;
 	}
 	out.uint(index.get(packed.plan)!);
-	out.uint(packed.furniture ? 1 : 0);
+	out.uint((packed.furniture ? FURNITURE : 0) | (packed.gusty ? GUSTY : 0));
 	const conditionMask = fieldMask(CONDITION_FIELDS, packed.conditions);
 	out.uint(conditionMask);
 	CONDITION_FIELDS.forEach(([, field], bit) => {
@@ -393,7 +404,7 @@ function read(bytes: Uint8Array, catalog: LinkCatalog): Packed | null {
 	const plan = catalog.plans.find((p) => p.id === planId);
 	if (!plan) return null;
 	const flags = input.uint();
-	if (flags > 1) throw MALFORMED;
+	if (flags > (FURNITURE | GUSTY)) throw MALFORMED;
 
 	const conditionMask = input.uint();
 	if (conditionMask >= 1 << CONDITION_FIELDS.length) throw MALFORMED;
@@ -431,7 +442,7 @@ function read(bytes: Uint8Array, catalog: LinkCatalog): Packed | null {
 		if (id !== undefined && openingIds.has(id)) amounts.set(id, steps);
 	}
 	if (input.remaining !== 0) throw MALFORMED;
-	return { plan: plan.id, furniture: flags === 1, conditions, devices, openings: [...amounts].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)) };
+	return { plan: plan.id, furniture: (flags & FURNITURE) !== 0, gusty: (flags & GUSTY) !== 0, conditions, devices, openings: [...amounts].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)) };
 }
 
 /** The link text for a setup: `1.` and base64url. Equal setups give equal text. */

@@ -1,4 +1,5 @@
 import { DECODE, ENTRY, F32, LINEAR, VEC2, VEC4, read, uniform, write, type KernelSource } from './common';
+import { FAN_SPIN_UP } from '../../types';
 
 /**
  * Kernels for step 5 of cpu/solver.ts, the projection (cpu/pressure.ts). `coef` packs a level's three conductances
@@ -88,11 +89,13 @@ ${ENTRY} {
  * Exterior openings on one side of the box (cpu/pressure.ts `assemble`, `openings`): the orifice law, or a window
  * fan's curve, linearised about the room's pressure from the last solve, becomes the face's conductance and a source
  * in the cell beside it. One dispatch per side, in the CPU's side order, so a corner cell's right-hand side gains its
- * sides' terms in the same order. `ext` holds three values per slot, `qg` the linearisation (q, slope).
+ * sides' terms in the same order. `ext` holds three values per slot, `B.gust` a pressure added outside every opening on the side (a gusty
+ * wind's departure from its mean), `qg` the linearisation (q, slope), which also gives
+ * the speed each face settled on last step, the one a window fan's face eases on from (`FAN_SPIN_UP`).
  */
 export const exterior: KernelSource = {
 	name: 'exterior',
-	bindings: [uniform('C', 'Consts'), uniform('B', 'Side'), read('ext', F32), read('p', F32), read('geo', VEC4), write('coef', VEC4), write('qg', VEC2)],
+	bindings: [uniform('C', 'Consts'), uniform('B', 'Side'), uniform('S', 'Step'), read('ext', F32), read('p', F32), read('geo', VEC4), write('coef', VEC4), write('qg', VEC2)],
 	code: `fn lane(v: vec4<f32>, axis: i32) -> f32 {
 	if (axis == 0) {
 		return v.x;
@@ -118,7 +121,10 @@ ${ENTRY} {
 	if (open > 0.0 && geo[cell].w > 0.0) {
 		let at = 3 * (B.slotBase + slot);
 		let pressure = p[cell];
-		let delta = ext[at] - pressure;
+		// The speed the face settled on last step: last step's law at the pressure it was solved for, which is still in p.
+		let last = qg[B.slotBase + slot];
+		let before = last.x - last.y * pressure;
+		let delta = ext[at] + B.gust - pressure;
 		let fanSpeed = ext[at + 1];
 		let fanRise = ext[at + 2];
 		var speed: f32;
@@ -130,6 +136,10 @@ ${ENTRY} {
 			let root = sqrt(max(1.0 + (s * delta) / fanRise, 0.0));
 			speed = fanSpeed * root;
 			slope = abs(fanSpeed) / (2.0 * fanRise * max(root, ${STALL}));
+			// The face moves only part of the way from its last speed toward the curve's, as a fan disk's push does (FAN_SPIN_UP).
+			let ease = S.dt / (S.dt + ${FAN_SPIN_UP.toFixed(6)});
+			speed = before + ease * (speed - before);
+			slope = slope * ease;
 		}
 		let flowArea = open * (C.h * C.h);
 		var e = coef[face];

@@ -193,6 +193,7 @@ export class GpuBackend implements FlowBackend {
 		if (change.faces?.length) s.updateFaces(change.faces);
 		// After the faces, so whether the box has an outlet is worked out on the new openings.
 		if (change.exterior) s.setExterior(change.exterior);
+		if (change.gust) s.setGust(change.gust);
 		if (change.fans) s.setFans(change.fans);
 		if (change.emitters) s.setEmitters(change.emitters);
 		if (change.sinks) s.setSinks(change.sinks);
@@ -383,6 +384,7 @@ export class GpuBackend implements FlowBackend {
 		queue.writeBuffer(s.vel, 0, packed);
 		queue.writeBuffer(s.next, 0, packed);
 		queue.writeBuffer(s.levels[0].p, 0, fields.p);
+		s.settleOn(fields.u, fields.v, fields.w);
 		queue.writeBuffer(s.scal, 0, packPair(fields.theta, fields.particulates));
 		// The air written in is known here, so it is the CFL reading, as the measure kernel would read it: a world that carries another's air
 		// on (a step down, the warm-up's air moved to the grid it picked) sizes its first steps from that air, not from the substep cap.

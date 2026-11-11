@@ -79,7 +79,7 @@ One of the four single-story homes the Airflow Experiment simulates, drawn as a 
 _Avoid_: house (that is one of the four), apartment, floor plan, layout
 
 **Room**:
-A named part of a Home, such as the Kitchen. Each Room has its own average speed, temperature, particulates, and air changes per hour.
+A named part of a Home, such as the Kitchen. Each Room has its own average speed, temperature, particulates, and air changes per hour, which the Physics panel lists. Its name floats over it on the Stage as a room label.
 _Avoid_: zone, space
 
 **Opening**:
@@ -95,8 +95,8 @@ The horizontal plane through a Home, at a height the visitor sets, that carries 
 _Avoid_: cross-section, cut, floor map
 
 **Layer**:
-Which quantity the Slice shows: speed, direction, particulates, or temperature.
-_Avoid_: mode, view, overlay
+Which quantity the Slice shows: speed, direction, particulates, or temperature. The HUD's Overlay control picks it as Off, Air speed, Temperature or Smoke, and Air speed also shows direction.
+_Avoid_: mode, view
 
 **Probe**:
 A point on the Slice the visitor pinned, which keeps reading the air there.
@@ -107,13 +107,33 @@ A tiny dot that drifts with the air so its motion can be seen.
 _Avoid_: particle (that is smoke), arrow
 
 **Smoke**:
-Fine particulates, measured as PM2.5, that the visitor releases or that come in from outdoors.
+Fine particulates, measured as PM2.5, that the visitor releases with the Smoke tool or that come in from outdoors.
 _Avoid_: dust, pollution, pollutant
 
+**Outdoor air**:
+The PM2.5 outside, set in the Weather widget as Clean, Hazy, Smoky or Wildfire, each a round value in one AQI category. Smoky is the setting, not the Scenario called The smoky day, which starts with it.
+_Avoid_: pollution level
+
 **Scenario**:
-A prepared Home, Devices, Openings, and weather that shows one idea, such as cross-ventilation.
+A prepared Home, Devices, Openings, and weather that shows one idea, such as cross-ventilation. There are five: Cross-ventilation, Stack effect, A fan in the window, Clearing the smoke and The smoky day.
 _Avoid_: preset, demo, example
 
+**HUD**:
+The controls drawn over the Airflow Stage, which fills the window: the top bar (Exit, Home, Scenario), the weather widget, the tool rail, the bottom bar (time, Overlay, walls, Inspector, About, Advanced), the legend and the status line. The Dock is the Relativity page's panel, and the Airflow page has none.
+_Avoid_: Dock, toolbar, sidebar
+
+**Tool**:
+What a press on the 3D view does: Select, Build, Probe or Smoke, chosen in the tool rail.
+_Avoid_: mode
+
+**Weather widget**:
+The HUD's control for the wind (speed, direction), the temperatures and the Outdoor air. Its Gusty switch makes the wind rise and fall about its mean speed. Gusty is a switch on the weather, not a speed.
+_Avoid_: gust (as a setting), turbulence
+
+**Runaway notice**:
+What the HUD shows in place of the status line when the simulation has run away (the solver's numbers left their limits and the air was stopped): why it stopped, with Reset, which puts the Home back as it began, and Restart, which runs the same setup again from still air.
+_Avoid_: crash, error
+
 **Physics panel**:
-The expandable panel that says how the simulation is doing: its clock, grid, backend, air changes per hour, and whether the particulate mass balance closes.
+The Physics section of the Advanced panel, which the page's own words also call the Physics panel. It says how the simulation is doing: its clock, grid, backend, air changes per hour, each Room's averages, and whether the particulate mass balance closes.
 _Avoid_: debug panel, stats

@@ -23,6 +23,16 @@ export interface Experiment {
 
 export const experiments: Experiment[] = [
 	{
+		slug: 'airflow',
+		title: 'Airflow, room by room',
+		summary:
+			'Open a window and watch the air. A live simulation of indoor air movement driven by wind, temperature, and fans, and how that air carries smoke and heat around the rooms.',
+		detail: 'Select a home, place a fan or open windows, and watch the flow patterns update in real time. Four homes to explore, from a studio to a house.',
+		image: '/images/experiments/airflow.svg',
+		alt: 'A dollhouse viewed three-quarter from above, with rooms tinted different colors and vectors showing air movement.',
+		tech: 'Navier-Stokes solver · Three.js · SvelteKit · WebGPU'
+	},
+	{
 		slug: 'relativity',
 		title: 'Relativity, in three dimensions',
 		summary:

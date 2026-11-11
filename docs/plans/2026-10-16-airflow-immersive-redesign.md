@@ -438,3 +438,43 @@ Kyle asked on 2026-11-04 to take #30 to completion, with no CI work unless it sp
 - **Not started:** #61 (end-to-end tests of the running simulation), #64 (real devices; ngrok is installed for a phone over https, with Kyle's OK), #69 (launch).
 - **Resume order:** #91 and #59's notice first (a shipped Scenario can run away at 1×), then the rest of #62 and #63, then #61, then #64 on a quiet machine, then #69. #69 merges #45, which changes `playwright.config.ts` and the `package.json` scripts, so main's `AGENTS.md` makes it wait for Kyle, with green CI and an `/interrogate` PASS on the PR. CI on #45 times out at 60 minutes in `yarn test:e2e`.
 - **Kyle's calls waiting:** how Smoky outdoor air should look (a mottled film on desktop walls, a brown fog on a phone; #63), and the studio's 11 % grid difference over its first two minutes (#87's weak spot, accepted as room mixing unless he says otherwise).
+
+### #94, the smoke that stands out and a smoky day outside (2026-11-10)
+
+Kyle's call on 2026-11-04, from the smoky-air analysis on #63: draw only the smoke that stands out, and show a smoky day outside, where it is visible.
+- **Indoors, only the PM2.5 above each Room's average is drawn** (`scene/air/excess.ts`). Each read's Room averages are measured from the volume itself, the mean over each Room's air, so they match the Physics panel's to within 1% (a volume cell that straddles a doorway is shared by its air in each Room) and never lag the picture. The excess goes up as a third texture beside the look and the velocity (`fields.ts`), and the smoke volume, its box and the puffs' births read it. The Smoke overlay and the probes still read the PM2.5. Smoke spread evenly through a Room draws nothing: the smoky day and Clearing the smoke show their rooms clear, and a release on top of the smoky room draws as the same release does in clean air (`tests/solver/smoke-look.spec.ts`), shows, and fades within about 10 s on a desktop.
+- **The phone's puffs** follow the same rule. They take the volume's grey at the light's brightness, without the light's colour, so an opaque puff under the warm late sun is grey, not brown. A puff is as opaque as the volume's smoke of the same strength through the depth of smoke it stands for: the space the drawn smoke fills over the area all the puffs cover. Before, a puff's opacity followed the log of the strength, so smoke a fiftieth of `SMOKE_DENSE` drew a fifth as opaque as the thickest, and once only the excess was drawn, every puff gathered in a small plume and stayed opaque until the plume was gone. A burst into the smoky studio on a phone now fades between 10 and 20 s.
+- **A smoky day outside** (`scene/look/smokyDay.ts`, sources in `docs/research/airflow/smoke-and-visibility.md`). Aged wildfire smoke takes out about 4.5 m² of light per gram (Reid et al. 2005: scattering 4.0 to 4.3, absorption about 0.5), so at the Smoky preset's 150 µg/m³ the visibility is 3.912/b = 5.8 km. The "about 4 m²/g" of check-in 3 is the scattering alone, and gives 6.5 km. The smoke is taken as mixed evenly through a 1 km mixed layer (Seidel et al. 2012: typically under 1 km by day), so the sky keeps half its own light straight up and none at the horizon, where it is a dull, warm grey. The lawn's far edge takes 3% more haze. The sun, 31 degrees up, keeps 33%, 27% and 17% of its red, green and blue (Ångström exponent 1.7), and the sky's light grows by 0.7 times the share of the sun the smoke takes out, for about 79% of a clear day's light on level ground. Clean air changes nothing: at 390 px the clean stills before and after are the same to the pixel, and at 1280 px they differ no more than two loads of the same build do (10.8% of pixels by at most 57, 0.3% by more than 8, from the frame's own noise).
+- **The explainer** says which smoke is drawn and why, how a smoky day looks, and what the sky leaves out (smoke above the mixed layer, which makes real skies darker), with its three sources. A test holds its figures to the code's.
+- **Evidence** (Chromium with the real GPU, `?cell=0.15&quality=high` at 1280 by 800 and `?cell=0.3&quality=low` at 390 by 844 at device scale 2, the overlay off unless named). The burst is a cooking burst for 3 s from the keyboard's cursor in the middle of the studio, at 1×, timed from the end of the release.
+
+| | |
+| --- | --- |
+| ![The smoky day and Clearing the smoke at 1280, before and after](airflow-checkins/2026-11-10-smoke/1280-smoky-day.jpg) | ![The same at 390, before and after](airflow-checkins/2026-11-10-smoke/390-smoky-day.jpg) |
+| ![A burst into the smoky studio at 0, 2, 5 and 10 s at 1280, before and after](airflow-checkins/2026-11-10-smoke/1280-burst.jpg) | ![The same burst at 390, before and after](airflow-checkins/2026-11-10-smoke/390-burst.jpg) |
+| ![The sky over the two-bedroom: Smoky before, then clean, Smoky and Wildfire after](airflow-checkins/2026-11-10-smoke/1280-sky.jpg) | ![The Smoke overlay still shows the PM2.5](airflow-checkins/2026-11-10-smoke/1280-smoke-overlay.jpg) |
+
+**Left as it is:** smoke that varies within a Room stands out and is drawn, as it should be: a purifier leaves its Room cleaner near itself, and smoke coming in at an open window is above the Room's average. The smoky studio 30 simulated seconds in has up to 14 µg/m³ over its average (on the CPU, at 30 cm), which the volume's extinction leaves invisible, and neither shows in the stills above. The smoky sky is subtle from the Sims camera, which sees a strip of sky at most; a smoky day shows most in the light, which is flatter and warmer.
+
+### Completion (2026-11-10 to 2026-11-11)
+
+Kyle asked on 2026-11-10 to take #30 to completion. The work ran in agent worktrees merged into `knakamura/issue-30-completion-b4c0c3`, and each issue's closing comment has its numbers. The status doc's "Final state" section is the summary.
+
+**Kyle's calls:**
+- The homes stay airtight (#93). The explainer says so.
+- Checks that need a person or real hardware (VoiceOver and NVDA, real phones and a tablet, real Safari) are recorded as not measured.
+- The smoky sky keeps the sourced haze, which from the default camera reads mostly as flatter, warmer light (#94).
+- The phone puffs keep the desktop smoke's opacity and lighting (#94).
+
+**Calls made during the work, on fidelity:**
+- The window fan eases toward its curve as disk fans do (#91).
+- The runaway notice takes the status line's place, so it is said once (#59).
+- A paused page stops drawing once its picture has caught up (#62's keyboard spec found it drawing about ten frames a second).
+- A room name with no clear side is hidden, not overlapped (#63). None is hidden in the four Homes at 390, 768, 1280 and 1920 px.
+- Each wall's gust term is zero-mean by construction (#92): the steady wind's pressure plus the gust's ½ρU²Cp(θ) minus its own long-run expectation, which is computed from the series' statistics. The first version divided by 1 + Iu² + Iv², which matched the mean only near 270°, and /interrogate on PR #103 caught it. The mean now matches within 0.0014 q on every wall at six bearings. The gust factor follows Eurocode (1.87), not the issue's 1.5.
+- Single-sided pumping by gusts is a documented limit, like the airtight walls.
+- The single-opening shortfall of 5 to 9% is kept as a known limit, inside the formula's own 14.7% scatter.
+
+**Measured:** this Mac's three browsers hold 60 fps at 1440×900, and the air is live in about 2 s. The page's first load is 838 KB of JavaScript (309 KB gzip) before three.js, and this branch adds 8 KB gzip to it. The 81 KB in #64 traces to an unmeasured note from 2026-10-12 (status doc, "First-load JavaScript").
+
+**Stills:** the smoke stills are in `airflow-checkins/2026-11-10-smoke/`. The runaway notice, the room labels and the sheet grabber (before and after at 390 px), the Gusty switch and the landing card are in `airflow-checkins/2026-11-11-launch/`.

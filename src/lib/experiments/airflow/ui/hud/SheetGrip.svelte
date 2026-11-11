@@ -114,17 +114,21 @@
 </button>
 
 <style>
-	/* A wide, short target along the sheet's top edge, the bar in its middle. The sheet keeps room for it with its top padding. */
+	/*
+	 * A wide target along the sheet's top edge, the bar in its middle. It is 44 px high, as every target is: 24 px inside the sheet, which
+	 * keeps room for it with its top padding, and 20 px above it, over the world, so it covers none of the first row. A sheet that clipped
+	 * its overflow would cut that part off, so no sheet scrolls itself: what scrolls is a box inside it.
+	 */
 	.grip {
 		position: absolute;
-		top: 0;
+		top: -20px;
 		left: 50%;
 		z-index: 1;
 		display: grid;
 		place-items: start center;
 		width: min(160px, 50%);
-		height: 24px;
-		padding: 7px 0 0;
+		height: 44px;
+		padding: 27px 0 0;
 		border: 0;
 		border-radius: 0 0 12px 12px;
 		background: transparent;

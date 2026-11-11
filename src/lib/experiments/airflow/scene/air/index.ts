@@ -1,4 +1,5 @@
 import { AmbientLight, Color, DirectionalLight, Group, HemisphereLight, Vector3, type Object3D, type PerspectiveCamera, type Scene, type WebGLRenderer } from 'three';
+import type { Raster } from '../../homes/rasterize';
 import type { World } from '../../sim/world';
 import type { Volume } from '../../solver/volume';
 import type { OverlayId } from '../../state';
@@ -7,6 +8,7 @@ import { RENDER_ORDER } from '../renderOrder';
 import { DepthPrepass } from './depth';
 import { AirFields } from './fields';
 import { MarchTarget } from './march';
+import { roomsFit, smokeExcess, volumeRooms, withSmoke, type VolumeRooms } from './excess';
 import { solidMask, type SolidMask } from './mask';
 import { Mute, Overlay } from './overlay';
 import { SMOKE_STEPS, SmokePuffs, SmokeVolume, smokeBounds, type PuffLook, type SmokeLighting } from './smokeVolume';
@@ -16,7 +18,8 @@ export { STREAK_AIR, overlayLegend, streakColor, type OverlayLegend, type Overla
 export { STREAK_COUNTS } from './streaks';
 
 /**
- * The air, drawn from the solver: streaks that ride the simulated air through every room, and the PM2.5 as smoke. An overlay (Air
+ * The air, drawn from the solver: streaks that ride the simulated air through every room, and the PM2.5 that stands out above each
+ * Room's average as smoke (`excess.ts`). An overlay (Air
  * speed, Temperature or Smoke) colours the streaks by its quantity, with a faint haze of the same colours through the rooms, and
  * mutes the world's colours a little; Off adds nothing. No plane is drawn. Everything that moves here moves because the solver's air
  * does; nothing drifts on its own.
@@ -139,6 +142,10 @@ export function createAir(options: AirOptions): Air {
 	let world: World | null = null;
 	let revision = -1;
 	let mask: SolidMask | null = null;
+	/** The Rooms of each volume cell, for the raster they were worked out from, and the last volume as the smoke draws it. */
+	let rooms: VolumeRooms | null = null;
+	let roomsOf: Raster | null = null;
+	let lastDrawn: Volume | null = null;
 	let pending = 0;
 	let prepared = false;
 	let configured = false;
@@ -165,7 +172,7 @@ export function createAir(options: AirOptions): Air {
 			puffs.setLook(look.puffs);
 			puffs.mesh.renderOrder = RENDER_ORDER.puffs;
 			group.add(puffs.mesh);
-			if (fields.newest && world) puffs.births(fields.newest, world.raster);
+			if (fields.newest && lastDrawn && world) puffs.births(lastDrawn, world.raster);
 		} else if (!low && puffs) {
 			group.remove(puffs.mesh);
 			puffs.dispose();
@@ -265,10 +272,19 @@ export function createAir(options: AirOptions): Air {
 			}
 			const now = performance.now() / 1000;
 			if (volume !== fields.newest) {
-				fields.push(volume, now);
+				// The smoke drawn is the PM2.5 above each Room's average (`excess.ts`): what stands out of the smoke spread through the Room.
+				if (roomsOf !== raster || !roomsFit(rooms, volume)) {
+					rooms = volumeRooms(volume, raster);
+					roomsOf = raster;
+				}
+				const excess = smokeExcess(volume, rooms!);
+				const drawn = withSmoke(volume, excess);
+				const older = fields.newest && fields.newest !== volume ? lastDrawn : null;
+				fields.push(volume, now, excess);
 				streaks.births(volume, raster);
-				puffs?.births(volume, raster);
-				smoke.setBounds(smokeBounds(fields.older && fields.older !== volume ? [fields.older, volume] : [volume]), box, finest);
+				puffs?.births(drawn, raster);
+				smoke.setBounds(smokeBounds(older ? [older, drawn] : [drawn]), box, finest);
+				lastDrawn = drawn;
 			}
 			const blend = fields.tick(now);
 			pending = Math.min(0.1, pending + Math.max(0, dt));

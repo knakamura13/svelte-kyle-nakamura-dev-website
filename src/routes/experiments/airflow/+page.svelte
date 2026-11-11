@@ -30,8 +30,6 @@
 	});
 
 	onMount(() => {
-		// QA reaches the page's state from a script. `vite dev` only: a production build drops this.
-		if (import.meta.env.DEV) (window as unknown as { __airflow: typeof experience }).__airflow = experience;
 		const stop = experience.start(detectUnits(navigator.language));
 		// A share link carries its setup in the address. The server never sees it, so it is read here, and again if a link is pasted into the open page.
 		const adopt = () => {

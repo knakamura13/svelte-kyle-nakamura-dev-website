@@ -44,6 +44,11 @@ export interface Conditions {
 	indoorTemp: number;
 	/** Outdoor PM2.5, µg/m³. 0 is clean air. */
 	outdoorPm25: number;
+	/**
+	 * Whether the wind gusts: its speed and direction vary about the mean as wind near the ground does (homes/gust.ts). Off unless set;
+	 * a setup that has it off leaves it out, so links and setups made before it existed mean the same.
+	 */
+	gusty?: boolean;
 }
 
 export type DeviceKind = 'box-fan' | 'pedestal-fan' | 'window-fan' | 'air-purifier';

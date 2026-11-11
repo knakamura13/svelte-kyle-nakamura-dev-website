@@ -2,7 +2,9 @@ import { PerspectiveCamera, Scene } from 'three';
 import { disposeTree } from '$lib/experiments/engine/kit';
 import type { Label } from '$lib/experiments/engine/labels';
 import type { DeviceModel } from '../devices/types';
+import { roomAt } from '../homes/rooms';
 import type { HomePlan } from '../homes/types';
+import { describeCursor, describeRefusal } from '../probeWords';
 import type { AirflowReadout } from '../readouts';
 import type { Target } from '../state';
 import { chooseBackend } from '../sim/backends';
@@ -128,7 +130,8 @@ export function createAirflowScene(host: WorldHost, params: AirflowSceneParams, 
 		scene.add(home.group);
 		lighting.fit(home.bounds);
 		const rooms: Label[] = home.roomAnchors.map((anchor) => {
-			const label = host.labels.add({ name: anchor.name, tone: 'room', side: 'above' });
+			// The Rooms' names never cover one another: one that would is put below its point, or beside it, or left out until there is room.
+			const label = host.labels.add({ name: anchor.name, tone: 'room', side: 'above', group: 'rooms' });
 			label.position.copy(anchor.position);
 			return label;
 		});
@@ -250,6 +253,9 @@ export function createAirflowScene(host: WorldHost, params: AirflowSceneParams, 
 			markers.setSmoke(point);
 		},
 		now: () => performance.now(),
+		// The cursor in words, for a screen reader. `announce` waits until the keys stop, so a run of arrow keys is said once, where it ended.
+		cursorMoved: (point, reading) => params.announce(describeCursor(roomAt(house.plan, point.x, point.z)?.name ?? null, point, reading, params.view.units)),
+		refused: (action, point, reading) => params.announce(describeRefusal(action, roomAt(house.plan, point.x, point.z)?.name ?? null, reading)),
 		grab: (at) => editor.grabAt(at, params.selected),
 		dragGrab: (grab, at, phase) => {
 			const held = grab as Grab;
@@ -305,6 +311,8 @@ export function createAirflowScene(host: WorldHost, params: AirflowSceneParams, 
 				house.home.update(look(), view.walls, 0, true);
 				openings = '';
 			}
+			// Smoke outdoors hazes the sky and the far lawn and dims and warms the sun (`look/smokyDay.ts`).
+			lighting.setSmoke(setup.conditions.outdoorPm25);
 			// A new tool forgets what the last one was doing, unless a key or a press since has already done so.
 			input.syncMode();
 			const reduced = host.reducedMotion();

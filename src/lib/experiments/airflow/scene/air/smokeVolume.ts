@@ -17,8 +17,8 @@ import {
 } from 'three';
 import type { Raster } from '../../homes/rasterize';
 import { SMOKE_DENSE } from '../../sim/session';
-import { SCALAR_STRIDE, type Volume } from '../../solver/volume';
-import { drawBirths, ppmAtLevel, puffWeights } from './birth';
+import { FLOW_STRIDE, SCALAR_STRIDE, type Volume } from '../../solver/volume';
+import { PUFF_THRESHOLD, drawBirths, ppmAtLevel, puffWeights } from './birth';
 import type { DepthUniforms } from './depth';
 import type { AirFields } from './fields';
 import { BOX_GLSL, DEPTH_GLSL, HASH_GLSL, VOLUME_GLSL } from './glsl';
@@ -26,7 +26,9 @@ import { noiseTexture } from './noise';
 import { ParticleField } from './particles';
 
 /**
- * Smoke: the solver's PM2.5, drawn as a lit volume. A ray from the camera is marched through the box that holds any visible smoke,
+ * Smoke: the solver's PM2.5 that stands out, drawn as a lit volume. What is drawn is the PM2.5 above each Room's average (`excess.ts`),
+ * so smoke spread evenly through a Room draws nothing, as real smoke at those levels looks clear, while a plume or a fresh release on
+ * top of a smoky Room draws as it would in clean air. A ray from the camera is marched through the box that holds any visible smoke,
  * up to the nearest surface (`depth.ts`), and at each step the smoke takes out some of the light behind it and adds its own: the sky
  * light from all round and the sun's from its direction, dimmed by the smoke between the step and the sun, and brightest when the
  * sun is behind it. It is grey, so it dims the sunlit room behind it, as smoke does. How much light it takes out grows with a power of
@@ -35,8 +37,8 @@ import { ParticleField } from './particles';
  * what the Smoke overlay is for. Within the field's blocks the air carries a detail (`SMOKE_DETAIL`) that gathers the smoke into wisps,
  * so a plume curls and frays where the field has one.
  *
- * At low quality it is puffs instead: soft round billboards carried by the air (`particles.ts`), born where the smoke is, each as
- * opaque as the smoke around it.
+ * At low quality it is puffs instead: soft round billboards carried by the air (`particles.ts`), born where the smoke stands out, each
+ * as opaque as the smoke around it, in the volume's grey.
  */
 
 export const SMOKE_LOOK = {
@@ -54,6 +56,7 @@ export const SMOKE_LOOK = {
 	 * (a mass extinction of about 4 m²/g), so a burst is seen near its source and is gone within seconds once it mixes through a room
 	 * (about 0.15 mg/m³ for a cooking burst in a living room), while its PM2.5 stays. The volume draws smoke far thinner than the eye could
 	 * see, and the steep power keeps a spread burst fading as real smoke does; the Smoke overlay shows the PM2.5 after (check-in 3).
+	 * These are for the smoke that stands out above its Room's average: smoke spread evenly through a Room is not drawn at all (#94).
 	 */
 	extinction: 6,
 	power: 1.75,
@@ -172,12 +175,12 @@ float extinctionOf(float c) {
 
 /** Extinction at a point, per metre, of the field as it is. */
 float extinction(vec3 p) {
-	return extinctionOf(airLook(p).b);
+	return extinctionOf(airSmoke(p));
 }
 
 /** The same from the newer read alone: one fetch, for the light's samples, which a tenth of a second's blend changes by nothing seen. */
 float extinctionNow(vec3 p) {
-	return extinctionOf(texture(uLookB, p / uExtent).b);
+	return extinctionOf(texture(uSmokeB, p / uExtent).r);
 }
 
 /**
@@ -239,7 +242,7 @@ void main() {
 	for (int i = 0; i < 160; i++) {
 		if (float(i) >= steps) break;
 		vec3 p = origin + direction * t;
-		float c = airLook(p).b;
+		float c = airSmoke(p);
 		float sigma = extinctionOf(c);
 		if (sigma > 1e-3) {
 			// The field's own smoke, shaped by the detail the air carries.
@@ -399,6 +402,11 @@ uniform float uDenseLog;
 uniform float uDecades;
 uniform float uFadeIn;
 uniform float uFadeOut;
+uniform float uExtinction;
+uniform float uPower;
+uniform float uCap;
+uniform float uDense;
+uniform float uDepth;
 attribute float aParticle;
 varying vec2 vCorner;
 varying float vAlpha;
@@ -411,8 +419,11 @@ void main() {
 	ivec2 at = ivec2(index % width, index / width);
 	vec4 state = texelFetch(uState, at, 0);
 	vec4 extra = texelFetch(uExtra, at, 0);
-	float level = clamp((log2(max(airLook(state.xyz).b, 1e-12)) * 0.30102999566 - uDenseLog) / uDecades + 1.0, 0.0, 1.0);
-	float alpha = extra.y < 0.5 ? 0.0 : pow(level, 1.4) * smoothstep(0.0, uFadeIn, state.w) * smoothstep(0.0, uFadeOut, extra.x - state.w);
+	float c = airSmoke(state.xyz);
+	float level = clamp((log2(max(c, 1e-12)) * 0.30102999566 - uDenseLog) / uDecades + 1.0, 0.0, 1.0);
+	// As opaque as the volume's smoke of the same strength is through the depth a puff stands for.
+	float opacity = 1.0 - exp(-uExtinction * pow(clamp(c / uDense, 0.0, uCap), uPower) * uDepth);
+	float alpha = extra.y < 0.5 ? 0.0 : opacity * smoothstep(0.0, uFadeIn, state.w) * smoothstep(0.0, uFadeOut, extra.x - state.w);
 	if (!(alpha >= 0.004)) {
 		gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
 		vAlpha = 0.0;
@@ -452,8 +463,33 @@ void main() {
 }
 `;
 
-/** Puffs at each quality that draws them, and the births a round draws. */
-const PUFFS = { count: 1_200, life: [3, 7] as [number, number], fadeIn: 0.6, fadeOut: 1, poolWidth: 32 };
+/**
+ * Puffs at each quality that draws them, and the births a round draws.
+ *
+ * A puff is as opaque as the volume's smoke of the same strength (`SMOKE_LOOK`) is through the depth of smoke it stands for, so the
+ * puffs fade as the volume does. Every puff is born in the smoke there is, however little, so that depth is the space the drawn smoke
+ * fills over the area all the puffs cover: a small plume's puffs crowd together and each stands for a thin slice of it, the ones along
+ * a line of sight adding up to the plume's depth. `coverage` is the share of a puff's square (`size` by `size`) it covers, its soft
+ * edge counted: a billow of half the square's width, its opacity falling as (1 − r²)², a third of it on average.
+ *
+ * Until #94 a puff's opacity followed the log of the strength, which drew smoke a fiftieth of `SMOKE_LOOK.dense` a fifth as opaque as
+ * the thickest, and every puff of a plume that had spread into a thin haze was as opaque as one in its core.
+ */
+const PUFFS = { count: 1_200, life: [3, 7] as [number, number], fadeIn: 0.6, fadeOut: 1, poolWidth: 32, coverage: 0.26, depth: [0.002, 2] as const };
+
+/** The space the cells of `volume` with at least `least` ppm of smoke fill, m³, counting only their air. */
+export function smokeSpace(volume: Volume, least: number) {
+	const cell = volume.sx * volume.sy * volume.sz * volume.h ** 3;
+	let space = 0;
+	for (let n = 0; n < volume.nx * volume.ny * volume.nz; n++) {
+		if (volume.scalars[SCALAR_STRIDE * n + 1] >= least) space += volume.flow[FLOW_STRIDE * n + 3] * cell;
+	}
+	return space;
+}
+
+/** The depth of smoke one of `count` puffs `size` metres wide stands for, when they are spread through `space` m³ (`PUFFS`). */
+export const puffDepth = (space: number, count: number, size: number) =>
+	Math.min(PUFFS.depth[1], Math.max(PUFFS.depth[0], space / Math.max(1, count * PUFFS.coverage * size * size)));
 
 /** What a quality tier may change of the puffs: how many there are, how wide one is, m, and how opaque (0 to 1). */
 export interface PuffLook {
@@ -486,7 +522,13 @@ export class SmokePuffs {
 				uDecades: { value: SMOKE_LOOK.decades },
 				uFadeIn: { value: PUFFS.fadeIn },
 				uFadeOut: { value: PUFFS.fadeOut },
-				uColor: { value: new Color(0.85, 0.84, 0.82) },
+				uExtinction: { value: SMOKE_LOOK.extinction },
+				uPower: { value: SMOKE_LOOK.power },
+				uCap: { value: SMOKE_LOOK.cap },
+				uDense: { value: SMOKE_LOOK.dense },
+				uDepth: { value: PUFFS.depth[1] },
+				// The volume's grey until the first light is read (`setLighting`).
+				uColor: { value: SMOKE_LOOK.albedo.clone() },
 				uOpacity: { value: 0.55 }
 			},
 			transparent: true,
@@ -498,9 +540,13 @@ export class SmokePuffs {
 		this.mesh.frustumCulled = false;
 	}
 
+	/** The space the drawn smoke fills, m³: what the puffs are born in. */
+	private space = 0;
+
 	births(volume: Volume, raster: Raster, random: () => number = Math.random) {
 		const pool = drawBirths(puffWeights(volume, raster, SMOKE_LOOK.dense, SMOKE_LOOK.decades), volume, raster, this.field.poolSize, random);
 		this.field.setPool(pool);
+		this.space = smokeSpace(volume, ppmAtLevel(PUFF_THRESHOLD, SMOKE_LOOK.dense, SMOKE_LOOK.decades));
 		return pool;
 	}
 
@@ -509,6 +555,7 @@ export class SmokePuffs {
 		const { uniforms } = this.mesh.material;
 		uniforms.uState.value = this.field.state;
 		uniforms.uExtra.value = this.field.extra;
+		uniforms.uDepth.value = puffDepth(this.space, this.field.count, uniforms.uSize.value);
 	}
 
 	/** The size and opacity the puffs were made with, for `setLook` to go back to. */
@@ -524,11 +571,15 @@ export class SmokePuffs {
 
 	/**
 	 * Lit as the volume is, but evenly: the sky, and a quarter of the sun. Inside smoke the volume's sun is mostly shadowed, so it is the
-	 * sky's cool grey; a flat puff lit by half the low sun came out a warm taupe at check-in 3, as bright as the floor.
+	 * sky's cool grey; a flat puff lit by half the low sun came out a warm taupe at check-in 3, as bright as the floor. Only the light's
+	 * brightness is taken, not its colour: an opaque puff lit by the warm late light, or by a sun that smoke outdoors has turned orange,
+	 * is a brown, while the volume's smoke is thin enough to read as the grey that darkens the room behind it (#94).
 	 */
 	setLighting(lighting: SmokeLighting) {
 		const color = this.mesh.material.uniforms.uColor.value as Color;
-		color.copy(lighting.sun).multiplyScalar(0.25).add(lighting.sky).multiply(SMOKE_LOOK.albedo);
+		color.copy(lighting.sun).multiplyScalar(0.25).add(lighting.sky);
+		const brightness = 0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b;
+		color.copy(SMOKE_LOOK.albedo).multiplyScalar(brightness);
 	}
 
 	reset() {
