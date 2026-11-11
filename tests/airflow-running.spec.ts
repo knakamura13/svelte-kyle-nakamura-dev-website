@@ -135,7 +135,7 @@ async function closeWeather(page: Page) {
 
 const fastest = (reading: Readings) => Math.max(...Object.values(reading.rooms).map((room) => room.speed));
 
-test.describe('the running simulation', () => {
+test.describe('the running simulation', { tag: '@slow' }, () => {
 	// Minutes: Chromium's headless shell steps the air on the processor at about real time here, and a runner drawing in software slower.
 	test.beforeEach(() => test.setTimeout(480_000));
 
@@ -340,7 +340,7 @@ test.describe('the running simulation', () => {
 	});
 });
 
-test.describe('a Share link', () => {
+test.describe('a Share link', { tag: '@slow' }, () => {
 	test.beforeEach(() => test.setTimeout(300_000));
 
 	/** The setup a copied link carries. */

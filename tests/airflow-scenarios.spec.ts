@@ -103,7 +103,7 @@ async function halving(page: Page, room: string, browserName: string) {
 	return minutes;
 }
 
-test.describe('each Scenario does what its notice says', () => {
+test.describe('each Scenario does what its notice says', { tag: '@slow' }, () => {
 	// Up to a quarter of an hour: the smoky day needs over three simulated minutes, which a CI runner steps at about real time or slower.
 	test.beforeEach(() => test.setTimeout(900_000));
 

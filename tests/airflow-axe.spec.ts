@@ -377,7 +377,7 @@ async function runawayNotice(page: Page, found: Scan[]) {
 }
 
 for (const { width, height } of WIDTHS)
-	test.describe(`at ${width} by ${height}`, () => {
+	test.describe(`at ${width} by ${height}`, { tag: '@slow' }, () => {
 		test.use({ viewport: { width, height }, locale: 'en-US', actionTimeout: STEP_MS });
 
 		test('axe finds no WCAG 2.1 A/AA violation in the states of the Airflow page', async ({
