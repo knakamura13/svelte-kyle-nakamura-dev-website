@@ -28,7 +28,13 @@ const WIDTHS = [
  * Each colour-contrast finding that stays, as `state | rule at element`, with its measured ratio in notes/98.md. A colour fix would change the
  * HUD's look, so the finding is reported, not fixed.
  */
-const KNOWN_CONTRAST: readonly string[] = ['the runaway notice | color-contrast at .primary'];
+const KNOWN_CONTRAST: readonly string[] = [
+	// Measured by axe in the full sweep at 1440 px in Chromium (notes/98.md): the notice's Reset button, and three selected chips.
+	'the runaway notice | color-contrast at .primary',
+	'the runaway notice | color-contrast at .tool.svelte-1idetoq[data-tool="select"] > .tool-label.svelte-1idetoq',
+	'the runaway notice | color-contrast at button[aria-label="5×, five times real time"]',
+	'the runaway notice | color-contrast at button:nth-child(1) > .seg-text.svelte-1g3rnyk'
+];
 
 interface Scan {
 	state: string;
@@ -181,8 +187,13 @@ async function sweep(page: Page, width: number, found: Scan[]) {
 	await page.keyboard.press('Enter');
 	// The count is "1 of 6 placed" on a desktop and "1/of6placed" in a phone's text, where a separator stands between the words.
 	await expect(page.getByRole('region', { name: 'Build' })).toContainText(/1\W*of\W*6\W*placed/);
-	if (phone) await page.getByRole('button', { name: 'View' }).click().catch(() => {});
-	await page.getByRole('button', { name: 'Inspector', exact: true }).first().click();
+	// On a phone the Inspector is in the View sheet. As in tests/airflow-phone.spec.ts, Select comes first, then the toolbar's View opens it.
+	if (phone) {
+		const tools = page.getByRole('toolbar', { name: 'Tools' });
+		await tools.locator('[data-tool="select"]').click();
+		await tools.getByRole('button', { name: 'View' }).click();
+	}
+	await page.getByRole('button', { name: 'Inspector', exact: true }).first().click({ timeout: 10_000 });
 	await expect(page.getByRole('region', { name: boxFan.name })).toBeVisible();
 	await scan(page, 'Inspector on a fan', found);
 
